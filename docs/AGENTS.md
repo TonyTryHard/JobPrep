@@ -94,6 +94,7 @@ Goal: small but pretty — calm, modern, consistent.
 - First milestone: write a short plan (files to add/change, risks) and wait for approval. Afterwards work one milestone at a time; do not start the next one on your own.
 - Prefer a thin vertical slice (UI + model + repository + test) over many half-finished layers.
 - Small, reviewable commits in conventional style, e.g. `feat(apps): add status badge delegate`.
+- Git: commit locally only. Never run `git push`, never force-push, never rewrite history, never touch `git config` or SSH keys. The user pushes after reviewing.
 - Do not add dependencies, change the stack, rename top-level folders, or change the schema outside a migration without asking.
 - If the spec is ambiguous, choose the simplest option consistent with this file, state the assumption in the report, and continue. Ask only when blocked.
 - Final report format: What changed / How to run / How verified (commands + results) / Deviations and assumptions / Suggested next step.
