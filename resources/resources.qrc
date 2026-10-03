@@ -1,0 +1,16 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file>styles/theme.qss</file>
+        <file>icons/app.svg</file>
+        <file>icons/home.svg</file>
+        <file>icons/study.svg</file>
+        <file>icons/jobs.svg</file>
+        <file>icons/calendar.svg</file>
+        <file>icons/settings.svg</file>
+        <file>icons/chevron-left.svg</file>
+        <file>icons/chevron-right.svg</file>
+        <file>icons/search.svg</file>
+        <file>icons/plus.svg</file>
+    </qresource>
+</RCC>

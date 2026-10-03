@@ -1,0 +1,75 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "JOBPREP_WERROR": "ON",
+        "CMAKE_PREFIX_PATH": "$penv{QT_PREFIX_PATH}"
+      }
+    },
+    {
+      "name": "dev-linux",
+      "displayName": "Linux Development",
+      "description": "Configure for Linux with Ninja and Qt 6",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "dev-windows",
+      "displayName": "Windows Development",
+      "description": "Configure for Windows with Ninja/MSVC and Qt 6",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev-linux",
+      "displayName": "Build Linux Development",
+      "configurePreset": "dev-linux"
+    },
+    {
+      "name": "dev-windows",
+      "displayName": "Build Windows Development",
+      "configurePreset": "dev-windows"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev-linux",
+      "displayName": "Test Linux Development",
+      "configurePreset": "dev-linux",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "dev-windows",
+      "displayName": "Test Windows Development",
+      "configurePreset": "dev-windows",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}

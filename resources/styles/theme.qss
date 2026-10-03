@@ -1,0 +1,283 @@
+/* JobPrep Global Theme Stylesheet Template */
+
+/* Global Widget defaults */
+QWidget {
+    background-color: @bg;
+    color: @text;
+    font-size: 10pt;
+    selection-background-color: @accent;
+    selection-color: @accentText;
+}
+
+/* Main Window */
+QMainWindow {
+    background-color: @bg;
+}
+
+/* Sidebar navigation */
+#SidebarWidget {
+    background-color: @surface;
+    border-right: 1px solid @border;
+}
+
+#SidebarToggleBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 6px;
+    color: @textMuted;
+}
+
+#SidebarToggleBtn:hover {
+    background-color: @surfaceAlt;
+    color: @text;
+}
+
+#SidebarNavButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 8px;
+    color: @textMuted;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 500;
+}
+
+#SidebarNavButton:hover {
+    background-color: @surfaceAlt;
+    color: @text;
+}
+
+#SidebarNavButton:checked {
+    background-color: @surfaceAlt;
+    color: @accent;
+    font-weight: 600;
+}
+
+/* Header */
+#HeaderWidget {
+    background-color: @surface;
+    border-bottom: 1px solid @border;
+    min-height: 56px;
+    max-height: 56px;
+    padding: 0 16px;
+}
+
+#HeaderTitle {
+    font-size: 16pt;
+    font-weight: 600;
+    color: @text;
+}
+
+#HeaderSearchEdit {
+    background-color: @surfaceAlt;
+    border: 1px solid @border;
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: @text;
+    min-width: 200px;
+}
+
+#HeaderSearchEdit:focus {
+    border: 1px solid @accent;
+}
+
+#HeaderPrimaryBtn {
+    background-color: @accent;
+    color: @accentText;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: 600;
+}
+
+#HeaderPrimaryBtn:hover {
+    background-color: @accentHover;
+}
+
+#HeaderPrimaryBtn:pressed {
+    background-color: @accentPressed;
+}
+
+/* Status Bar */
+QStatusBar {
+    background-color: @surface;
+    border-top: 1px solid @border;
+    color: @textMuted;
+    min-height: 28px;
+    padding: 2px 8px;
+}
+
+QStatusBar QLabel {
+    color: @textMuted;
+    font-size: 9pt;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: @surface;
+    border: 1px solid @border;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: @text;
+    font-weight: 500;
+}
+
+QPushButton:hover {
+    background-color: @surfaceAlt;
+    border-color: @accent;
+}
+
+QPushButton:pressed {
+    background-color: @border;
+}
+
+QPushButton:disabled {
+    color: @textMuted;
+    background-color: @surfaceAlt;
+    border-color: @border;
+}
+
+/* Primary Button */
+QPushButton[primary="true"] {
+    background-color: @accent;
+    border: 1px solid @accent;
+    color: @accentText;
+}
+
+QPushButton[primary="true"]:hover {
+    background-color: @accentHover;
+    border-color: @accentHover;
+}
+
+QPushButton[primary="true"]:pressed {
+    background-color: @accentPressed;
+    border-color: @accentPressed;
+}
+
+/* Line Edit / Text input */
+QLineEdit, QTextEdit, QPlainTextEdit {
+    background-color: @surface;
+    border: 1px solid @border;
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: @text;
+}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
+    border: 1px solid @accent;
+}
+
+/* Combobox */
+QComboBox {
+    background-color: @surface;
+    border: 1px solid @border;
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: @text;
+    min-height: 24px;
+}
+
+QComboBox:focus, QComboBox:on {
+    border: 1px solid @accent;
+}
+
+QComboBox::drop-down {
+    border: none;
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: @surface;
+    border: 1px solid @border;
+    border-radius: 8px;
+    selection-background-color: @surfaceAlt;
+    selection-color: @accent;
+    outline: none;
+}
+
+/* Cards & Containers */
+QFrame[card="true"] {
+    background-color: @surface;
+    border: 1px solid @border;
+    border-radius: 12px;
+}
+
+/* Empty State */
+#EmptyStateWidget {
+    background: transparent;
+}
+
+#EmptyStateIcon {
+    color: @textMuted;
+}
+
+#EmptyStateTitle {
+    font-size: 14pt;
+    font-weight: 600;
+    color: @text;
+}
+
+#EmptyStateDescription {
+    font-size: 10pt;
+    color: @textMuted;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    border: none;
+    background-color: transparent;
+    width: 8px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background-color: @border;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: @textMuted;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+    border: none;
+}
+
+QScrollBar:horizontal {
+    border: none;
+    background-color: transparent;
+    height: 8px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: @border;
+    border-radius: 4px;
+    min-width: 24px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: @textMuted;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+    border: none;
+}
+
+/* Tooltips */
+QToolTip {
+    background-color: @surface;
+    color: @text;
+    border: 1px solid @border;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 9pt;
+}
