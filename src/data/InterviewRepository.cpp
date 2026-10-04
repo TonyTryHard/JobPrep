@@ -142,9 +142,10 @@ bool InterviewRepository::update(const Domain::Interview& interview) {
             u"No interview with id %1."_s.arg(QString::number(interview.id)));
         return false;
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -159,9 +160,10 @@ bool InterviewRepository::remove(int id) {
         m_database.setExpectedError(u"No interview with id %1."_s.arg(QString::number(id)));
         return false;
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 

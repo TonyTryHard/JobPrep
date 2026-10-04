@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QPointer>
+#include <QSet>
 #include <QSqlDatabase>
 #include <QString>
 
@@ -60,6 +62,7 @@ public:
         bool commit();
         void rollback();
         bool isActive() const;
+        bool isOwner() const;
 
     private:
         void finish();
@@ -71,6 +74,10 @@ public:
 
     Transaction transaction() const;
 
+    void deferChanged(QObject* repo) const;
+    void flushPendingChanges() const;
+    void clearPendingChanges() const;
+
 private:
     bool begin() const;
     bool commitInternal() const;
@@ -81,6 +88,7 @@ private:
     QString m_path;
     mutable QString m_lastError;
     mutable int m_transactionDepth{0};
+    mutable QSet<QObject*> m_pendingChangeRepos;
     bool m_open{false};
 };
 

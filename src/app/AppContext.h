@@ -14,6 +14,7 @@ class TrackRepository;
 }  // namespace JobPrep::Data
 
 namespace JobPrep::Services {
+class ExportService;
 class SeedService;
 class SettingsService;
 }  // namespace JobPrep::Services
@@ -45,6 +46,7 @@ public:
     Data::InterviewRepository& interviews() const;
     Data::ReminderLogRepository& reminderLog() const;
 
+    Services::ExportService& exportService() const;
     Services::SeedService& seedService() const;
     Services::SettingsService& settings() const;
     Ui::Theme::ThemeManager& themeManager() const;
@@ -62,6 +64,7 @@ private:
     std::unique_ptr<Data::InterviewRepository> m_interviews;
     std::unique_ptr<Data::ReminderLogRepository> m_reminderLog;
     std::unique_ptr<Services::SeedService> m_seedService;
+    std::unique_ptr<Services::ExportService> m_exportService;
     std::unique_ptr<Services::SettingsService> m_settings;
     std::unique_ptr<Ui::Theme::ThemeManager> m_themeManager;
 };

@@ -55,9 +55,10 @@ bool ReminderLogRepository::remove(const QString& key) {
         m_database.setExpectedError(u"No reminder sent for key %1."_s.arg(key));
         return false;
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 

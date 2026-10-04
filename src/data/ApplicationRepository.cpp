@@ -165,9 +165,10 @@ bool ApplicationRepository::insert(Domain::JobApplication& application) {
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
     if (!insertRow(application)) return false;
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -187,9 +188,10 @@ bool ApplicationRepository::update(const Domain::JobApplication& application) {
                        QString())) {
         return false;
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -209,9 +211,10 @@ bool ApplicationRepository::setStatus(int id, Domain::ApplicationStatus status,
         !addHistoryRow(id, stored->status, status, DbFormat::now(), note)) {
         return false;
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -231,9 +234,10 @@ bool ApplicationRepository::setNextAction(int id, const QString& text, std::opti
         m_database.setExpectedError(u"No application with id %1."_s.arg(QString::number(id)));
         return false;
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -250,9 +254,10 @@ bool ApplicationRepository::duplicate(int id, Domain::JobApplication& copy) {
     copy = *stored;
     copy.id = 0;
     if (!insertRow(copy)) return false;
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -267,9 +272,10 @@ bool ApplicationRepository::remove(int id) {
         m_database.setExpectedError(u"No application with id %1."_s.arg(QString::number(id)));
         return false;
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 

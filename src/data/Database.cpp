@@ -223,19 +223,33 @@ bool Database::Transaction::commit() {
     }
 
     bool ok = m_database->commitInternal();
-    if (!ok) m_database->rollbackInternal();
+    if (!ok) {
+        m_database->rollbackInternal();
+        Database* dbp = m_database;
+        finish();
+        if (dbp) dbp->clearPendingChanges();
+        return false;
+    }
+    Database* dbp = m_database;
     finish();
-    return ok;
+    if (dbp) dbp->flushPendingChanges();
+    return true;
 }
 
 void Database::Transaction::rollback() {
     if (!m_active) return;
+    Database* dbp = m_database;
     if (m_owner && m_database) m_database->rollbackInternal();
     finish();
+    if (dbp) dbp->clearPendingChanges();
 }
 
 bool Database::Transaction::isActive() const {
     return m_active;
+}
+
+bool Database::Transaction::isOwner() const {
+    return m_owner;
 }
 
 void Database::Transaction::finish() {
@@ -243,6 +257,25 @@ void Database::Transaction::finish() {
     m_database = nullptr;
     m_active = false;
     m_owner = false;
+}
+
+void Database::deferChanged(QObject* repo) const {
+    if (!repo) return;
+    m_pendingChangeRepos.insert(repo);
+}
+
+void Database::flushPendingChanges() const {
+    const auto repos = m_pendingChangeRepos;
+    for (const auto& ptr : repos) {
+        if (ptr) {
+            QMetaObject::invokeMethod(ptr, "changed", Qt::DirectConnection);
+        }
+    }
+    m_pendingChangeRepos.clear();
+}
+
+void Database::clearPendingChanges() const {
+    m_pendingChangeRepos.clear();
 }
 
 }  // namespace JobPrep::Data

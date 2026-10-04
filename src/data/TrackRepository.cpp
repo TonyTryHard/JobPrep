@@ -92,9 +92,10 @@ bool TrackRepository::update(const Domain::Track& track) {
     statement.bind(5, track.id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingTrack(m_database, track.id);
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -106,9 +107,10 @@ bool TrackRepository::remove(int id) {
     statement.bind(1, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingTrack(m_database, id);
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 

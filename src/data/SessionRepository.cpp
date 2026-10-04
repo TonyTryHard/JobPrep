@@ -112,9 +112,10 @@ bool SessionRepository::update(const Domain::StudySession& session) {
             u"No study session with id %1."_s.arg(QString::number(session.id)));
         return false;
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -129,9 +130,10 @@ bool SessionRepository::remove(int id) {
         m_database.setExpectedError(u"No study session with id %1."_s.arg(QString::number(id)));
         return false;
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 

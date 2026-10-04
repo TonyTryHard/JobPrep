@@ -88,6 +88,14 @@ add_library(jobprep_core STATIC
     src/services/SettingsService.cpp
     src/services/SeedService.h
     src/services/SeedService.cpp
+    src/services/ExportService.h
+    src/services/ExportService.cpp
+
+    # Models
+    src/models/ApplicationTableModel.h
+    src/models/ApplicationTableModel.cpp
+    src/models/ApplicationFilterProxy.h
+    src/models/ApplicationFilterProxy.cpp
 
     # Theme & Tokens
     src/ui/theme/Tokens.h
@@ -99,11 +107,21 @@ add_library(jobprep_core STATIC
     src/ui/theme/ThemeManager.h
     src/ui/theme/ThemeManager.cpp
 
+    # Delegates
+    src/ui/delegates/StatusBadgeDelegate.h
+    src/ui/delegates/StatusBadgeDelegate.cpp
+
     # Widgets & Base Pages
     src/ui/widgets/EmptyState.h
     src/ui/widgets/EmptyState.cpp
+    src/ui/widgets/ChipBar.h
+    src/ui/widgets/ChipBar.cpp
     src/ui/PageBase.h
     src/ui/PageBase.cpp
+
+    # Dialogs
+    src/ui/dialogs/ApplicationDialog.h
+    src/ui/dialogs/ApplicationDialog.cpp
 
     # Page implementations
     src/ui/pages/HomePage.h

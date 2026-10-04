@@ -155,9 +155,10 @@ bool TopicRepository::update(const Domain::Topic& topic) {
     statement.bind(11, topic.id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"topic"_s, topic.id);
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -172,9 +173,10 @@ bool TopicRepository::setStatus(int id, Domain::TopicStatus status) {
     statement.bind(3, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"topic"_s, id);
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -191,9 +193,10 @@ bool TopicRepository::updatePositions(const QList<int>& orderedIds) {
             return reportMissingRow(m_database, u"topic"_s, orderedIds.at(position));
         }
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -205,9 +208,10 @@ bool TopicRepository::remove(int id) {
     statement.bind(1, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"topic"_s, id);
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -263,9 +267,10 @@ bool TopicRepository::updateSubtask(const Domain::Subtask& subtask) {
     statement.bind(5, subtask.id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"subtask"_s, subtask.id);
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -280,9 +285,10 @@ bool TopicRepository::setSubtaskDone(int subtaskId, bool done) {
     if (statement.rowsAffected() != 1) {
         return reportMissingRow(m_database, u"subtask"_s, subtaskId);
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -294,9 +300,10 @@ bool TopicRepository::removeSubtask(int subtaskId) {
     statement.bind(1, subtaskId);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"subtask"_s, subtaskId);
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 
@@ -315,9 +322,10 @@ bool TopicRepository::reorderSubtasks(int topicId, const QList<int>& orderedIds)
             return reportMissingRow(m_database, u"subtask"_s, orderedIds.at(position));
         }
     }
+    bool owner = transaction.isOwner();
     if (!transaction.commit()) return false;
-
-    emit changed();
+    if (owner) emit changed();
+    else m_database.deferChanged(this);
     return true;
 }
 

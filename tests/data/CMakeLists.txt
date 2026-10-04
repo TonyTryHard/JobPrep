@@ -26,6 +26,7 @@ set(DATA_TESTS
     tst_InterviewRepository
     tst_ReminderLogRepository
     tst_SeedService
+    tst_TransactionBehavior
 )
 
 foreach(test_name IN LISTS DATA_TESTS)
