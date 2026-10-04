@@ -56,12 +56,38 @@ add_library(jobprep_core STATIC
 
     # Domain models
     src/domain/Enums.h
+    src/domain/Structs.h
     src/domain/EnumStrings.h
     src/domain/EnumStrings.cpp
+
+    # Data layer
+    src/data/DataLogging.h
+    src/data/DbFormat.h
+    src/data/DbFormat.cpp
+    src/data/Database.h
+    src/data/Database.cpp
+    src/data/Migrations.h
+    src/data/Migrations.cpp
+    src/data/SqlStatement.h
+    src/data/SqlStatement.cpp
+    src/data/TrackRepository.h
+    src/data/TrackRepository.cpp
+    src/data/TopicRepository.h
+    src/data/TopicRepository.cpp
+    src/data/SessionRepository.h
+    src/data/SessionRepository.cpp
+    src/data/ApplicationRepository.h
+    src/data/ApplicationRepository.cpp
+    src/data/InterviewRepository.h
+    src/data/InterviewRepository.cpp
+    src/data/ReminderLogRepository.h
+    src/data/ReminderLogRepository.cpp
 
     # Services
     src/services/SettingsService.h
     src/services/SettingsService.cpp
+    src/services/SeedService.h
+    src/services/SeedService.cpp
 
     # Theme & Tokens
     src/ui/theme/Tokens.h

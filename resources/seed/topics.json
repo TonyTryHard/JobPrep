@@ -1,0 +1,261 @@
+{
+    "version": 1,
+    "tracks": [
+        {
+            "name": "C++",
+            "color": "#5B6CFF",
+            "icon": "",
+            "topics": [
+                {
+                    "title": "Modern C++ essentials",
+                    "priority": "high",
+                    "tags": "c++20, basics",
+                    "subtasks": [
+                        "Write one example for auto, structured bindings and constexpr",
+                        "Explain optional and variant in two minutes",
+                        "Summarize what concepts and requires bring",
+                        "Compile a small snippet with -Wall -Wextra -Wpedantic"
+                    ]
+                },
+                {
+                    "title": "RAII & smart pointers",
+                    "priority": "high",
+                    "tags": "c++, memory",
+                    "subtasks": [
+                        "Read the cppreference page on ownership",
+                        "Write a 30-line example with unique_ptr and shared_ptr",
+                        "Implement a custom deleter",
+                        "Compare rule of 0 and rule of 5 in a table"
+                    ]
+                },
+                {
+                    "title": "Move semantics & value categories",
+                    "priority": "high",
+                    "tags": "c++, move",
+                    "subtasks": [
+                        "Re-derive the five rules of the overload resolution set",
+                        "Write a class with a move constructor and move assignment",
+                        "Explain copy elision aloud in 2 minutes",
+                        "Profile a function that copies when it could move"
+                    ]
+                },
+                {
+                    "title": "Templates & metaprogramming",
+                    "priority": "normal",
+                    "tags": "c++, templates",
+                    "subtasks": [
+                        "Write a variadic template function",
+                        "Build a type trait from scratch",
+                        "Show where SFINAE is still needed",
+                        "Read one modern C++ library implementation"
+                    ]
+                },
+                {
+                    "title": "STL containers & algorithms",
+                    "priority": "high",
+                    "tags": "stl, performance",
+                    "subtasks": [
+                        "Make a table of complexity for vector, map and unordered_map",
+                        "Reproduce two iterator invalidation cases",
+                        "Solve 3 tasks with std::ranges algorithms",
+                        "Explain when a linked list beats a vector"
+                    ]
+                },
+                {
+                    "title": "Concurrency & memory model",
+                    "priority": "normal",
+                    "tags": "c++, threads",
+                    "subtasks": [
+                        "Draw the happens-before relation for a mutex and an atomic",
+                        "Write a thread pool with std::jthread",
+                        "Explain data race vs deadlock with an example",
+                        "Read about the C++ memory model chapter"
+                    ]
+                },
+                {
+                    "title": "OOP & design patterns",
+                    "priority": "normal",
+                    "tags": "design, oop",
+                    "subtasks": [
+                        "Re-implement Observer and Strategy in one file each",
+                        "Explain SOLID with a project example",
+                        "Compare composition and inheritance for one case",
+                        "Prepare two stories about refactoring decisions"
+                    ]
+                },
+                {
+                    "title": "Memory, performance & UB",
+                    "priority": "normal",
+                    "tags": "performance, debugging",
+                    "subtasks": [
+                        "Find one UB example and fix it with a sanitizer",
+                        "Profile a program and explain the numbers",
+                        "Summarize the rule of zero cost",
+                        "Run a memory checker over a small project"
+                    ]
+                },
+                {
+                    "title": "Qt essentials",
+                    "priority": "high",
+                    "tags": "qt, c++",
+                    "subtasks": [
+                        "Explain signals, slots and the event loop in 2 minutes",
+                        "Build a small model/view application",
+                        "Compare QObject memory ownership with std::unique_ptr",
+                        "Read the docs on QAbstractItemModel"
+                    ]
+                },
+                {
+                    "title": "Build & tooling",
+                    "priority": "low",
+                    "tags": "cmake, testing",
+                    "subtasks": [
+                        "Write a CMakeLists with a library and two tests",
+                        "Run a build under sanitizers",
+                        "Set up a debugger session and inspect a core dump",
+                        "Explain what a linker actually does"
+                    ]
+                },
+                {
+                    "title": "Algorithms practice",
+                    "priority": "normal",
+                    "tags": "algorithms, practice",
+                    "subtasks": [
+                        "Solve 5 medium problems and log the time",
+                        "Re-solve 2 problems from memory a week later",
+                        "Explain a greedy solution and when it fails",
+                        "Write a short post-mortem for the hardest problem"
+                    ]
+                },
+                {
+                    "title": "System design basics",
+                    "priority": "normal",
+                    "tags": "design, interviews",
+                    "subtasks": [
+                        "Sketch a URL shortener with the trade-offs",
+                        "Explain horizontal vs vertical scaling",
+                        "Describe database sharding in one paragraph",
+                        "Prepare a whiteboard walkthrough"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "English",
+            "color": "#F59E0B",
+            "icon": "",
+            "topics": [
+                {
+                    "title": "Self-introduction",
+                    "priority": "high",
+                    "tags": "speaking",
+                    "subtasks": [
+                        "Record a 60 second pitch and listen back",
+                        "Prepare a 3 minute version for a technical screen",
+                        "Remove filler words from the pitch",
+                        "Re-record until it sounds natural"
+                    ]
+                },
+                {
+                    "title": "Describing my projects (STAR stories)",
+                    "priority": "high",
+                    "tags": "speaking, stories",
+                    "subtasks": [
+                        "Write 3 STAR stories about real projects",
+                        "Add numbers and trade-offs to each story",
+                        "Rehearse each story in under 2 minutes",
+                        "Ask a friend to interrupt and take notes"
+                    ]
+                },
+                {
+                    "title": "Behavioral questions",
+                    "priority": "normal",
+                    "tags": "interviews, soft skills",
+                    "subtasks": [
+                        "Answer the top 10 behavioral questions out loud",
+                        "Prepare an answer for a conflict with a teammate",
+                        "Prepare an answer for a failure",
+                        "Review the answers for structure, not wording"
+                    ]
+                },
+                {
+                    "title": "Technical vocabulary and explaining code aloud",
+                    "priority": "normal",
+                    "tags": "speaking, technical",
+                    "subtasks": [
+                        "Explain 5 pieces of code from memory",
+                        "Learn 20 technical terms used in C++ interviews",
+                        "Practice describing a bug fix without jargon",
+                        "Record a 5 minute code walkthrough"
+                    ]
+                },
+                {
+                    "title": "Clarifying questions & small talk",
+                    "priority": "low",
+                    "tags": "communication",
+                    "subtasks": [
+                        "Write 8 questions to ask as an interviewer",
+                        "Practice reacting to unexpected answers",
+                        "Prepare two questions about the team",
+                        "Review how to end a screen politely"
+                    ]
+                },
+                {
+                    "title": "Grammar refresh (tenses, articles, prepositions)",
+                    "priority": "low",
+                    "tags": "grammar",
+                    "subtasks": [
+                        "Review tenses in one sitting",
+                        "Do 20 article and preposition exercises",
+                        "Correct one written answer yourself",
+                        "Write a short paragraph and check every word"
+                    ]
+                },
+                {
+                    "title": "Listening practice (talks, shadowing)",
+                    "priority": "low",
+                    "tags": "listening",
+                    "subtasks": [
+                        "Watch a 10 minute technical talk twice",
+                        "Shadow 2 minutes of audio",
+                        "Summarize the talk in 3 sentences",
+                        "Note unknown words and review them"
+                    ]
+                },
+                {
+                    "title": "Writing: resume, cover letter, follow-up e-mails",
+                    "priority": "normal",
+                    "tags": "writing",
+                    "subtasks": [
+                        "Rewrite the resume summary in 3 sentences",
+                        "Draft a cover letter template",
+                        "Write 3 follow-up e-mail templates",
+                        "Check every template for tone and typos"
+                    ]
+                },
+                {
+                    "title": "Salary & offer negotiation phrases",
+                    "priority": "low",
+                    "tags": "negotiation, speaking",
+                    "subtasks": [
+                        "Write 5 phrases for asking about the budget",
+                        "Prepare a response to a low offer",
+                        "Rehearse the negotiation out loud twice",
+                        "Research one benchmark source"
+                    ]
+                },
+                {
+                    "title": "Mock interviews (record and review)",
+                    "priority": "high",
+                    "tags": "practice, interviews",
+                    "subtasks": [
+                        "Book a 45 minute mock interview",
+                        "Record it and note every filler phrase",
+                        "Review the recording with a checklist",
+                        "Write down the 3 biggest improvements"
+                    ]
+                }
+            ]
+        }
+    ]
+}

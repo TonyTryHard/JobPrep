@@ -41,6 +41,9 @@ public:
     bool closeToTray() const;
     void setCloseToTray(bool enabled);
 
+    bool sampleDataPrompted() const;
+    void setSampleDataPrompted(bool prompted);
+
 signals:
     void themeModeChanged(const QString& mode);
     void accentPresetChanged(const QString& preset);

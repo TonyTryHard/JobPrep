@@ -1,7 +1,11 @@
 #include <QApplication>
 #include <QFont>
 #include <QFontDatabase>
+#include <QMessageBox>
 #include "app/AppContext.h"
+#include "data/Database.h"
+#include "services/SeedService.h"
+#include "services/SettingsService.h"
 #include "ui/MainWindow.h"
 
 using namespace Qt::StringLiterals;
@@ -21,6 +25,32 @@ int main(int argc, char* argv[]) {
 
     // Build composition root
     JobPrep::App::AppContext ctx;
+
+    if (!ctx.database().isOpen()) {
+        QMessageBox::critical(
+            nullptr, QObject::tr("Cannot open the database"),
+            QObject::tr("JobPrep could not open its data file.\n\n%1").arg(ctx.database().lastError()));
+        return 1;
+    }
+
+    // First launch: offer the sample topics (SPEC §3.7).
+    if (!ctx.settings().sampleDataPrompted() && ctx.isDataEmpty()) {
+        const auto answer = QMessageBox::question(
+            nullptr, QObject::tr("Load sample data?"),
+            QObject::tr("Would you like to start with a sample study plan?\n\n"
+                        "It adds the C++ and English tracks with their topics and checklists."),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+
+        if (answer == QMessageBox::Yes) {
+            QString error;
+            if (!ctx.seedService().loadSampleTopics(&error)) {
+                QMessageBox::warning(nullptr, QObject::tr("Sample data"),
+                                     QObject::tr("The sample data could not be loaded.\n\n%1")
+                                         .arg(error));
+            }
+        }
+        ctx.settings().setSampleDataPrompted(true);
+    }
 
     // Create and show main window
     JobPrep::Ui::MainWindow mainWindow(ctx);

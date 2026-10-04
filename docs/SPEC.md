@@ -377,3 +377,5 @@ Kanban for applications, per-company contacts directory, salary comparison chart
 - 1.0 — initial spec.
 - 1.2 — AppImage/packaging dropped (run from build folder, `docs/RUNNING.md` is the guide); build quality gate added (`scripts/check`, `ui_smoke`).
 - 1.1 — Windows + Linux as first-class targets (tray fallback, platform folder, packaging, presets); weekly study goal default 6 h (360 min), user-adjustable.
+- 1.3 — `sampleDataPrompted` setting added for the first-launch sample-data prompt.
+- 1.3 — `insert()` writes an initial `status_history` row (NULL → initial status).

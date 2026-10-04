@@ -88,4 +88,14 @@ void SettingsService::setCloseToTray(bool enabled) {
     emit closeToTrayChanged(enabled);
 }
 
+bool SettingsService::sampleDataPrompted() const {
+    // The first-launch "Load sample data?" question is asked only once (SPEC §3.7).
+    return m_settings->value(u"app/sampleDataPrompted"_s, false).toBool();
+}
+
+void SettingsService::setSampleDataPrompted(bool prompted) {
+    if (sampleDataPrompted() == prompted) return;
+    m_settings->setValue(u"app/sampleDataPrompted"_s, prompted);
+}
+
 }  // namespace JobPrep::Services

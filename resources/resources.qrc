@@ -12,5 +12,6 @@
         <file>icons/chevron-right.svg</file>
         <file>icons/search.svg</file>
         <file>icons/plus.svg</file>
+        <file>seed/topics.json</file>
     </qresource>
 </RCC>

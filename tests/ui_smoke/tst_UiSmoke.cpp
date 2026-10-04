@@ -4,6 +4,7 @@
 #include <QStringList>
 #include <QTest>
 #include "app/AppContext.h"
+#include "data/Database.h"
 #include "ui/MainWindow.h"
 #include "ui/Sidebar.h"
 #include "ui/theme/ThemeManager.h"
@@ -46,7 +47,9 @@ void tst_UiSmoke::initTestCase() {
     QCoreApplication::setOrganizationName(u"JobPrepTest"_s);
     QCoreApplication::setApplicationName(u"JobPrepTest"_s);
 
-    m_ctx = std::make_unique<JobPrep::App::AppContext>();
+    // An in-memory database keeps the smoke test away from the user's data folder.
+    m_ctx = std::make_unique<JobPrep::App::AppContext>(u":memory:"_s);
+    QVERIFY(m_ctx->database().isOpen());
     m_window = std::make_unique<JobPrep::Ui::MainWindow>(*m_ctx);
     m_window->show();
 }
