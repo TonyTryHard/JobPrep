@@ -379,3 +379,4 @@ Kanban for applications, per-company contacts directory, salary comparison chart
 - 1.1 — Windows + Linux as first-class targets (tray fallback, platform folder, packaging, presets); weekly study goal default 6 h (360 min), user-adjustable.
 - 1.3 — `sampleDataPrompted` setting added for the first-launch sample-data prompt.
 - 1.3 — `insert()` writes an initial `status_history` row (NULL → initial status).
+- 1.3 — applications CSV column set fixed to 22 English names: §3.3 A1 first, then every remaining `applications` field; no id column.
