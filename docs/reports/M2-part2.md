@@ -1,0 +1,170 @@
+# M2 part 2 — Jobs page implementation report
+
+Scope: `docs/plans/M2-plan-part2.md` with `docs/prompts/M2-part2-amendments.md`, delivered in
+the commits `8bf6752` (Part A), `29ec8da` (B1) and `d443ce1` (B2). This report covers only
+part 2; the earlier M2 work (nested transactions, models, services, UI scaffolding) is in
+`docs/reports/M2.md`.
+
+## What changed
+
+### Data layer
+
+- `Database` gained an outer-failure flag. A failing write inside a joined (non-owner)
+  transaction now poisons the outer unit of work: the owner's `commit()` skips `COMMIT`,
+  issues `ROLLBACK` and returns `false`, so a partial write can never survive. Only the
+  owner clears the pending notification list; a joined rollback only marks the flag.
+- Pending notifications are an ordered, deduped `QList<QPointer<QObject>>` instead of a
+  `QSet<QObject*>`. The list is moved into a local before it is emitted, so a repository
+  that writes again from its own `changed()` handler cannot mutate the list being walked,
+  and one repository emits once per outer commit.
+- `Data::Repository` is a new `QObject` base with the single `changed()` signal and a
+  protected `commitAndNotify(Database&, Transaction&)`. All six repositories derive from
+  it, dropped their own `changed()` and collapse every write path onto that helper. As a
+  side effect the four repositories that used to emit unconditionally when joining a
+  transaction now defer correctly.
+- Repositories return before opening a transaction when there is nothing to do, e.g. an
+  unknown id (`setStatus`, `setNextAction`, `duplicate`, `remove`).
+- `Database` now derives a **unique** default SQL connection name from a UUID. Before, two
+  live `Database` objects (two `AppContext`s, as the UI tests create) shared the single
+  `jobprep` connection, and destroying one closed the other's connection.
+- `ApplicationRepository::insert()` defaults the applied date to today, so the first
+  history row and the Applied column agree without UI help.
+
+### Models
+
+- `ApplicationTableModel` takes an injectable `Clock` (`std::function<QDateTime()>`) and
+  reads it once per `buildCache()`, so "upcoming" is testable. New `IdRole` returns the
+  database id, which is what the page uses to restore a selection across model resets.
+- The status column no longer duplicates `StatusStyle::label()` in `data()`: the delegate
+  and the page ask `StatusStyle`, the model only exposes `StatusRole` (plus `SortRole`
+  for the pipeline order and `SearchRole` for the search haystack). Tests read `StatusRole`.
+
+### Services
+
+- `ExportService::headers()` is the one canonical, fixed English header list (no `tr()`),
+  and `ExportRow::toFields()` is pinned to the same order; `exportToFile` falls back to it.
+- The CSV column set is 22 names, the §3.3 A1 columns first, then every remaining
+  `applications` field: Company, Position, Status, Applied, Next step, Salary, Source,
+  Updated, URL, Resume version, Location, Work mode, Salary min, Salary max, Currency,
+  Next action, Next action date, Contact name, Contact email, Notes, Created at, Updated
+  at. No id column; "Updated" appears once as an exact name.
+
+### UI — Jobs page
+
+- `JobsPage` (was the M0 placeholder) owns the model, the proxy and the
+  `StatusBadgeDelegate`. Toolbar: page search box, status chips (All/Active/Interviewing/
+  Offer/Closed), Export CSV, `+ Application`. Default sort is Updated descending, the
+  footer counts every application per status from `countsByStatus()`, and a
+  `QStackedWidget` switches between no-data, table and no-matches empty states.
+- Context menu per row: Edit, Change status submenu, Add interview (disabled, "Arrives in
+  M3"), Open posting URL (only `http`/`https`, otherwise a no-op), Duplicate, Delete with
+  confirmation. `Enter`, double-click and `activated` open the editor, `Delete` asks to
+  delete — both through an event filter on the table, so `Delete` in the search box does
+  nothing to the table.
+- One filter state: `setSearchText()` is the single entry point, the page box mirrors the
+  text under a `QSignalBlocker` so the two cannot echo each other.
+- `ApplicationDialog` is the real four-tab editor: Overview with every `applications`
+  field (editable source combo, status and work-mode combo, salary min/max + currency,
+  applied date, next action + date, URL, resume version, location, contacts), inline
+  validation (company and position required, salary min ≤ salary max, a malformed contact
+  e-mail only warns), Notes, a read-only Interviews list and a read-only Timeline from
+  `statusHistory()`. Interviews and Timeline are disabled and empty until the row exists.
+  Dirty tracking drives a "Discard changes?" confirmation on Cancel and on window close.
+
+### UI — header
+
+- The header search box owns no state: it switches to the Jobs page when needed and
+  forwards the text to `JobsPage::setSearchText`.
+- `+ New` is a `QToolButton` with a menu: **Application** is enabled and runs the current
+  page's `triggerNew()`; **Interview** and **Study session** are disabled with the
+  milestone they arrive in.
+- `Find` and `New` are registered once in `MainWindow` and dispatch to the active page's
+  `focusSearch()` / `triggerNew()` through new `PageBase` hooks. No widget owns a
+  shortcut, so no shortcut can be ambiguous.
+
+## How to run
+
+```bash
+cd /home/tony/projects/JobPrep
+CMAKE_BUILD_PARALLEL_LEVEL=2 ./scripts/check.sh      # configure + build + ctest
+./build/dev-linux/jobprep                            # run the app
+```
+
+Qt comes from the system (`/usr/lib/x86_64-linux-gnu/cmake/Qt6`, Qt 6.10.2), found through
+the existing `build/dev-linux` cache; `QT_PREFIX_PATH` is not set on this machine.
+
+## How verified
+
+Environment: Linux 26.04, GCC 15.2.0, Ninja, `dev-linux` preset, `CMAKE_BUILD_TYPE=Debug`,
+`JOBPREP_WERROR=ON`, build with `CMAKE_BUILD_PARALLEL_LEVEL=2`. Not built on Windows —
+nothing platform-specific was added.
+
+Commands and results:
+
+- `CMAKE_BUILD_PARALLEL_LEVEL=2 ./scripts/check.sh` — configure OK, build OK with zero
+  warnings, `100% tests passed, 0 tests failed out of 13` (the 13 binaries: tst_Database,
+  tst_TrackRepository, tst_TopicRepository, tst_SessionRepository,
+  tst_ApplicationRepository, tst_InterviewRepository, tst_ReminderLogRepository,
+  tst_SeedService, tst_TransactionBehavior, ui_smoke, tst_ApplicationTableModel,
+  tst_ApplicationFilterProxy, tst_ExportService). Run after every commit.
+- `ui_smoke` — 19 slots, all passing, and the message handler fails the run on any
+  unexpected `qWarning`/`qCritical`.
+
+Acceptance criteria (SPEC §12):
+
+| Criterion | How verified |
+| --- | --- |
+| Add | `testJobsPageAddAndEdit` drives the real modal dialog through `newApplication()` and asserts the new row is visible and in the database. |
+| Edit | Same slot: `Enter` on the selected row opens the editor and the changed company shows in the cell and in the database. |
+| Delete | `testJobsPageDuplicateAndDelete` answers the confirmation with No (row kept) and with Yes (row gone from the table and the database). |
+| Duplicate | Same slot: `duplicate()` adds a row with its own id and history. |
+| Sort and filter | `testJobsPageSortAndFilter`: header click flips company order, the Closed chip keeps only the rejected row, and a Cyrillic search matches the notes column. `testHeaderSearchFiltersJobsTable` covers the header box. |
+| Status change appears in Timeline | `testJobsPageStatusChangeAppearsInTimeline`: `changeStatus(id, Offer)` grows `statusHistory()` to two rows and the Timeline tab shows Applied → Offer. |
+| CSV export | `testJobsPageCsvExport`: the file starts with the UTF-8 BOM, its header equals `ExportService::headers()`, data rows follow the visible order, and an empty result still writes the header row. |
+| Dialog behaviours | `testApplicationDialogTabs`, `testApplicationDialogValidation`, `testApplicationDialogCancelKeepsEditing`: four tabs, required fields, salary range, e-mail warning only, Cancel-keeps-editing vs Discard. |
+| Light and dark | `testJobsPageThemes` renders the page and a dialog in both modes with zero warnings. |
+| Real launch | `XDG_DATA_HOME=$(mktemp -d) XDG_CONFIG_HOME=$(mktemp -d) ./jobprep` on the live Wayland session: the process stayed up for the full 12 s window, stderr was empty, and `jobprep.sqlite` appeared in the fresh folder. Repeated with `QT_QPA_PLATFORM=xcb` for X11: same result. |
+
+Not verified by agent, user to check:
+
+- **Status badge contrast in light and dark themes.** The tests only assert that both
+  themes render without warnings.
+- **The CSV opening in a spreadsheet app.** The bytes are asserted (BOM, CRLF, header,
+  order), but no spreadsheet was opened here.
+
+## Deviations and assumptions
+
+1. `QList<QPointer<QObject>>` for the pending notifications, not `QPointer<Repository>` as
+   the amendment asked. `QPointer` needs a complete type at instantiation, and
+   `Repository` is only forward-declared in `Database.h`; with the base `QObject` the
+   queue still cannot outlive its repository.
+2. `ExportService::headers()` is the canonical header list; the plan called it
+   `applicationHeaders()`.
+3. The CSV has both `Updated` (the A1 column) and `Updated at` (the raw `updated_at`
+   field), because the rule is "A1 columns plus all remaining fields". No id column, and
+   `Updated` appears once as an exact name.
+4. `Database`'s default connection name is now unique per instance. Not requested by the
+   plan; needed because the UI tests keep two `AppContext`s alive and the old fixed name
+   made the second one lose its connection.
+5. `ui_smoke` filters the offscreen platform plugin's `This plugin does not support
+   propagateSizeHints()` notice, which Qt logs once per shown dialog. It is a limitation of
+   the test platform plugin, not of the application.
+6. Typing in the header search box jumps to the Jobs page from any page, as the plan
+   specifies. `PageBase::focusSearch()` stays a no-op for pages without a search box.
+7. `ApplicationDialog::reject()` is public (it was protected) so a test can drive the
+   discard confirmation without weakening it: the confirmation itself still runs.
+8. `JobsPage` got the minimal `MainWindow` injection in the B1 commit, because the build
+   has to stay green between commits; the header search, the `+ New` menu and the
+   shortcuts are the B2 commit.
+9. The Inter font is not bundled (the files were not available on this machine), so the
+   system UI font is used — recorded in `resources/fonts/README.md`.
+10. The report is a fourth commit after the three code commits, because it has to record
+    the real launch that happens after the code is green.
+
+## Suggested next step
+
+M3 — Calendar and interviews: `InterviewDialog`, the read-only Interviews tab of the
+application dialog becomes editable, `AgendaService` (with tests for ranges across month
+borders, follow-ups and target dates), `MonthView` and the agenda panel. The context-menu
+"Add interview…" entry and the `+ New` → Interview action in the header turn on at that
+point.
