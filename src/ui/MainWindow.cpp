@@ -4,10 +4,11 @@
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
-#include <QPushButton>
+#include <QMenu>
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QStatusBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
 #include "app/AppContext.h"
@@ -99,10 +100,16 @@ void MainWindow::setupUi() {
     m_searchEdit->setClearButtonEnabled(true);
     headerLayout->addWidget(m_searchEdit, 0, Qt::AlignVCenter);
 
-    m_newBtn = new QPushButton(header);
-    m_newBtn->setObjectName(u"HeaderPrimaryBtn"_s);
+    // A menu, not a bare button: each entry point can arrive in a later milestone and
+    // must not be a dead or ambiguous button until then.
+    m_newBtn = new QToolButton(header);
+    m_newBtn->setObjectName(u"HeaderNewBtn"_s);
     m_newBtn->setText(tr("+ New"));
+    m_newBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     m_newBtn->setCursor(Qt::PointingHandCursor);
+    m_newBtn->setPopupMode(QToolButton::InstantPopup);
+    m_newBtn->setMenu(setupNewMenu(header));
+    m_newBtn->setToolTip(tr("Add something new"));
     headerLayout->addWidget(m_newBtn, 0, Qt::AlignVCenter);
 
     rightLayout->addWidget(header);
@@ -112,8 +119,10 @@ void MainWindow::setupUi() {
 
     m_pages.append(new Pages::HomePage(m_pageStack));
     m_pages.append(new Pages::StudyPage(m_pageStack));
-    m_pages.append(new Pages::JobsPage(m_ctx.applications(), m_ctx.interviews(),
-                                      m_ctx.exportService(), m_pageStack));
+    m_jobsPage = new Pages::JobsPage(m_ctx.applications(), m_ctx.interviews(),
+                                     m_ctx.exportService(), m_pageStack);
+    m_pages.append(m_jobsPage);
+    m_jobsIndex = static_cast<int>(m_pages.size()) - 1;
     m_pages.append(new Pages::CalendarPage(m_pageStack));
     m_pages.append(new Pages::SettingsPage(m_ctx.settings(), m_ctx.themeManager(), m_pageStack));
 
@@ -155,16 +164,63 @@ void MainWindow::setupShortcuts() {
         updateHeader(4);
     });
 
+    // Shortcuts live here only, never on a widget, so none of them is ambiguous.
     auto* findShortcut = new QShortcut(QKeySequence::Find, this);
-    connect(findShortcut, &QShortcut::activated, this, [this]() {
-        m_searchEdit->setFocus();
-        m_searchEdit->selectAll();
-    });
+    connect(findShortcut, &QShortcut::activated, this, &MainWindow::focusCurrentPageSearch);
+
+    auto* newShortcut = new QShortcut(QKeySequence::New, this);
+    connect(newShortcut, &QShortcut::activated, this, &MainWindow::triggerCurrentPageNew);
+}
+
+QMenu* MainWindow::setupNewMenu(QWidget* parent) {
+    auto* menu = new QMenu(parent);
+    menu->setObjectName(u"HeaderNewMenu"_s);
+
+    QAction* application = menu->addAction(tr("Application"));
+    application->setObjectName(u"HeaderNewApplication"_s);
+    connect(application, &QAction::triggered, this, &MainWindow::triggerCurrentPageNew);
+
+    // Interviews and study sessions have no page yet; they arrive in M3 and M4.
+    QAction* interview = menu->addAction(tr("Interview"));
+    interview->setObjectName(u"HeaderNewInterview"_s);
+    interview->setEnabled(false);
+    interview->setToolTip(tr("Arrives in M3"));
+
+    QAction* session = menu->addAction(tr("Study session"));
+    session->setObjectName(u"HeaderNewSession"_s);
+    session->setEnabled(false);
+    session->setToolTip(tr("Arrives in M4"));
+    return menu;
+}
+
+void MainWindow::goToPage(int pageIndex) {
+    m_sidebar->setCurrentPage(pageIndex);
+    updateHeader(pageIndex);
+}
+
+void MainWindow::focusCurrentPageSearch() {
+    auto* page = m_pages.value(m_pageStack->currentIndex(), nullptr);
+    if (!page) return;
+    page->focusSearch();
+}
+
+void MainWindow::triggerCurrentPageNew() {
+    auto* page = m_pages.value(m_pageStack->currentIndex(), nullptr);
+    if (!page) return;
+    page->triggerNew();
 }
 
 void MainWindow::setupConnections() {
     connect(m_sidebar, &Sidebar::pageSelected, this, [this](int index) {
         updateHeader(index);
+    });
+
+    // The header box owns no filter state: it forwards to the page, which mirrors the
+    // text back under a blocker.
+    connect(m_searchEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
+        if (m_jobsIndex < 0) return;
+        if (m_pageStack->currentIndex() != m_jobsIndex) goToPage(m_jobsIndex);
+        m_jobsPage->setSearchText(text);
     });
 
     connect(m_sidebar, &Sidebar::collapseToggled, this, [this](bool collapsed) {

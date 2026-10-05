@@ -1,3 +1,4 @@
+#include <QAction>
 #include <QApplication>
 #include <QFile>
 #include <QLineEdit>
@@ -12,6 +13,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextEdit>
+#include <QToolButton>
 #include <QTimer>
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
@@ -76,6 +78,16 @@ QPushButton* buttonNamed(QWidget* root, const QString& objectName) {
     return childNamed<QPushButton>(root, objectName);
 }
 
+/// Top-level ApplicationDialog widgets, used to prove an entry point opens exactly one.
+int countApplicationDialogs() {
+    int count = 0;
+    const auto widgets = QApplication::topLevelWidgets();
+    for (QWidget* widget : widgets) {
+        if (qobject_cast<ApplicationDialog*>(widget)) ++count;
+    }
+    return count;
+}
+
 }  // namespace
 
 class tst_UiSmoke : public QObject {
@@ -97,6 +109,8 @@ private slots:
     void testApplicationDialogValidation();
     void testApplicationDialogCancelKeepsEditing();
     void testJobsPageThemes();
+    void testHeaderSearchFiltersJobsTable();
+    void testNewEntryPointsOpenOneDialog();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -551,6 +565,82 @@ void tst_UiSmoke::testJobsPageThemes() {
     QCOMPARE(dialog.validationMessage(), QString());
     dialog.close();
     QCoreApplication::processEvents();
+}
+
+void tst_UiSmoke::testHeaderSearchFiltersJobsTable() {
+    // The window's own context is empty until now, so the table starts out blank.
+    QCOMPARE(m_window->pageStack()->currentIndex(), 0);
+    QCOMPARE(m_window->findChild<QTableView*>(u"JobsTableView"_s)->model()->rowCount(), 0);
+
+    for (const auto& company : {u"Southwind"_s, u"Eastwind"_s, u"Westwind"_s}) {
+        JobApplication app;
+        app.company = company;
+        app.position = u"Engineer"_s;
+        QVERIFY(m_ctx->applications().insert(app));
+    }
+
+    auto* headerSearch = m_window->findChild<QLineEdit*>(u"HeaderSearchEdit"_s);
+    auto* pageSearch = m_window->findChild<QLineEdit*>(u"JobsSearchEdit"_s);
+    auto* view = m_window->findChild<QTableView*>(u"JobsTableView"_s);
+    QVERIFY(headerSearch != nullptr);
+    QVERIFY(pageSearch != nullptr);
+    QVERIFY(view != nullptr);
+    QCOMPARE(view->model()->rowCount(), 3);
+
+    // Typing in the header box switches to Jobs and filters there.
+    headerSearch->setText(u"Southwind"_s);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 2);
+    QCOMPARE(m_window->pageStack()->currentWidget(), m_window->findChild<JobPrep::Ui::Pages::JobsPage*>());
+    QCOMPARE(pageSearch->text(), u"Southwind"_s);
+    QCOMPARE(view->model()->rowCount(), 1);
+
+    headerSearch->setText(QString());
+    QCOMPARE(pageSearch->text(), QString());
+    QCOMPARE(view->model()->rowCount(), 3);
+}
+
+void tst_UiSmoke::testNewEntryPointsOpenOneDialog() {
+    auto* newBtn = m_window->findChild<QToolButton*>(u"HeaderNewBtn"_s);
+    auto* applicationAction = m_window->findChild<QAction*>(u"HeaderNewApplication"_s);
+    auto* interviewAction = m_window->findChild<QAction*>(u"HeaderNewInterview"_s);
+    auto* sessionAction = m_window->findChild<QAction*>(u"HeaderNewSession"_s);
+    auto* pageAddBtn = m_window->findChild<QPushButton*>(u"JobsAddBtn"_s);
+    QVERIFY(newBtn != nullptr);
+    QVERIFY(newBtn->menu() != nullptr);
+    QVERIFY(applicationAction != nullptr);
+    QVERIFY(pageAddBtn != nullptr);
+
+    // Only Application works yet; the other two say which milestone brings them.
+    QVERIFY(applicationAction->isEnabled());
+    QVERIFY(interviewAction != nullptr && !interviewAction->isEnabled());
+    QCOMPARE(interviewAction->toolTip(), u"Arrives in M3");
+    QVERIFY(sessionAction != nullptr && !sessionAction->isEnabled());
+    QCOMPARE(sessionAction->toolTip(), u"Arrives in M4");
+
+    m_window->sidebar()->setCurrentPage(2);
+    emit m_window->sidebar()->pageSelected(2);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 2);
+
+    int dialogs = 0;
+    withNextModal([&dialogs](QWidget* modal) {
+        dialogs = countApplicationDialogs();
+        QCOMPARE(dialogs, 1);
+        auto* dialog = qobject_cast<ApplicationDialog*>(modal);
+        QVERIFY(dialog != nullptr);
+        dialog->reject();
+    });
+    applicationAction->trigger();
+    QCOMPARE(dialogs, 1);
+
+    withNextModal([&dialogs](QWidget* modal) {
+        dialogs = countApplicationDialogs();
+        auto* dialog = qobject_cast<ApplicationDialog*>(modal);
+        QVERIFY(dialog != nullptr);
+        dialog->reject();
+    });
+    pageAddBtn->click();
+    QCOMPARE(dialogs, 1);
+    QCOMPARE(m_ctx->applications().count(), 3);
 }
 
 void tst_UiSmoke::testZeroWarnings() {
