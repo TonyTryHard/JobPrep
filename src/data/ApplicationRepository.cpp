@@ -111,7 +111,7 @@ void bindApplication(SqlStatement& statement, const Domain::JobApplication& appl
 }  // namespace
 
 ApplicationRepository::ApplicationRepository(Database& database, QObject* parent)
-    : QObject(parent), m_database(database) {}
+    : Repository(parent), m_database(database) {}
 
 ApplicationRepository::~ApplicationRepository() = default;
 
@@ -165,60 +165,44 @@ bool ApplicationRepository::insert(Domain::JobApplication& application) {
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
     if (!insertRow(application)) return false;
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool ApplicationRepository::update(const Domain::JobApplication& application) {
-    auto transaction = m_database.transaction();
-    if (!transaction.isActive()) return false;
-
     const auto stored = byId(application.id);
-    if (!stored) {
-        m_database.setExpectedError(u"No application with id %1."_s.arg(QString::number(application.id)));
+    if (!acceptExisting(m_database, stored.has_value(), u"application"_s, application.id)) {
         return false;
     }
 
+    auto transaction = m_database.transaction();
+    if (!transaction.isActive()) return false;
     if (!updateRow(application)) return false;
     if (stored->status != application.status &&
         !addHistoryRow(application.id, stored->status, application.status, DbFormat::now(),
                        QString())) {
         return false;
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool ApplicationRepository::setStatus(int id, Domain::ApplicationStatus status,
                                       const QString& note) {
+    const auto stored = byId(id);
+    if (!acceptExisting(m_database, stored.has_value(), u"application"_s, id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
-
-    const auto stored = byId(id);
-    if (!stored) {
-        m_database.setExpectedError(u"No application with id %1."_s.arg(QString::number(id)));
-        return false;
-    }
-
     if (!updateStatusRow(id, status, stored->appliedDate)) return false;
     if (stored->status != status &&
         !addHistoryRow(id, stored->status, status, DbFormat::now(), note)) {
         return false;
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool ApplicationRepository::setNextAction(int id, const QString& text, std::optional<QDate> date) {
+    if (!acceptExisting(m_database, byId(id).has_value(), u"application"_s, id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -231,37 +215,26 @@ bool ApplicationRepository::setNextAction(int id, const QString& text, std::opti
     statement.bind(4, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) {
-        m_database.setExpectedError(u"No application with id %1."_s.arg(QString::number(id)));
-        return false;
+        return acceptExisting(m_database, false, u"application"_s, id);
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool ApplicationRepository::duplicate(int id, Domain::JobApplication& copy) {
+    const auto stored = byId(id);
+    if (!acceptExisting(m_database, stored.has_value(), u"application"_s, id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
-
-    const auto stored = byId(id);
-    if (!stored) {
-        m_database.setExpectedError(u"No application with id %1."_s.arg(QString::number(id)));
-        return false;
-    }
-
     copy = *stored;
     copy.id = 0;
     if (!insertRow(copy)) return false;
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool ApplicationRepository::remove(int id) {
+    if (!acceptExisting(m_database, byId(id).has_value(), u"application"_s, id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -269,14 +242,9 @@ bool ApplicationRepository::remove(int id) {
     statement.bind(1, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) {
-        m_database.setExpectedError(u"No application with id %1."_s.arg(QString::number(id)));
-        return false;
+        return acceptExisting(m_database, false, u"application"_s, id);
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 int ApplicationRepository::count() const {

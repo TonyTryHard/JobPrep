@@ -2,8 +2,8 @@
 
 #include <optional>
 #include <QList>
-#include <QObject>
 #include <QStringView>
+#include "data/Repository.h"
 #include "domain/Structs.h"
 
 namespace JobPrep::Data {
@@ -11,12 +11,11 @@ namespace JobPrep::Data {
 class Database;
 
 /// CRUD for study tracks (SPEC §5 `tracks`). Deleting a track cascades its topics.
-class TrackRepository : public QObject {
-    Q_OBJECT
+class TrackRepository : public Repository {
 
 public:
     explicit TrackRepository(Database& database, QObject* parent = nullptr);
-    ~TrackRepository() override;
+    ~TrackRepository() override = default;
 
     QList<Domain::Track> all() const;
     std::optional<Domain::Track> byId(int id) const;
@@ -32,8 +31,6 @@ public:
     QString lastError() const;
     JobPrep::Data::Database& database() const;
 
-signals:
-    void changed();
 
 private:
     Database& m_database;

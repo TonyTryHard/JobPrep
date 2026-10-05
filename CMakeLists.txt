@@ -66,6 +66,8 @@ add_library(jobprep_core STATIC
     src/data/DbFormat.cpp
     src/data/Database.h
     src/data/Database.cpp
+    src/data/Repository.h
+    src/data/Repository.cpp
     src/data/Migrations.h
     src/data/Migrations.cpp
     src/data/SqlStatement.h

@@ -1,6 +1,7 @@
 #include "models/ApplicationTableModel.h"
 #include <QDate>
 #include <QMap>
+#include <algorithm>
 #include "data/ApplicationRepository.h"
 #include "data/DbFormat.h"
 #include "data/InterviewRepository.h"
@@ -13,9 +14,17 @@ namespace JobPrep::Models {
 ApplicationTableModel::ApplicationTableModel(JobPrep::Data::ApplicationRepository& apps,
                                              JobPrep::Data::InterviewRepository& interviews,
                                              QObject* parent)
-    : QAbstractTableModel(parent), m_apps(apps), m_interviews(interviews) {
+    : QAbstractTableModel(parent),
+      m_apps(apps),
+      m_interviews(interviews),
+      m_clock([] { return QDateTime::currentDateTime(); }) {
     connect(&m_apps, &JobPrep::Data::ApplicationRepository::changed, this, &ApplicationTableModel::reload);
     connect(&m_interviews, &JobPrep::Data::InterviewRepository::changed, this, &ApplicationTableModel::reload);
+    reload();
+}
+
+void ApplicationTableModel::setClock(Clock clock) {
+    m_clock = clock ? std::move(clock) : Clock([] { return QDateTime::currentDateTime(); });
     reload();
 }
 
@@ -43,7 +52,8 @@ void ApplicationTableModel::buildCache() {
     for (const auto& iv : allInterviews) {
         byApp[iv.applicationId].append(iv);
     }
-    const QDateTime now = QDateTime::currentDateTime();
+    // Read the clock once: every row must see the same "now".
+    const QDateTime now = m_clock();
 
     m_cache.clear();
     m_cache.reserve(apps.size());
@@ -63,21 +73,24 @@ void ApplicationTableModel::buildCache() {
                 break;
             }
         }
-        // Build next step text
-        if (rc.nextInterviewAt.has_value()) {
-            const QDateTime sat = rc.nextInterviewAt.value();
-            rc.nextStepText = sat.toString(u"yyyy-MM-dd HH:mm"_s);
-        } else {
-            if (!app.nextAction.isEmpty() && app.nextActionDate.has_value()) {
-                rc.nextStepText = app.nextAction + u" ("_s + JobPrep::Data::DbFormat::toText(app.nextActionDate.value()) + u")"_s;
-            } else if (app.nextActionDate.has_value()) {
-                rc.nextStepText = JobPrep::Data::DbFormat::toText(app.nextActionDate.value());
-            } else if (!app.nextAction.isEmpty()) {
-                rc.nextStepText = app.nextAction;
-            }
-        }
+        rc.nextStepText = nextStepText(app, rc.nextInterviewAt);
         m_cache.append(rc);
     }
+}
+
+QString ApplicationTableModel::nextStepText(const JobPrep::Domain::JobApplication& app,
+                                            std::optional<QDateTime> nextInterviewAt) const {
+    // An interview is the most urgent thing about a row, so it wins over the next action.
+    if (nextInterviewAt.has_value()) {
+        return nextInterviewAt->toString(u"yyyy-MM-dd HH:mm"_s);
+    }
+    const QString actionDate =
+        app.nextActionDate.has_value() ? JobPrep::Data::DbFormat::toText(*app.nextActionDate) : QString();
+    if (!app.nextAction.isEmpty() && !actionDate.isEmpty()) {
+        return app.nextAction + u" ("_s + actionDate + u")"_s;
+    }
+    if (!actionDate.isEmpty()) return actionDate;
+    return app.nextAction;
 }
 
 QVariant ApplicationTableModel::data(const QModelIndex& index, int role) const {
@@ -88,21 +101,10 @@ QVariant ApplicationTableModel::data(const QModelIndex& index, int role) const {
         switch (index.column()) {
             case CompanyColumn: return app.company;
             case PositionColumn: return app.position;
-            case StatusColumn: {
-                switch (app.status) {
-                    case Domain::ApplicationStatus::Wishlist: return tr("Wishlist");
-                    case Domain::ApplicationStatus::Applied: return tr("Applied");
-                    case Domain::ApplicationStatus::HrScreen: return tr("HR Screen");
-                    case Domain::ApplicationStatus::Technical: return tr("Technical");
-                    case Domain::ApplicationStatus::Final: return tr("Final");
-                    case Domain::ApplicationStatus::Offer: return tr("Offer");
-                    case Domain::ApplicationStatus::Accepted: return tr("Accepted");
-                    case Domain::ApplicationStatus::Rejected: return tr("Rejected");
-                    case Domain::ApplicationStatus::Withdrawn: return tr("Withdrawn");
-                    case Domain::ApplicationStatus::Ghosted: return tr("Ghosted");
-                }
-                return QString();
-            }
+            case StatusColumn:
+            // The label lives in StatusStyle, which the status badge delegate paints;
+            // StatusRole carries the enum, so the model never formats it twice.
+            return QVariant();
             case AppliedColumn: return app.appliedDate.has_value() ? JobPrep::Data::DbFormat::toText(app.appliedDate.value()) : QString();
             case NextStepColumn: return rc.nextStepText;
             case SalaryColumn: {

@@ -31,9 +31,7 @@ bool reportMissingTrack(Database& database, int id) {
 }  // namespace
 
 TrackRepository::TrackRepository(Database& database, QObject* parent)
-    : QObject(parent), m_database(database) {}
-
-TrackRepository::~TrackRepository() = default;
+    : Repository(parent), m_database(database) {}
 
 QList<Domain::Track> TrackRepository::all() const {
     QList<Domain::Track> tracks;
@@ -72,14 +70,15 @@ bool TrackRepository::insert(Domain::Track& track) {
     statement.bind(2, track.color);
     statement.bind(3, track.icon);
     statement.bind(4, track.position);
-    if (!statement.exec() || !transaction.commit()) return false;
-
+    if (!statement.exec()) return false;
+    if (!commitAndNotify(m_database, transaction)) return false;
     track.id = statement.lastInsertId();
-    emit changed();
     return true;
 }
 
 bool TrackRepository::update(const Domain::Track& track) {
+    if (!acceptExisting(m_database, byId(track.id).has_value(), u"track"_s, track.id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -92,14 +91,12 @@ bool TrackRepository::update(const Domain::Track& track) {
     statement.bind(5, track.id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingTrack(m_database, track.id);
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool TrackRepository::remove(int id) {
+    if (!acceptExisting(m_database, byId(id).has_value(), u"track"_s, id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -107,11 +104,7 @@ bool TrackRepository::remove(int id) {
     statement.bind(1, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingTrack(m_database, id);
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 int TrackRepository::count() const {

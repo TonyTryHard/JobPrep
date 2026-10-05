@@ -1,9 +1,9 @@
 #pragma once
 
 #include <QList>
-#include <QObject>
 #include <QString>
 #include <QStringView>
+#include "data/Repository.h"
 #include "domain/Structs.h"
 
 namespace JobPrep::Data {
@@ -12,8 +12,7 @@ class Database;
 
 /// Bookkeeping of already delivered reminders (SPEC §5 `reminders_sent`, §3.5 R2).
 /// Keys look like `interview:<id>:<leadMinutes>` or `followup:<appId>:<yyyy-MM-dd>`.
-class ReminderLogRepository : public QObject {
-    Q_OBJECT
+class ReminderLogRepository : public Repository {
 
 public:
     explicit ReminderLogRepository(Database& database, QObject* parent = nullptr);
@@ -29,8 +28,6 @@ public:
     QString lastError() const;
     JobPrep::Data::Database& database() const;
 
-signals:
-    void changed();
 
 private:
     Database& m_database;

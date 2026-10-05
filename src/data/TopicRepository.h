@@ -2,7 +2,7 @@
 
 #include <optional>
 #include <QList>
-#include <QObject>
+#include "data/Repository.h"
 #include "domain/Structs.h"
 
 namespace JobPrep::Data {
@@ -11,8 +11,7 @@ class Database;
 
 /// CRUD for topics and their checklist items (SPEC §5 `topics`, `subtasks`).
 /// Topics and subtasks share one `changed()` signal so views reload together.
-class TopicRepository : public QObject {
-    Q_OBJECT
+class TopicRepository : public Repository {
 
 public:
     explicit TopicRepository(Database& database, QObject* parent = nullptr);
@@ -51,11 +50,10 @@ public:
     QString lastError() const;
     JobPrep::Data::Database& database() const;
 
-signals:
-    void changed();
 
 private:
     int countSubtasks(int topicId, bool doneOnly) const;
+    bool subtaskExists(int subtaskId) const;
 
     Database& m_database;
 };

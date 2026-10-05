@@ -88,7 +88,7 @@ void bindTopic(SqlStatement& statement, const Domain::Topic& topic) {
 }  // namespace
 
 TopicRepository::TopicRepository(Database& database, QObject* parent)
-    : QObject(parent), m_database(database) {}
+    : Repository(parent), m_database(database) {}
 
 TopicRepository::~TopicRepository() = default;
 
@@ -135,14 +135,15 @@ bool TopicRepository::insert(Domain::Topic& topic) {
     bindTopic(statement, topic);
     statement.bind(10, topic.createdAt);
     statement.bind(11, topic.updatedAt);
-    if (!statement.exec() || !transaction.commit()) return false;
-
+    if (!statement.exec()) return false;
+    if (!commitAndNotify(m_database, transaction)) return false;
     topic.id = statement.lastInsertId();
-    emit changed();
     return true;
 }
 
 bool TopicRepository::update(const Domain::Topic& topic) {
+    if (!acceptExisting(m_database, byId(topic.id).has_value(), u"topic"_s, topic.id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -155,14 +156,12 @@ bool TopicRepository::update(const Domain::Topic& topic) {
     statement.bind(11, topic.id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"topic"_s, topic.id);
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool TopicRepository::setStatus(int id, Domain::TopicStatus status) {
+    if (!acceptExisting(m_database, byId(id).has_value(), u"topic"_s, id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -173,14 +172,14 @@ bool TopicRepository::setStatus(int id, Domain::TopicStatus status) {
     statement.bind(3, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"topic"_s, id);
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool TopicRepository::updatePositions(const QList<int>& orderedIds) {
+    for (const int id : orderedIds) {
+        if (!acceptExisting(m_database, byId(id).has_value(), u"topic"_s, id)) return false;
+    }
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -193,14 +192,12 @@ bool TopicRepository::updatePositions(const QList<int>& orderedIds) {
             return reportMissingRow(m_database, u"topic"_s, orderedIds.at(position));
         }
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool TopicRepository::remove(int id) {
+    if (!acceptExisting(m_database, byId(id).has_value(), u"topic"_s, id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -208,11 +205,7 @@ bool TopicRepository::remove(int id) {
     statement.bind(1, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"topic"_s, id);
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 int TopicRepository::count() const {
@@ -236,6 +229,11 @@ QList<Domain::Subtask> TopicRepository::subtasks(int topicId) const {
 }
 
 bool TopicRepository::addSubtask(Domain::Subtask& subtask) {
+    if (!acceptExisting(m_database, byId(subtask.topicId).has_value(), u"topic"_s,
+                        subtask.topicId)) {
+        return false;
+    }
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -246,14 +244,17 @@ bool TopicRepository::addSubtask(Domain::Subtask& subtask) {
     statement.bind(2, subtask.text);
     statement.bind(3, subtask.done);
     statement.bind(4, subtask.position);
-    if (!statement.exec() || !transaction.commit()) return false;
-
+    if (!statement.exec()) return false;
+    if (!commitAndNotify(m_database, transaction)) return false;
     subtask.id = statement.lastInsertId();
-    emit changed();
     return true;
 }
 
 bool TopicRepository::updateSubtask(const Domain::Subtask& subtask) {
+    if (!acceptExisting(m_database, subtaskExists(subtask.id), u"subtask"_s, subtask.id)) {
+        return false;
+    }
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -267,14 +268,14 @@ bool TopicRepository::updateSubtask(const Domain::Subtask& subtask) {
     statement.bind(5, subtask.id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"subtask"_s, subtask.id);
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool TopicRepository::setSubtaskDone(int subtaskId, bool done) {
+    if (!acceptExisting(m_database, subtaskExists(subtaskId), u"subtask"_s, subtaskId)) {
+        return false;
+    }
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -285,14 +286,14 @@ bool TopicRepository::setSubtaskDone(int subtaskId, bool done) {
     if (statement.rowsAffected() != 1) {
         return reportMissingRow(m_database, u"subtask"_s, subtaskId);
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool TopicRepository::removeSubtask(int subtaskId) {
+    if (!acceptExisting(m_database, subtaskExists(subtaskId), u"subtask"_s, subtaskId)) {
+        return false;
+    }
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -300,14 +301,16 @@ bool TopicRepository::removeSubtask(int subtaskId) {
     statement.bind(1, subtaskId);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) return reportMissingRow(m_database, u"subtask"_s, subtaskId);
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool TopicRepository::reorderSubtasks(int topicId, const QList<int>& orderedIds) {
+    for (const int subtaskId : orderedIds) {
+        if (!acceptExisting(m_database, subtaskExists(subtaskId), u"subtask"_s, subtaskId)) {
+            return false;
+        }
+    }
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -322,11 +325,7 @@ bool TopicRepository::reorderSubtasks(int topicId, const QList<int>& orderedIds)
             return reportMissingRow(m_database, u"subtask"_s, orderedIds.at(position));
         }
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 int TopicRepository::subtaskCount(int topicId) const {
@@ -345,6 +344,12 @@ int TopicRepository::countSubtasks(int topicId, bool doneOnly) const {
     statement.bind(1, topicId);
     if (!statement.exec() || !statement.query().next()) return 0;
     return statement.query().value(0).toInt();
+}
+
+bool TopicRepository::subtaskExists(int subtaskId) const {
+    SqlStatement statement(m_database, u"SELECT 1 FROM subtasks WHERE id = ?"_s);
+    statement.bind(1, subtaskId);
+    return statement.exec() && statement.query().next();
 }
 
 QString TopicRepository::lastError() const {

@@ -3,6 +3,7 @@
 #include <QAbstractTableModel>
 #include <QDateTime>
 #include <QList>
+#include <functional>
 #include <optional>
 #include "domain/Enums.h"
 #include "domain/Structs.h"
@@ -18,6 +19,9 @@ class ApplicationTableModel : public QAbstractTableModel {
     Q_OBJECT
 
 public:
+    /// Reads "now"; injected so tests can pin it instead of racing the wall clock.
+    using Clock = std::function<QDateTime()>;
+
     enum Column {
         CompanyColumn = 0,
         PositionColumn,
@@ -41,6 +45,9 @@ public:
                           QObject* parent = nullptr);
     ~ApplicationTableModel() override = default;
 
+    /// Replaces the clock used to decide which interviews are still upcoming.
+    void setClock(Clock clock);
+
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     int columnCount(const QModelIndex& parent = QModelIndex()) const override;
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
@@ -57,11 +64,14 @@ private:
     };
 
     int effectiveSalary(const JobPrep::Domain::JobApplication& app) const;
+    QString nextStepText(const JobPrep::Domain::JobApplication& app,
+                         std::optional<QDateTime> nextInterviewAt) const;
     void buildCache();
 
     JobPrep::Data::ApplicationRepository& m_apps;
     JobPrep::Data::InterviewRepository& m_interviews;
     QList<RowCache> m_cache;
+    Clock m_clock;
 };
 
 }  // namespace JobPrep::Models

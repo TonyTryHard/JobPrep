@@ -69,7 +69,7 @@ QList<Domain::Interview> collect(Database& database, SqlStatement& statement) {
 }  // namespace
 
 InterviewRepository::InterviewRepository(Database& database, QObject* parent)
-    : QObject(parent), m_database(database) {}
+    : Repository(parent), m_database(database) {}
 
 InterviewRepository::~InterviewRepository() = default;
 
@@ -119,14 +119,18 @@ bool InterviewRepository::insert(Domain::Interview& interview) {
                            u"type, place, interviewer, notes, outcome) "
                            u"VALUES (?, ?, ?, ?, ?, ?, ?, ?)"_s);
     bindInterview(statement, interview);
-    if (!statement.exec() || !transaction.commit()) return false;
-
+    if (!statement.exec()) return false;
+    if (!commitAndNotify(m_database, transaction)) return false;
     interview.id = statement.lastInsertId();
-    emit changed();
     return true;
 }
 
 bool InterviewRepository::update(const Domain::Interview& interview) {
+    if (!acceptExisting(m_database, byId(interview.id).has_value(), u"interview"_s,
+                        interview.id)) {
+        return false;
+    }
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -138,18 +142,14 @@ bool InterviewRepository::update(const Domain::Interview& interview) {
     statement.bind(9, interview.id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) {
-        m_database.setExpectedError(
-            u"No interview with id %1."_s.arg(QString::number(interview.id)));
-        return false;
+        return acceptExisting(m_database, false, u"interview"_s, interview.id);
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool InterviewRepository::remove(int id) {
+    if (!acceptExisting(m_database, byId(id).has_value(), u"interview"_s, id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -157,14 +157,9 @@ bool InterviewRepository::remove(int id) {
     statement.bind(1, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) {
-        m_database.setExpectedError(u"No interview with id %1."_s.arg(QString::number(id)));
-        return false;
+        return acceptExisting(m_database, false, u"interview"_s, id);
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 QString InterviewRepository::lastError() const {

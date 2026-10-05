@@ -40,7 +40,7 @@ void bindSession(SqlStatement& statement, const Domain::StudySession& session) {
 }  // namespace
 
 SessionRepository::SessionRepository(Database& database, QObject* parent)
-    : QObject(parent), m_database(database) {}
+    : Repository(parent), m_database(database) {}
 
 SessionRepository::~SessionRepository() = default;
 
@@ -89,14 +89,18 @@ bool SessionRepository::insert(Domain::StudySession& session) {
                            u"INSERT INTO study_sessions (topic_id, session_date, minutes, note) "
                            u"VALUES (?, ?, ?, ?)"_s);
     bindSession(statement, session);
-    if (!statement.exec() || !transaction.commit()) return false;
-
+    if (!statement.exec()) return false;
+    if (!commitAndNotify(m_database, transaction)) return false;
     session.id = statement.lastInsertId();
-    emit changed();
     return true;
 }
 
 bool SessionRepository::update(const Domain::StudySession& session) {
+    if (!acceptExisting(m_database, byId(session.id).has_value(), u"study session"_s,
+                        session.id)) {
+        return false;
+    }
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -108,18 +112,14 @@ bool SessionRepository::update(const Domain::StudySession& session) {
     statement.bind(5, session.id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) {
-        m_database.setExpectedError(
-            u"No study session with id %1."_s.arg(QString::number(session.id)));
-        return false;
+        return acceptExisting(m_database, false, u"study session"_s, session.id);
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 bool SessionRepository::remove(int id) {
+    if (!acceptExisting(m_database, byId(id).has_value(), u"study session"_s, id)) return false;
+
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;
 
@@ -127,14 +127,9 @@ bool SessionRepository::remove(int id) {
     statement.bind(1, id);
     if (!statement.exec()) return false;
     if (statement.rowsAffected() != 1) {
-        m_database.setExpectedError(u"No study session with id %1."_s.arg(QString::number(id)));
-        return false;
+        return acceptExisting(m_database, false, u"study session"_s, id);
     }
-    bool owner = transaction.isOwner();
-    if (!transaction.commit()) return false;
-    if (owner) emit changed();
-    else m_database.deferChanged(this);
-    return true;
+    return commitAndNotify(m_database, transaction);
 }
 
 int SessionRepository::count() const {

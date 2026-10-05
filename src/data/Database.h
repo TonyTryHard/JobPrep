@@ -1,11 +1,14 @@
 #pragma once
 
+#include <QList>
+#include <QObject>
 #include <QPointer>
-#include <QSet>
 #include <QSqlDatabase>
 #include <QString>
 
 namespace JobPrep::Data {
+
+class Repository;
 
 /// Owns the SQLite connection: opens it, applies the pragmas and runs migrations.
 class Database {
@@ -47,7 +50,6 @@ public:
     /// services can wrap several repository writes into a single unit of work.
     class Transaction {
     public:
-    public:
         /// Internal: instances are only produced by `Database::transaction()`, which
         /// is not a friend of this nested class.
         explicit Transaction(Database* database, bool owner);
@@ -72,24 +74,28 @@ public:
         bool m_owner{false};
     };
 
-    Transaction transaction() const;
+    Transaction transaction();
 
-    void deferChanged(QObject* repo) const;
-    void flushPendingChanges() const;
-    void clearPendingChanges() const;
+    void deferChanged(Repository* repo);
+    void flushPendingChanges();
+    void clearPendingChanges();
 
 private:
-    bool begin() const;
-    bool commitInternal() const;
-    void rollbackInternal() const;
+    bool begin();
+    bool commitInternal();
+    void rollbackInternal();
     bool readPragma(const QString& pragma, QVariant* value) const;
+    void markOuterFailed();
 
     QString m_connectionName;
     QString m_path;
     mutable QString m_lastError;
-    mutable int m_transactionDepth{0};
-    mutable QSet<QObject*> m_pendingChangeRepos;
+    int m_transactionDepth{0};
+    // QPointer, not a raw pointer: a repository may die inside the outer unit of work.
+    // QObject rather than Repository so the header does not need Repository complete.
+    QList<QPointer<QObject>> m_pendingChangeRepos;
     bool m_open{false};
+    bool m_outerFailed{false};
 };
 
 }  // namespace JobPrep::Data

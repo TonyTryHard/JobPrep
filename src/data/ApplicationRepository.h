@@ -3,7 +3,7 @@
 #include <optional>
 #include <QHash>
 #include <QList>
-#include <QObject>
+#include "data/Repository.h"
 #include "domain/Structs.h"
 
 namespace JobPrep::Data {
@@ -13,8 +13,7 @@ class Database;
 /// CRUD for job applications and their status history (SPEC §5 `applications`,
 /// `status_history`). Status changes write the history row in the same transaction
 /// (SPEC §3.3 A5), including the initial row of a new application.
-class ApplicationRepository : public QObject {
-    Q_OBJECT
+class ApplicationRepository : public Repository {
 
 public:
     explicit ApplicationRepository(Database& database, QObject* parent = nullptr);
@@ -51,8 +50,6 @@ public:
     QString lastError() const;
     JobPrep::Data::Database& database() const;
 
-signals:
-    void changed();
 
 private:
     bool insertRow(Domain::JobApplication& application);

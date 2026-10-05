@@ -5,7 +5,6 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QSet>
-#include <QSignalBlocker>
 #include <QStringList>
 #include "services/SeedService.h"
 #include "data/Database.h"
@@ -87,6 +86,12 @@ bool readSeedFile(QList<SeedTrack>* tracks, QString* error) {
     return true;
 }
 
+/// A poisoned or rejected unit of work may leave no SQL error behind, but the caller
+/// still needs something to show.
+QString seedFailure(const QString& lastError) {
+    return lastError.isEmpty() ? u"The seed was rolled back."_s : lastError;
+}
+
 }  // namespace
 
 SeedService::SeedService(Data::TrackRepository& tracks, Data::TopicRepository& topics,
@@ -105,82 +110,70 @@ bool SeedService::loadSampleTopics(QString* error) {
         return false;
     }
 
-    // The repositories emit one changed() per write; the whole seed is a single unit
-    // of work, so intermediate signals are suppressed and re-emitted after commit.
-    bool tracksAdded = false;
-    bool topicsAdded = false;
-    {
-        const QSignalBlocker trackBlocker(&m_tracks);
-        const QSignalBlocker topicBlocker(&m_topics);
-
-        int position = 0;
-        for (const SeedTrack& seedTrack : seedTracks) {
-            int trackId = 0;
-            if (const auto existing = m_tracks.idByName(seedTrack.name)) {
-                trackId = *existing;
-            } else {
-                Domain::Track track;
-                track.name = seedTrack.name;
-                track.color = seedTrack.color;
-                track.icon = seedTrack.icon;
-                track.position = position;
-                if (!m_tracks.insert(track)) {
-                    if (error) *error = m_tracks.lastError();
-                    return false;
-                }
-                trackId = track.id;
-                tracksAdded = true;
+    // The whole seed is one unit of work. The repositories defer their changed() to the
+    // outer commit, so consumers see exactly one signal per repository, after the data.
+    int position = 0;
+    for (const SeedTrack& seedTrack : seedTracks) {
+        int trackId = 0;
+        if (const auto existing = m_tracks.idByName(seedTrack.name)) {
+            trackId = *existing;
+        } else {
+            Domain::Track track;
+            track.name = seedTrack.name;
+            track.color = seedTrack.color;
+            track.icon = seedTrack.icon;
+            track.position = position;
+            if (!m_tracks.insert(track)) {
+                if (error) *error = m_tracks.lastError();
+                return false;
             }
-            ++position;
+            trackId = track.id;
+        }
+        ++position;
 
-            QSet<QString> existingTitles;
-            for (const Domain::Topic& topic : m_topics.byTrack(trackId)) {
-                existingTitles.insert(topic.title);
+        QSet<QString> existingTitles;
+        for (const Domain::Topic& topic : m_topics.byTrack(trackId)) {
+            existingTitles.insert(topic.title);
+        }
+
+        int topicPosition = 0;
+        for (const SeedTopic& seedTopic : seedTrack.topics) {
+            if (existingTitles.contains(seedTopic.title)) {
+                ++topicPosition;
+                continue;
+            }
+            Domain::Topic topic;
+            topic.trackId = trackId;
+            topic.title = seedTopic.title;
+            topic.status = Domain::TopicStatus::Backlog;
+            topic.priority = seedTopic.priority;
+            topic.tags = seedTopic.tags;
+            topic.position = topicPosition;
+            if (!m_topics.insert(topic)) {
+                if (error) *error = m_topics.lastError();
+                return false;
             }
 
-            int topicPosition = 0;
-            for (const SeedTopic& seedTopic : seedTrack.topics) {
-                if (existingTitles.contains(seedTopic.title)) {
-                    ++topicPosition;
-                    continue;
-                }
-                Domain::Topic topic;
-                topic.trackId = trackId;
-                topic.title = seedTopic.title;
-                topic.status = Domain::TopicStatus::Backlog;
-                topic.priority = seedTopic.priority;
-                topic.tags = seedTopic.tags;
-                topic.position = topicPosition;
-                if (!m_topics.insert(topic)) {
+            int subtaskPosition = 0;
+            for (const QString& text : seedTopic.subtasks) {
+                Domain::Subtask subtask;
+                subtask.topicId = topic.id;
+                subtask.text = text;
+                subtask.position = subtaskPosition;
+                if (!m_topics.addSubtask(subtask)) {
                     if (error) *error = m_topics.lastError();
                     return false;
                 }
-                topicsAdded = true;
-
-                int subtaskPosition = 0;
-                for (const QString& text : seedTopic.subtasks) {
-                    Domain::Subtask subtask;
-                    subtask.topicId = topic.id;
-                    subtask.text = text;
-                    subtask.position = subtaskPosition;
-                    if (!m_topics.addSubtask(subtask)) {
-                        if (error) *error = m_topics.lastError();
-                        return false;
-                    }
-                    ++subtaskPosition;
-                }
-                ++topicPosition;
+                ++subtaskPosition;
             }
+            ++topicPosition;
         }
     }
 
     if (!transaction.commit()) {
-        if (error) *error = m_tracks.lastError();
+        if (error) *error = seedFailure(m_tracks.lastError());
         return false;
     }
-
-    if (tracksAdded) emit m_tracks.changed();
-    if (topicsAdded) emit m_topics.changed();
     return true;
 }
 

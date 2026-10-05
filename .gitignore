@@ -24,3 +24,6 @@ Makefile
 *.sqlite-wal
 *.sqlite-shm
 *.log
+
+# CTest scratch files at the repo root (ctest run from the wrong directory)
+Testing/

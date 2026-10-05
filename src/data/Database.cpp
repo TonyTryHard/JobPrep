@@ -6,8 +6,10 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QVariant>
+#include <algorithm>
 #include "data/DataLogging.h"
 #include "data/Migrations.h"
+#include "data/Repository.h"
 
 Q_LOGGING_CATEGORY(lcData, "jobprep.data")
 
@@ -91,6 +93,7 @@ void Database::close() {
     if (!m_open) return;
     m_open = false;
     m_transactionDepth = 0;
+    m_outerFailed = false;
     {
         // Qualified so the local name does not hide the member function.
         QSqlDatabase db = Database::connection();
@@ -141,27 +144,28 @@ bool Database::execute(const QString& sql) const {
     return true;
 }
 
-Database::Transaction Database::transaction() const {
+Database::Transaction Database::transaction() {
     if (!m_open) {
         setError(u"Cannot start a transaction on a closed database."_s);
         return Transaction();
     }
-    if (m_transactionDepth > 0) return Transaction(const_cast<Database*>(this), false);
+    if (m_transactionDepth > 0) return Transaction(this, false);
     if (!begin()) return Transaction();
-    return Transaction(const_cast<Database*>(this), true);
+    return Transaction(this, true);
 }
 
-bool Database::begin() const {
+bool Database::begin() {
     QString error;
     if (!executeOn(connection(), u"BEGIN IMMEDIATE"_s, &error)) {
         setError(error);
         return false;
     }
     ++m_transactionDepth;
+    m_outerFailed = false;
     return true;
 }
 
-bool Database::commitInternal() const {
+bool Database::commitInternal() {
     QString error;
     if (!executeOn(connection(), u"COMMIT"_s, &error)) {
         setError(error);
@@ -170,7 +174,7 @@ bool Database::commitInternal() const {
     return true;
 }
 
-void Database::rollbackInternal() const {
+void Database::rollbackInternal() {
     QString error;
     if (!executeOn(connection(), u"ROLLBACK"_s, &error)) {
         setError(error);
@@ -185,6 +189,10 @@ bool Database::readPragma(const QString& pragma, QVariant* value) const {
     }
     *value = query.value(0);
     return true;
+}
+
+void Database::markOuterFailed() {
+    m_outerFailed = true;
 }
 
 Database::Transaction::Transaction(Database* database, bool owner)
@@ -217,31 +225,45 @@ Database::Transaction::~Transaction() {
 bool Database::Transaction::commit() {
     if (!m_active) return true;
     if (!m_owner) {
-        m_active = false;
-        m_database = nullptr;
+        // Joined: the outer unit of work owns the real COMMIT and the notifications.
+        finish();
         return true;
     }
 
-    bool ok = m_database->commitInternal();
-    if (!ok) {
-        m_database->rollbackInternal();
-        Database* dbp = m_database;
-        finish();
-        if (dbp) dbp->clearPendingChanges();
-        return false;
-    }
-    Database* dbp = m_database;
+    Database* const database = m_database;
+    // A failed inner write already poisoned this unit of work: COMMIT would succeed
+    // at the SQL level but would persist writes the caller was told had failed.
+    const bool poisoned = database && database->m_outerFailed;
+    const bool ok = !poisoned && database && database->commitInternal();
+    if (database && !ok) database->rollbackInternal();
+
     finish();
-    if (dbp) dbp->flushPendingChanges();
-    return true;
+    if (!database) return false;
+    if (ok) {
+        database->flushPendingChanges();
+    } else {
+        database->clearPendingChanges();
+    }
+    database->m_outerFailed = false;
+    return ok;
 }
 
 void Database::Transaction::rollback() {
     if (!m_active) return;
-    Database* dbp = m_database;
-    if (m_owner && m_database) m_database->rollbackInternal();
+    if (!m_owner) {
+        // Joined: poison the outer unit of work, but keep the notifications queued
+        // here, because other joined writes may still be part of that unit of work.
+        if (m_database) m_database->markOuterFailed();
+        finish();
+        return;
+    }
+    Database* const database = m_database;
+    if (database) database->rollbackInternal();
     finish();
-    if (dbp) dbp->clearPendingChanges();
+    if (database) {
+        database->clearPendingChanges();
+        database->m_outerFailed = false;
+    }
 }
 
 bool Database::Transaction::isActive() const {
@@ -259,22 +281,27 @@ void Database::Transaction::finish() {
     m_owner = false;
 }
 
-void Database::deferChanged(QObject* repo) const {
+void Database::deferChanged(Repository* repo) {
     if (!repo) return;
-    m_pendingChangeRepos.insert(repo);
+    // Ordered list, not a set, so notification order follows write order; an existing
+    // entry moves to the back so each repository is notified once, at its last write.
+    const QPointer<QObject> pointer(repo);
+    const auto it = std::find(m_pendingChangeRepos.cbegin(), m_pendingChangeRepos.cend(), pointer);
+    if (it != m_pendingChangeRepos.cend()) m_pendingChangeRepos.erase(it);
+    m_pendingChangeRepos.append(pointer);
 }
 
-void Database::flushPendingChanges() const {
-    const auto repos = m_pendingChangeRepos;
-    for (const auto& ptr : repos) {
-        if (ptr) {
-            QMetaObject::invokeMethod(ptr, "changed", Qt::DirectConnection);
-        }
+void Database::flushPendingChanges() {
+    // Emitting re-enters the repositories, which may queue more changes, so the queue
+    // is moved out before the first signal.
+    QList<QPointer<QObject>> pending;
+    pending.swap(m_pendingChangeRepos);
+    for (const auto& pointer : pending) {
+        if (pointer) QMetaObject::invokeMethod(pointer, "changed", Qt::DirectConnection);
     }
-    m_pendingChangeRepos.clear();
 }
 
-void Database::clearPendingChanges() const {
+void Database::clearPendingChanges() {
     m_pendingChangeRepos.clear();
 }
 

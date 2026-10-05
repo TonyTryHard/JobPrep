@@ -2,7 +2,7 @@
 
 #include <optional>
 #include <QList>
-#include <QObject>
+#include "data/Repository.h"
 #include "domain/Structs.h"
 
 namespace JobPrep::Data {
@@ -10,8 +10,7 @@ namespace JobPrep::Data {
 class Database;
 
 /// CRUD for interviews (SPEC §5 `interviews`). Rows belong to one application.
-class InterviewRepository : public QObject {
-    Q_OBJECT
+class InterviewRepository : public Repository {
 
 public:
     explicit InterviewRepository(Database& database, QObject* parent = nullptr);
@@ -34,8 +33,6 @@ public:
     QString lastError() const;
     JobPrep::Data::Database& database() const;
 
-signals:
-    void changed();
 
 private:
     Database& m_database;

@@ -2,7 +2,7 @@
 
 #include <optional>
 #include <QList>
-#include <QObject>
+#include "data/Repository.h"
 #include "domain/Structs.h"
 
 namespace JobPrep::Data {
@@ -11,8 +11,7 @@ class Database;
 
 /// CRUD for logged study sessions (SPEC §5 `study_sessions`).
 /// Sessions survive a deleted topic: their `topic_id` becomes NULL.
-class SessionRepository : public QObject {
-    Q_OBJECT
+class SessionRepository : public Repository {
 
 public:
     explicit SessionRepository(Database& database, QObject* parent = nullptr);
@@ -36,8 +35,6 @@ public:
     QString lastError() const;
     JobPrep::Data::Database& database() const;
 
-signals:
-    void changed();
 
 private:
     Database& m_database;
