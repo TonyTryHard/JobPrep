@@ -37,7 +37,9 @@ public:
     enum Role {
         StatusRole = Qt::UserRole + 1,
         SortRole,
-        SearchRole
+        SearchRole,
+        /// Database id of the row; the stable identity used to restore the selection.
+        IdRole,
     };
 
     ApplicationTableModel(JobPrep::Data::ApplicationRepository& apps,

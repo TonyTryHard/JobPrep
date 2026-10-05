@@ -112,7 +112,8 @@ void MainWindow::setupUi() {
 
     m_pages.append(new Pages::HomePage(m_pageStack));
     m_pages.append(new Pages::StudyPage(m_pageStack));
-    m_pages.append(new Pages::JobsPage(m_pageStack));
+    m_pages.append(new Pages::JobsPage(m_ctx.applications(), m_ctx.interviews(),
+                                      m_ctx.exportService(), m_pageStack));
     m_pages.append(new Pages::CalendarPage(m_pageStack));
     m_pages.append(new Pages::SettingsPage(m_ctx.settings(), m_ctx.themeManager(), m_pageStack));
 

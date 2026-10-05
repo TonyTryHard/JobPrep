@@ -121,6 +121,8 @@ QVariant ApplicationTableModel::data(const QModelIndex& index, int role) const {
         }
     } else if (role == StatusRole) {
         return QVariant::fromValue(app.status);
+    } else if (role == IdRole) {
+        return app.id;
     } else if (role == SearchRole) {
         return (app.company + u" "_s + app.position + u" "_s + app.notes).toLower();
     } else if (role == SortRole) {

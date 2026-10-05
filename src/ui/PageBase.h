@@ -17,6 +17,13 @@ public:
     /// Called whenever the page becomes the active page in the main stack.
     virtual void onActivated() {}
 
+    /// Moves focus into the page's own search box (QKeySequence::Find). Pages without a
+    /// search box keep the default no-op; the header decides whether to switch pages.
+    virtual void focusSearch() {}
+
+    /// Opens the page's primary "add" flow (QKeySequence::New).
+    virtual void triggerNew() {}
+
 private:
     QString m_title;
 };

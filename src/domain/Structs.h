@@ -77,6 +77,18 @@ struct JobApplication {
     QDateTime                      updatedAt;
 };
 
+inline bool operator==(const JobApplication& lhs, const JobApplication& rhs) {
+    return lhs.id == rhs.id && lhs.company == rhs.company && lhs.position == rhs.position &&
+           lhs.url == rhs.url && lhs.source == rhs.source &&
+           lhs.resumeVersion == rhs.resumeVersion && lhs.location == rhs.location &&
+           lhs.workMode == rhs.workMode && lhs.salaryMin == rhs.salaryMin &&
+           lhs.salaryMax == rhs.salaryMax && lhs.currency == rhs.currency &&
+           lhs.status == rhs.status && lhs.appliedDate == rhs.appliedDate &&
+           lhs.nextAction == rhs.nextAction && lhs.nextActionDate == rhs.nextActionDate &&
+           lhs.contactName == rhs.contactName && lhs.contactEmail == rhs.contactEmail &&
+           lhs.notes == rhs.notes;
+}
+
 /// A record of a status transition for a job application.
 struct StatusChange {
     int                               id{0};

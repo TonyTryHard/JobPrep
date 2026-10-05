@@ -5,6 +5,7 @@
 #include <QLoggingCategory>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QUuid>
 #include <QVariant>
 #include <algorithm>
 #include "data/DataLogging.h"
@@ -31,7 +32,12 @@ bool executeOn(const QSqlDatabase& connection, const QString& sql, QString* erro
 }  // namespace
 
 Database::Database(QString connectionName)
-    : m_connectionName(connectionName.isEmpty() ? u"jobprep"_s : std::move(connectionName)) {}
+    // A unique default keeps two live Database objects (two tests, or a second
+    // AppContext) from sharing, and then tearing down, the same SQL connection.
+    : m_connectionName(connectionName.isEmpty()
+                           ? u"jobprep-%1"_s.arg(
+                                 QUuid::createUuid().toString(QUuid::WithoutBraces))
+                           : std::move(connectionName)) {}
 
 Database::~Database() {
     close();
