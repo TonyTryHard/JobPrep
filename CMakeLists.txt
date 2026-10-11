@@ -126,6 +126,8 @@ add_library(jobprep_core STATIC
     # Dialogs
     src/ui/dialogs/ApplicationDialog.h
     src/ui/dialogs/ApplicationDialog.cpp
+    src/ui/dialogs/InterviewDialog.h
+    src/ui/dialogs/InterviewDialog.cpp
 
     # Page implementations
     src/ui/pages/HomePage.h

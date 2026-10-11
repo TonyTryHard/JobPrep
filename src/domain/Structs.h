@@ -119,6 +119,8 @@ struct AgendaItem {
     QString               title;
     QString               subtitle;
     int                   refId{0};
+    /// Neutral fact that the item is in the past. Overdue follow-ups and study targets
+    /// still need attention, so UI dims only past interviews, never these.
     bool                  past{false};
 };
 

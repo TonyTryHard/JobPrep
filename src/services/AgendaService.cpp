@@ -41,7 +41,7 @@ QString interviewSubtitle(const Domain::Interview& iv) {
 AgendaService::AgendaService(Data::InterviewRepository& interviews,
                              Data::ApplicationRepository& apps,
                              Data::TopicRepository& topics,
-                             Data::TrackRepository* tracks,
+                             Data::TrackRepository& tracks,
                              Clock clock)
     : m_interviews(interviews),
       m_apps(apps),
@@ -71,11 +71,9 @@ QList<Domain::AgendaItem> AgendaService::items(QDate from, QDate to) const {
 
     // Cache tracks by id for study target subtitle
     QHash<int, QString> trackNamesById;
-    if (m_tracks) {
-        const auto allTracks = m_tracks->all();
-        for (const auto& track : allTracks) {
-            trackNamesById.insert(track.id, track.name);
-        }
+    const auto allTracks = m_tracks.all();
+    for (const auto& track : allTracks) {
+        trackNamesById.insert(track.id, track.name);
     }
 
     // 1. Interviews: half-open day bounds [from 00:00:00, to+1 00:00:00).

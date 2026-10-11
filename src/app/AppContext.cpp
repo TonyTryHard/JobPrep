@@ -48,7 +48,8 @@ AppContext::AppContext(const QString& databasePath) {
     m_interviews = std::make_unique<Data::InterviewRepository>(*m_database);
     m_reminderLog = std::make_unique<Data::ReminderLogRepository>(*m_database);
 
-    m_agendaService = std::make_unique<Services::AgendaService>(*m_interviews, *m_applications, *m_topics, m_tracks.get());
+    m_agendaService = std::make_unique<Services::AgendaService>(
+        *m_interviews, *m_applications, *m_topics, *m_tracks);
     m_seedService = std::make_unique<Services::SeedService>(*m_tracks, *m_topics);
     m_exportService = std::make_unique<Services::ExportService>();
     m_settings = std::make_unique<Services::SettingsService>();

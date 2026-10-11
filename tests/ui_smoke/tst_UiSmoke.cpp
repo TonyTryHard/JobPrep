@@ -1,5 +1,7 @@
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
+#include <QDateEdit>
 #include <QFile>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -13,16 +15,18 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextEdit>
-#include <QToolButton>
 #include <QTimer>
+#include <QToolButton>
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
 #include "data/Database.h"
+#include "data/InterviewRepository.h"
 #include "models/ApplicationTableModel.h"
 #include "services/ExportService.h"
 #include "ui/MainWindow.h"
 #include "ui/Sidebar.h"
 #include "ui/dialogs/ApplicationDialog.h"
+#include "ui/dialogs/InterviewDialog.h"
 #include "ui/pages/JobsPage.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
@@ -33,9 +37,12 @@ using namespace Qt::StringLiterals;
 namespace {
 
 using JobPrep::Domain::ApplicationStatus;
+using JobPrep::Domain::Interview;
+using JobPrep::Domain::InterviewType;
 using JobPrep::Domain::JobApplication;
 using JobPrep::Models::ApplicationTableModel;
 using JobPrep::Ui::Dialogs::ApplicationDialog;
+using JobPrep::Ui::Dialogs::InterviewDialog;
 
 QStringList s_capturedWarnings;
 
@@ -88,6 +95,16 @@ int countApplicationDialogs() {
     return count;
 }
 
+/// Top-level InterviewDialog widgets, used to prove an entry point opens exactly one.
+int countInterviewDialogs() {
+    int count = 0;
+    const auto widgets = QApplication::topLevelWidgets();
+    for (QWidget* widget : widgets) {
+        if (qobject_cast<InterviewDialog*>(widget)) ++count;
+    }
+    return count;
+}
+
 }  // namespace
 
 class tst_UiSmoke : public QObject {
@@ -108,6 +125,9 @@ private slots:
     void testApplicationDialogTabs();
     void testApplicationDialogValidation();
     void testApplicationDialogCancelKeepsEditing();
+    void testInterviewDialogCreateAndEdit();
+    void testInterviewDialogValidation();
+    void testInterviewDialogDeleteWithConfirmation();
     void testJobsPageThemes();
     void testHeaderSearchFiltersJobsTable();
     void testNewEntryPointsOpenOneDialog();
@@ -543,6 +563,112 @@ void tst_UiSmoke::testApplicationDialogCancelKeepsEditing() {
     dialog.reject();
     QVERIFY(!dialog.isVisible());
     QCOMPARE(m_jobsCtx->applications().byId(id)->company, u"Umbrella"_s);
+}
+
+void tst_UiSmoke::testInterviewDialogCreateAndEdit() {
+    resetJobsData();
+    addApplication(u"Acme"_s, u"Developer"_s);
+    addApplication(u"Globex"_s, u"Engineer"_s);
+    const int appId = m_jobsCtx->applications().all().at(1).id;
+
+    InterviewDialog create(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                           InterviewDialog::Create);
+    create.show();
+    QCOMPARE(countInterviewDialogs(), 1);
+
+    auto* appCombo = childNamed<QComboBox>(&create, u"InterviewApplicationCombo"_s);
+    QVERIFY(appCombo != nullptr);
+    create.setApplicationId(appId);
+    QCOMPARE(appCombo->currentData().toInt(), appId);
+
+    auto* typeCombo = childNamed<QComboBox>(&create, u"InterviewTypeCombo"_s);
+    typeCombo->setCurrentIndex(typeCombo->findData(static_cast<int>(InterviewType::SystemDesign)));
+    childNamed<QDateEdit>(&create, u"InterviewDateEdit"_s)->setDate(QDate(2026, 5, 4));
+    childNamed<QLineEdit>(&create, u"InterviewPlaceEdit"_s)->setText(u"Zoom"_s);
+    QVERIFY(create.isDirty());
+
+    buttonNamed(&create, u"DialogSaveBtn"_s)->click();
+    QCOMPARE(m_jobsCtx->interviews().byApplication(appId).size(), 1);
+    const auto saved = m_jobsCtx->interviews().byApplication(appId).first();
+    QCOMPARE(saved.startAt.date(), QDate(2026, 5, 4));
+    QCOMPARE(saved.type, InterviewType::SystemDesign);
+    QCOMPARE(saved.place, u"Zoom"_s);
+    create.close();
+
+    // Editing loads the row, tracks dirty state and can be discarded unchanged.
+    InterviewDialog edit(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                         InterviewDialog::Edit);
+    edit.setInterview(*m_jobsCtx->interviews().byId(saved.id));
+    edit.show();
+    QVERIFY(!edit.isDirty());
+    auto* placeEdit = childNamed<QLineEdit>(&edit, u"InterviewPlaceEdit"_s);
+    QCOMPARE(placeEdit->text(), u"Zoom"_s);
+    placeEdit->setText(u"Google Meet"_s);
+    QVERIFY(edit.isDirty());
+
+    answerNextMessageBox([](QMessageBox* box) { box->button(QMessageBox::Cancel)->click(); });
+    edit.reject();
+    QVERIFY(edit.isVisible());
+    QVERIFY(edit.isDirty());
+    QCOMPARE(m_jobsCtx->interviews().byId(saved.id)->place, u"Zoom"_s);
+
+    answerNextMessageBox([](QMessageBox* box) { box->button(QMessageBox::Discard)->click(); });
+    edit.reject();
+    QVERIFY(!edit.isVisible());
+}
+
+void tst_UiSmoke::testInterviewDialogValidation() {
+    resetJobsData();
+
+    // With no applications the combo is empty, so an application is required.
+    InterviewDialog noApps(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                           InterviewDialog::Create);
+    buttonNamed(&noApps, u"DialogSaveBtn"_s)->click();
+    QVERIFY(!noApps.validationMessage().isEmpty());
+    QCOMPARE(m_jobsCtx->interviews().all().size(), 0);
+
+    addApplication(u"Acme"_s, u"Developer"_s);
+    const int appId = m_jobsCtx->applications().all().first().id;
+
+    InterviewDialog dialog(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                           InterviewDialog::Create);
+    dialog.setApplicationId(appId);
+    childNamed<QSpinBox>(&dialog, u"InterviewDurationSpin"_s)->setValue(0);
+    buttonNamed(&dialog, u"DialogSaveBtn"_s)->click();
+    QCOMPARE(dialog.validationMessage(), u"Duration must be at least 1 minute."_s);
+    QCOMPARE(m_jobsCtx->interviews().all().size(), 0);
+
+    // A valid duration saves.
+    childNamed<QSpinBox>(&dialog, u"InterviewDurationSpin"_s)->setValue(30);
+    buttonNamed(&dialog, u"DialogSaveBtn"_s)->click();
+    QCOMPARE(m_jobsCtx->interviews().all().size(), 1);
+}
+
+void tst_UiSmoke::testInterviewDialogDeleteWithConfirmation() {
+    resetJobsData();
+    addApplication(u"Acme"_s, u"Developer"_s);
+    const int appId = m_jobsCtx->applications().all().first().id;
+
+    Interview interview;
+    interview.applicationId = appId;
+    interview.startAt = QDateTime(QDate(2026, 5, 4), QTime(10, 0));
+    QVERIFY(m_jobsCtx->interviews().insert(interview));
+
+    InterviewDialog edit(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                         InterviewDialog::Edit);
+    edit.setInterview(*m_jobsCtx->interviews().byId(interview.id));
+    auto* deleteBtn = buttonNamed(&edit, u"DialogDeleteBtn"_s);
+    QVERIFY(deleteBtn != nullptr);
+
+    // Declining keeps the row.
+    answerNextMessageBox([](QMessageBox* box) { box->button(QMessageBox::No)->click(); });
+    deleteBtn->click();
+    QCOMPARE(m_jobsCtx->interviews().all().size(), 1);
+
+    // Accepting deletes it.
+    answerNextMessageBox([](QMessageBox* box) { box->button(QMessageBox::Yes)->click(); });
+    deleteBtn->click();
+    QCOMPARE(m_jobsCtx->interviews().all().size(), 0);
 }
 
 void tst_UiSmoke::testJobsPageThemes() {

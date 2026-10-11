@@ -44,6 +44,7 @@ private slots:
     void followUpForActiveAndWishlistApplications();
     void pastFollowUpFlagged();
     void studyTargetForOpenTopics();
+    void pastStudyTargetFlagged();
     void rangeAcrossMonthBorder();
     void rangeAcrossYearEnd();
     void leapDayMonth();
@@ -70,7 +71,7 @@ void tst_AgendaService::init() {
     m_topics = std::make_unique<TopicRepository>(m_db->db());
     m_apps = std::make_unique<ApplicationRepository>(m_db->db());
     m_interviews = std::make_unique<InterviewRepository>(m_db->db());
-    m_service = std::make_unique<AgendaService>(*m_interviews, *m_apps, *m_topics, m_tracks.get());
+    m_service = std::make_unique<AgendaService>(*m_interviews, *m_apps, *m_topics, *m_tracks);
 }
 
 void tst_AgendaService::cleanup() {
@@ -258,12 +259,23 @@ void tst_AgendaService::pastFollowUpFlagged() {
     appToday.nextActionDate = QDate(2026, 10, 15);
     QVERIFY(m_apps->insert(appToday));
 
+    // Future follow-up (2026-10-16) - not past
+    JobApplication appFuture;
+    appFuture.company = u"FutureCo"_s;
+    appFuture.position = u"Dev"_s;
+    appFuture.status = ApplicationStatus::Applied;
+    appFuture.nextAction = u"Call"_s;
+    appFuture.nextActionDate = QDate(2026, 10, 16);
+    QVERIFY(m_apps->insert(appFuture));
+
     const auto items = m_service->items(QDate(2026, 10, 1), QDate(2026, 10, 20));
-    QCOMPARE(items.size(), 2);
+    QCOMPARE(items.size(), 3);
     QCOMPARE(items[0].refId, appPast.id);
     QVERIFY(items[0].past);
     QCOMPARE(items[1].refId, appToday.id);
     QVERIFY(!items[1].past);
+    QCOMPARE(items[2].refId, appFuture.id);
+    QVERIFY(!items[2].past);
 }
 
 void tst_AgendaService::studyTargetForOpenTopics() {
@@ -304,6 +316,41 @@ void tst_AgendaService::studyTargetForOpenTopics() {
     QCOMPARE(items[1].title, u"Target · Move Semantics"_s);
     QCOMPARE(items[1].subtitle, u"C++"_s);
     QCOMPARE(items[1].refId, inProgTopic.id);
+}
+
+void tst_AgendaService::pastStudyTargetFlagged() {
+    // Clock at 2026-10-15; targets compare their date to today.
+    const QDateTime fixedClock(QDate(2026, 10, 15), QTime(9, 0, 0));
+    m_service->setClock([fixedClock] { return fixedClock; });
+
+    const int trackId = addTrack(u"C++"_s);
+
+    Topic pastTopic;
+    pastTopic.trackId = trackId;
+    pastTopic.title = u"Past target"_s;
+    pastTopic.targetDate = QDate(2026, 10, 14);
+    QVERIFY(m_topics->insert(pastTopic));
+
+    Topic todayTopic;
+    todayTopic.trackId = trackId;
+    todayTopic.title = u"Today target"_s;
+    todayTopic.targetDate = QDate(2026, 10, 15);
+    QVERIFY(m_topics->insert(todayTopic));
+
+    Topic futureTopic;
+    futureTopic.trackId = trackId;
+    futureTopic.title = u"Future target"_s;
+    futureTopic.targetDate = QDate(2026, 10, 16);
+    QVERIFY(m_topics->insert(futureTopic));
+
+    const auto items = m_service->items(QDate(2026, 10, 1), QDate(2026, 10, 20));
+    QCOMPARE(items.size(), 3);
+    QCOMPARE(items[0].refId, pastTopic.id);
+    QVERIFY(items[0].past);
+    QCOMPARE(items[1].refId, todayTopic.id);
+    QVERIFY(!items[1].past);
+    QCOMPARE(items[2].refId, futureTopic.id);
+    QVERIFY(!items[2].past);
 }
 
 void tst_AgendaService::rangeAcrossMonthBorder() {

@@ -21,10 +21,11 @@ class AgendaService {
 public:
     using Clock = std::function<QDateTime()>;
 
+    /// `tracks` is required: it provides the track name used as the study-target subtitle.
     explicit AgendaService(Data::InterviewRepository& interviews,
                            Data::ApplicationRepository& apps,
                            Data::TopicRepository& topics,
-                           Data::TrackRepository* tracks = nullptr,
+                           Data::TrackRepository& tracks,
                            Clock clock = [] { return QDateTime::currentDateTime(); });
 
     void setClock(Clock clock);
@@ -37,7 +38,7 @@ private:
     Data::InterviewRepository& m_interviews;
     Data::ApplicationRepository& m_apps;
     Data::TopicRepository& m_topics;
-    Data::TrackRepository* m_tracks{nullptr};
+    Data::TrackRepository& m_tracks;
     Clock m_clock;
 };
 
