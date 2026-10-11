@@ -386,3 +386,6 @@ Kanban for applications, per-company contacts directory, salary comparison chart
 - 1.5 — `CalendarPage` takes explicit repository/service references (no `AppContext&`), matching `JobsPage`.
 - 1.5 — `StatusStyle::label(InterviewType)` / `label(InterviewOutcome)` centralize interview type and outcome labels for tables and dialogs.
 - 1.5 — `AgendaItem::past` is a neutral fact; the UI dims only past interviews. Overdue follow-ups and study targets still need attention and are never drawn as "done".
+- 1.5 — `CalendarPage` gains a trailing defaulted `std::function<QDate()>` "today" provider (and `MonthView` takes one); the default is `QDate::currentDate`. Fixed-clock tests inject a date instead of relying on the real clock.
+- 1.5 — Calendar layer chips are checkable `QPushButton`s using the shared chip QSS with a kind-colored dot; the per-kind SVG icons (`AgendaKindStyle::icon`) are used in the agenda rows, not on the chips. Layer visibility persists via `SettingsService` (`calendarLayer*`).
+- 1.5 — `FollowUpDialog` writes `applications.next_action_date`: it offers only non-closed applications and asks for confirmation before replacing an existing planned follow-up.

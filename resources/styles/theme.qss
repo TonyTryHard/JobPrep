@@ -272,6 +272,81 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
     border: none;
 }
 
+/* Calendar page */
+#CalendarToolbar {
+    background: transparent;
+}
+
+#CalendarPrevBtn, #CalendarNextBtn {
+    background-color: @surface;
+    border: 1px solid @border;
+    border-radius: 8px;
+    padding: 6px;
+}
+
+#CalendarPrevBtn:hover, #CalendarNextBtn:hover {
+    background-color: @surfaceAlt;
+    border-color: @accent;
+}
+
+#CalendarMonthTitle {
+    font-size: 14pt;
+    font-weight: 600;
+    color: @text;
+    padding-left: 4px;
+}
+
+#CalendarAgendaPanel {
+    background-color: @surface;
+    border: 1px solid @border;
+    border-radius: 12px;
+}
+
+#CalendarAgendaTitle {
+    font-size: 11pt;
+    font-weight: 600;
+    color: @text;
+}
+
+#CalendarAgendaList {
+    background: transparent;
+    border: none;
+}
+
+#CalendarAgendaList::item {
+    border-radius: 8px;
+    padding: 2px 4px;
+}
+
+#CalendarAgendaList::item:hover {
+    background-color: @surfaceAlt;
+}
+
+#CalendarAgendaList::item:selected {
+    color: @accentText;
+}
+
+/* Layer chips: multi-select toggles styled like ChipBar chips with a kind dot (C8). */
+QPushButton[calendarLayer="true"] {
+    background-color: @surfaceAlt;
+    border: 1px solid @border;
+    border-radius: 16px;
+    padding: 5px 12px;
+    font-weight: 500;
+}
+
+QPushButton[calendarLayer="true"]:hover {
+    background-color: @surface;
+    border-color: @accent;
+}
+
+QPushButton[calendarLayer="true"]:checked {
+    background-color: @surfaceAlt;
+    border: 1px solid @accent;
+    color: @accent;
+    font-weight: 600;
+}
+
 /* Tooltips */
 QToolTip {
     background-color: @surface;

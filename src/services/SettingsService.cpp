@@ -128,4 +128,12 @@ void SettingsService::setCalendarLayerTargets(bool enabled) {
     emit calendarLayerTargetsChanged(enabled);
 }
 
+QByteArray SettingsService::calendarSplitterState() const {
+    return m_settings->value(u"calendar/splitterState"_s).toByteArray();
+}
+
+void SettingsService::setCalendarSplitterState(const QByteArray& state) {
+    m_settings->setValue(u"calendar/splitterState"_s, state);
+}
+
 }  // namespace JobPrep::Services

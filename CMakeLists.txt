@@ -100,6 +100,8 @@ add_library(jobprep_core STATIC
     src/models/ApplicationTableModel.cpp
     src/models/ApplicationFilterProxy.h
     src/models/ApplicationFilterProxy.cpp
+    src/models/AgendaListModel.h
+    src/models/AgendaListModel.cpp
 
     # Theme & Tokens
     src/ui/theme/Tokens.h
@@ -110,16 +112,22 @@ add_library(jobprep_core STATIC
     src/ui/theme/IconProvider.cpp
     src/ui/theme/ThemeManager.h
     src/ui/theme/ThemeManager.cpp
+    src/ui/theme/AgendaKindStyle.h
+    src/ui/theme/AgendaKindStyle.cpp
 
     # Delegates
     src/ui/delegates/StatusBadgeDelegate.h
     src/ui/delegates/StatusBadgeDelegate.cpp
+    src/ui/delegates/AgendaItemDelegate.h
+    src/ui/delegates/AgendaItemDelegate.cpp
 
     # Widgets & Base Pages
     src/ui/widgets/EmptyState.h
     src/ui/widgets/EmptyState.cpp
     src/ui/widgets/ChipBar.h
     src/ui/widgets/ChipBar.cpp
+    src/ui/widgets/MonthView.h
+    src/ui/widgets/MonthView.cpp
     src/ui/PageBase.h
     src/ui/PageBase.cpp
 
@@ -128,6 +136,8 @@ add_library(jobprep_core STATIC
     src/ui/dialogs/ApplicationDialog.cpp
     src/ui/dialogs/InterviewDialog.h
     src/ui/dialogs/InterviewDialog.cpp
+    src/ui/dialogs/FollowUpDialog.h
+    src/ui/dialogs/FollowUpDialog.cpp
 
     # Page implementations
     src/ui/pages/HomePage.h

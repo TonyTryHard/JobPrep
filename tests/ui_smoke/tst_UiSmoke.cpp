@@ -2,13 +2,18 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDateEdit>
+#include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListView>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QStringList>
 #include <QTabWidget>
@@ -23,28 +28,39 @@
 #include "data/ApplicationRepository.h"
 #include "data/Database.h"
 #include "data/InterviewRepository.h"
+#include "data/TopicRepository.h"
+#include "data/TrackRepository.h"
+#include "domain/Structs.h"
+#include "models/AgendaListModel.h"
 #include "models/ApplicationTableModel.h"
 #include "services/ExportService.h"
+#include "services/SettingsService.h"
 #include "ui/MainWindow.h"
 #include "ui/Sidebar.h"
 #include "ui/dialogs/ApplicationDialog.h"
+#include "ui/dialogs/FollowUpDialog.h"
 #include "ui/dialogs/InterviewDialog.h"
 #include "ui/pages/CalendarPage.h"
 #include "ui/pages/JobsPage.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
 #include "ui/widgets/ChipBar.h"
+#include "ui/widgets/MonthView.h"
 
 using namespace Qt::StringLiterals;
 
 namespace {
 
+using JobPrep::Domain::AgendaKind;
 using JobPrep::Domain::ApplicationStatus;
 using JobPrep::Domain::Interview;
 using JobPrep::Domain::InterviewType;
 using JobPrep::Domain::JobApplication;
+using JobPrep::Domain::Topic;
+using JobPrep::Domain::Track;
 using JobPrep::Models::ApplicationTableModel;
 using JobPrep::Ui::Dialogs::ApplicationDialog;
+using JobPrep::Ui::Dialogs::FollowUpDialog;
 using JobPrep::Ui::Dialogs::InterviewDialog;
 
 QStringList s_capturedWarnings;
@@ -77,6 +93,23 @@ void answerNextMessageBox(Action action) {
     withNextModal([action](QWidget* modal) {
         if (auto* box = qobject_cast<QMessageBox*>(modal)) action(box);
     });
+}
+
+/// Answers the next modal widget, polling until one appears. Required when the trigger is
+/// a synthesized mouse event (QTest spins the event loop before showing the modal, so a
+/// one-shot timer would fire too early and miss it).
+template <typename Action>
+void answerModalWhenReady(Action action) {
+    auto* timer = new QTimer;
+    timer->setInterval(5);
+    QObject::connect(timer, &QTimer::timeout, timer, [timer, action]() {
+        if (auto* modal = qobject_cast<QWidget*>(QApplication::activeModalWidget())) {
+            timer->stop();
+            timer->deleteLater();
+            action(modal);
+        }
+    });
+    timer->start();
 }
 
 template <typename T>
@@ -140,6 +173,14 @@ private slots:
     void testNewEntryPointsOpenOneDialog();
     void testHeaderNewApplicationOnCalendarPage();
     void testJobsContextMenuAddInterviewEndToEnd();
+    void testCalendarPageMarkersAndAgenda();
+    void testCalendarLayerChipsFilterAgenda();
+    void testCalendarNewInterviewFromDay();
+    void testCalendarFollowUpEndToEnd();
+    void testCalendarFollowUpOverwritePrompt();
+    void testCalendarSplitterStatePersisted();
+    void testCalendarThemes();
+    void testCalendarScreenshots();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -158,10 +199,23 @@ private:
     void saveNextDialog(const QString& company, const QString& position);
     void clickChip(int index);
 
+    /// Rebuilds an isolated context plus a standalone CalendarPage with a fixed "today",
+    /// so marker/agenda assertions never depend on the real clock.
+    void resetCalendarData(const QDate& today);
+    JobPrep::Ui::Pages::CalendarPage* calendarPage() { return m_calendar.get(); }
+    JobPrep::Ui::Widgets::MonthView* monthView() const;
+    QListView* agendaList() const;
+    /// Inserts an application plus one interview on `day`; returns the application id.
+    int addApplicationWithInterview(const QString& company, const QDate& day, int hour);
+    /// Inserts a track and one non-done topic targeting `day`; returns the track id.
+    int addStudyTarget(const QDate& day);
+
     std::unique_ptr<JobPrep::App::AppContext> m_ctx;
     std::unique_ptr<JobPrep::Ui::MainWindow> m_window;
     std::unique_ptr<JobPrep::App::AppContext> m_jobsCtx;
     std::unique_ptr<JobPrep::Ui::Pages::JobsPage> m_jobs;
+    std::unique_ptr<JobPrep::App::AppContext> m_calCtx;
+    std::unique_ptr<JobPrep::Ui::Pages::CalendarPage> m_calendar;
 };
 
 void tst_UiSmoke::initTestCase() {
@@ -298,6 +352,69 @@ void tst_UiSmoke::clickChip(int index) {
     const auto buttons = chips->findChildren<QPushButton*>();
     QCOMPARE(buttons.size(), 5);
     buttons.at(index)->click();
+}
+
+void tst_UiSmoke::resetCalendarData(const QDate& today) {
+    m_calendar.reset();
+    m_calCtx = std::make_unique<JobPrep::App::AppContext>(u":memory:"_s);
+    QVERIFY(m_calCtx->database().isOpen());
+
+    // Layer visibility is persisted in QSettings, so pin it for every calendar slot.
+    m_calCtx->settings().setCalendarLayerInterviews(true);
+    m_calCtx->settings().setCalendarLayerFollowUps(true);
+    m_calCtx->settings().setCalendarLayerTargets(true);
+
+    m_calendar = std::make_unique<JobPrep::Ui::Pages::CalendarPage>(
+        m_calCtx->interviews(), m_calCtx->applications(), m_calCtx->topics(),
+        m_calCtx->agendaService(), m_calCtx->settings(), m_calCtx->themeManager(), nullptr,
+        [today]() { return today; });
+    m_calendar->resize(1200, 720);
+    m_calendar->show();
+    QCoreApplication::processEvents();
+}
+
+JobPrep::Ui::Widgets::MonthView* tst_UiSmoke::monthView() const {
+    return childNamed<JobPrep::Ui::Widgets::MonthView>(m_calendar.get(), u"CalendarMonthView"_s);
+}
+
+QListView* tst_UiSmoke::agendaList() const {
+    return childNamed<QListView>(m_calendar.get(), u"CalendarAgendaList"_s);
+}
+
+int tst_UiSmoke::addApplicationWithInterview(const QString& company, const QDate& day, int hour) {
+    JobApplication app;
+    app.company = company;
+    app.position = u"Developer"_s;
+    if (!m_calCtx->applications().insert(app)) {
+        QTest::qFail("failed to insert application", __FILE__, __LINE__);
+        return 0;
+    }
+
+    Interview interview;
+    interview.applicationId = app.id;
+    interview.startAt = QDateTime(day, QTime(hour, 0));
+    if (!m_calCtx->interviews().insert(interview)) {
+        QTest::qFail("failed to insert interview", __FILE__, __LINE__);
+    }
+    return app.id;
+}
+
+int tst_UiSmoke::addStudyTarget(const QDate& day) {
+    Track track;
+    track.name = u"English"_s;
+    if (!m_calCtx->tracks().insert(track)) {
+        QTest::qFail("failed to insert track", __FILE__, __LINE__);
+        return 0;
+    }
+
+    Topic topic;
+    topic.trackId = track.id;
+    topic.title = u"Review STL containers"_s;
+    topic.targetDate = day;
+    if (!m_calCtx->topics().insert(topic)) {
+        QTest::qFail("failed to insert topic", __FILE__, __LINE__);
+    }
+    return track.id;
 }
 
 void tst_UiSmoke::testJobsPageEmptyStates() {
@@ -981,6 +1098,259 @@ void tst_UiSmoke::testJobsContextMenuAddInterviewEndToEnd() {
     QVERIFY(calendar->hasItemsOn(day));
 }
 
+void tst_UiSmoke::testCalendarPageMarkersAndAgenda() {
+    const QDate today(2026, 10, 11);
+    resetCalendarData(today);
+
+    auto* view = monthView();
+    auto* list = agendaList();
+    QVERIFY(view != nullptr);
+    QVERIFY(list != nullptr);
+    QCOMPARE(view->visibleMonth(), QDate(2026, 10, 1));
+    QCOMPARE(list->model()->rowCount(), 0);
+    QVERIFY(!calendarPage()->hasItemsOn(today));
+
+    // An interview lands on the selected day: one marker, one agenda row.
+    const int appId = addApplicationWithInterview(u"Acme"_s, today, 10);
+    QVERIFY(calendarPage()->hasItemsOn(today));
+    QVERIFY(!calendarPage()->hasItemsOn(today.addDays(1)));
+    QCOMPARE(view->markersFor(today).total, 1);
+    QCOMPARE(view->markersFor(today).kinds.first(), AgendaKind::Interview);
+    QCOMPARE(list->model()->rowCount(), 1);
+    QCOMPARE(list->model()->index(0, 0).data(JobPrep::Models::AgendaListModel::KindRole).toInt(),
+             static_cast<int>(AgendaKind::Interview));
+
+    // A follow-up on the same day adds a second marker and agenda row.
+    QVERIFY(m_calCtx->applications().setNextAction(appId, u"Email the recruiter"_s, today));
+    QCOMPARE(view->markersFor(today).total, 2);
+    QCOMPARE(view->markersFor(today).kinds.size(), 2);
+    QCOMPARE(list->model()->rowCount(), 2);
+}
+
+void tst_UiSmoke::testCalendarLayerChipsFilterAgenda() {
+    const QDate today(2026, 10, 11);
+    resetCalendarData(today);
+    const int appId = addApplicationWithInterview(u"Acme"_s, today, 10);
+    QVERIFY(m_calCtx->applications().setNextAction(appId, u"Email the recruiter"_s, today));
+    addStudyTarget(today);
+
+    auto* view = monthView();
+    auto* list = agendaList();
+    QCOMPARE(list->model()->rowCount(), 3);
+    QCOMPARE(view->markersFor(today).total, 3);
+
+    // Hiding a layer drops its marker and its agenda row but keeps the others.
+    auto* followUpChip = buttonNamed(m_calendar.get(), u"CalendarLayerFollowUpBtn"_s);
+    QVERIFY(followUpChip != nullptr);
+    followUpChip->click();
+    QCOMPARE(m_calCtx->settings().calendarLayerFollowUps(), false);
+    QCOMPARE(list->model()->rowCount(), 2);
+    QCOMPARE(view->markersFor(today).total, 2);
+    QVERIFY(!view->markersFor(today).kinds.contains(AgendaKind::FollowUp));
+    QVERIFY(calendarPage()->hasItemsOn(today));
+
+    auto* targetChip = buttonNamed(m_calendar.get(), u"CalendarLayerTargetBtn"_s);
+    targetChip->click();
+    QCOMPARE(m_calCtx->settings().calendarLayerTargets(), false);
+    QCOMPARE(list->model()->rowCount(), 1);
+
+    // Re-enabling restores everything.
+    followUpChip->click();
+    targetChip->click();
+    QCOMPARE(list->model()->rowCount(), 3);
+    QCOMPARE(view->markersFor(today).total, 3);
+}
+
+void tst_UiSmoke::testCalendarNewInterviewFromDay() {
+    resetCalendarData(QDate(2026, 10, 11));
+    JobApplication app;
+    app.company = u"Acme"_s;
+    app.position = u"Developer"_s;
+    QVERIFY(m_calCtx->applications().insert(app));
+
+    // Double-clicking a day opens one InterviewDialog preselected to that day.
+    const QDate day(2026, 10, 20);
+    auto* view = monthView();
+    view->setVisibleMonth(day);
+    QCoreApplication::processEvents();
+    int dialogs = 0;
+    answerModalWhenReady([&dialogs, day](QWidget* modal) {
+        auto* dialog = qobject_cast<InterviewDialog*>(modal);
+        QVERIFY(dialog != nullptr);
+        ++dialogs;
+        QCOMPARE(childNamed<QDateEdit>(dialog, u"InterviewDateEdit"_s)->date(), day);
+        dialog->done(QDialog::Rejected);  // skip the "discard changes?" prompt
+    });
+    QTest::mouseDClick(view, Qt::LeftButton, Qt::KeyboardModifiers(), view->dayRect(day).center());
+    QCOMPARE(dialogs, 1);
+
+    // triggerNew uses the selected day.
+    view->setSelectedDay(QDate(2026, 10, 25));
+    withNextModal([](QWidget* modal) {
+        auto* dialog = qobject_cast<InterviewDialog*>(modal);
+        QVERIFY(dialog != nullptr);
+        QCOMPARE(childNamed<QDateEdit>(dialog, u"InterviewDateEdit"_s)->date(), QDate(2026, 10, 25));
+        dialog->done(QDialog::Rejected);
+    });
+    calendarPage()->triggerNew();
+}
+
+void tst_UiSmoke::testCalendarFollowUpEndToEnd() {
+    const QDate today(2026, 10, 11);
+    resetCalendarData(today);
+    JobApplication app;
+    app.company = u"Acme"_s;
+    app.position = u"Developer"_s;
+    QVERIFY(m_calCtx->applications().insert(app));
+
+    auto* view = monthView();
+    const QDate day(2026, 10, 15);
+    view->setVisibleMonth(day);
+    view->setSelectedDay(day);
+    QCoreApplication::processEvents();
+
+    withNextModal([appId = app.id](QWidget* modal) {
+        auto* dialog = qobject_cast<FollowUpDialog*>(modal);
+        QVERIFY(dialog != nullptr);
+        auto* combo = childNamed<QComboBox>(dialog, u"FollowUpApplicationCombo"_s);
+        combo->setCurrentIndex(combo->findData(appId));
+        childNamed<QLineEdit>(dialog, u"FollowUpActionEdit"_s)->setText(u"Email recruiter"_s);
+        buttonNamed(dialog, u"DialogSaveBtn"_s)->click();
+    });
+    buttonNamed(m_calendar.get(), u"CalendarAddFollowUpBtn"_s)->click();
+
+    QVERIFY(m_calCtx->applications().byId(app.id)->nextActionDate.has_value());
+    QCOMPARE(*m_calCtx->applications().byId(app.id)->nextActionDate, day);
+    QCOMPARE(agendaList()->model()->rowCount(), 1);
+    QCOMPARE(agendaList()->model()->index(0, 0).data(JobPrep::Models::AgendaListModel::KindRole).toInt(),
+             static_cast<int>(AgendaKind::FollowUp));
+    QCOMPARE(view->markersFor(day).total, 1);
+}
+
+void tst_UiSmoke::testCalendarFollowUpOverwritePrompt() {
+    resetCalendarData(QDate(2026, 10, 11));
+    JobApplication app;
+    app.company = u"Acme"_s;
+    app.position = u"Developer"_s;
+    QVERIFY(m_calCtx->applications().insert(app));
+    const QDate first(2026, 10, 15);
+    const QDate second(2026, 10, 20);
+    QVERIFY(m_calCtx->applications().setNextAction(app.id, u"First action"_s, first));
+
+    FollowUpDialog dialog(m_calCtx->applications(), second);
+    dialog.show();
+    auto* combo = childNamed<QComboBox>(&dialog, u"FollowUpApplicationCombo"_s);
+    combo->setCurrentIndex(combo->findData(app.id));
+    childNamed<QLineEdit>(&dialog, u"FollowUpActionEdit"_s)->setText(u"Second action"_s);
+    auto* saveBtn = buttonNamed(&dialog, u"DialogSaveBtn"_s);
+    QVERIFY(saveBtn != nullptr);
+
+    // Declining the overwrite prompt keeps the original date and the dialog open.
+    answerNextMessageBox([](QMessageBox* box) { box->button(QMessageBox::No)->click(); });
+    saveBtn->click();
+    QCOMPARE(*m_calCtx->applications().byId(app.id)->nextActionDate, first);
+    QVERIFY(dialog.isVisible());
+
+    // Accepting replaces it.
+    answerNextMessageBox([](QMessageBox* box) { box->button(QMessageBox::Yes)->click(); });
+    saveBtn->click();
+    QCOMPARE(*m_calCtx->applications().byId(app.id)->nextActionDate, second);
+    QVERIFY(!dialog.isVisible());
+}
+
+void tst_UiSmoke::testCalendarSplitterStatePersisted() {
+    resetCalendarData(QDate(2026, 10, 11));
+    auto* splitter = childNamed<QSplitter>(m_calendar.get(), u"CalendarSplitter"_s);
+    QVERIFY(splitter != nullptr);
+
+    if (splitter->sizes().value(1) < splitter->width() / 4) {
+        splitter->setSizes({splitter->width() / 2, splitter->width() / 2});
+        QCoreApplication::processEvents();
+    }
+
+    // Drag handle #1 like a user would; only a real move emits splitterMoved, which is
+    // what saves the state (QSplitter::moveSplitter is protected).
+    auto* handle = splitter->handle(1);
+    QVERIFY(handle != nullptr);
+    const QPoint start(handle->width() / 2, handle->height() / 2);
+    QTest::mousePress(handle, Qt::LeftButton, Qt::KeyboardModifiers(), start);
+    QTest::mouseMove(handle, start + QPoint(80, 0));
+    QTest::mouseRelease(handle, Qt::LeftButton, Qt::KeyboardModifiers(), start + QPoint(80, 0));
+    QCoreApplication::processEvents();
+    const QList<int> movedSizes = splitter->sizes();
+    const QByteArray saved = m_calCtx->settings().calendarSplitterState();
+    QVERIFY(!saved.isEmpty());
+
+    // A fresh page in the same context restores exactly those sizes.
+    JobPrep::Ui::Pages::CalendarPage second(
+        m_calCtx->interviews(), m_calCtx->applications(), m_calCtx->topics(),
+        m_calCtx->agendaService(), m_calCtx->settings(), m_calCtx->themeManager(), nullptr,
+        [] { return QDate(2026, 10, 11); });
+    second.resize(1200, 720);
+    second.show();
+    QCoreApplication::processEvents();
+    auto* restored = childNamed<QSplitter>(&second, u"CalendarSplitter"_s);
+    QVERIFY(restored != nullptr);
+    QCOMPARE(restored->sizes(), movedSizes);
+}
+
+void tst_UiSmoke::testCalendarThemes() {
+    const QDate today(2026, 10, 11);
+    resetCalendarData(today);
+    const int appId = addApplicationWithInterview(u"Acme"_s, today, 10);
+    QVERIFY(m_calCtx->applications().setNextAction(appId, u"Email the recruiter"_s, today));
+    addStudyTarget(today);
+
+    for (const auto mode :
+         {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
+        m_calCtx->themeManager().setThemeMode(mode);
+        QCoreApplication::processEvents();
+        QCOMPARE(monthView()->markersFor(today).total, 3);
+        QCOMPARE(agendaList()->model()->rowCount(), 3);
+    }
+}
+
+void tst_UiSmoke::testCalendarScreenshots() {
+    const QString dir = qEnvironmentVariable("JOBPREP_REPORT_IMG_DIR");
+    if (dir.isEmpty()) QSKIP("JOBPREP_REPORT_IMG_DIR is not set");
+    QVERIFY(QDir().mkpath(dir));
+
+    const QDate today(2026, 10, 11);
+    resetCalendarData(today);
+
+    const auto save = [this, dir](JobPrep::Ui::Theme::ThemeMode mode, const QString& name) {
+        m_calCtx->themeManager().setThemeMode(mode);
+        QCoreApplication::processEvents();
+        const QImage image = m_calendar->grab().toImage();
+        QVERIFY(!image.isNull());
+        QVERIFY(image.save(QDir(dir).filePath(name + u".png"_s)));
+        // A 150% rendering for the report, since the offscreen platform is fixed at 100%.
+        const QImage scaled = image.scaled(image.size() * 1.5, Qt::KeepAspectRatio,
+                                           Qt::SmoothTransformation);
+        QVERIFY(scaled.save(QDir(dir).filePath(name + u"@1.5x.png"_s)));
+    };
+    const auto forBothThemes = [&save](const QString& name) {
+        save(JobPrep::Ui::Theme::ThemeMode::Light, name + u"-light"_s);
+        save(JobPrep::Ui::Theme::ThemeMode::Dark, name + u"-dark"_s);
+    };
+
+    // Empty: no agenda data, the "Nothing Planned" state is shown.
+    forBothThemes(u"calendar-empty"_s);
+
+    // With markers: interviews, a follow-up and a study target across the month.
+    addApplicationWithInterview(u"Google"_s, today, 10);
+    const int second = addApplicationWithInterview(u"DeepMind"_s, today.addDays(3), 14);
+    QVERIFY(m_calCtx->applications().setNextAction(second, u"Send thank-you email"_s,
+                                                   today.addDays(1)));
+    addStudyTarget(today.addDays(2));
+    forBothThemes(u"calendar-markers"_s);
+
+    // With a selected day: the agenda panel is filled for a specific interview day.
+    monthView()->setSelectedDay(today.addDays(3));
+    QCoreApplication::processEvents();
+    forBothThemes(u"calendar-selected"_s);
+}
+
 void tst_UiSmoke::testZeroWarnings() {
     if (!s_capturedWarnings.isEmpty()) {
         const QString failures = s_capturedWarnings.join(u"\n"_s);
@@ -992,6 +1362,8 @@ void tst_UiSmoke::testZeroWarnings() {
 void tst_UiSmoke::cleanupTestCase() {
     m_jobs.reset();
     m_jobsCtx.reset();
+    m_calendar.reset();
+    m_calCtx.reset();
     m_window.reset();
     m_ctx.reset();
     qInstallMessageHandler(nullptr);

@@ -2,6 +2,7 @@ add_library(jobprep_model_test_helpers INTERFACE)
 
 # Models tests
 set(MODELS_TESTS
+    tst_AgendaListModel
     tst_ApplicationTableModel
     tst_ApplicationFilterProxy
 )

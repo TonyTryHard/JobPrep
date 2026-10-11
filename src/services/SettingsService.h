@@ -53,6 +53,9 @@ public:
     bool calendarLayerTargets() const;
     void setCalendarLayerTargets(bool enabled);
 
+    QByteArray calendarSplitterState() const;
+    void setCalendarSplitterState(const QByteArray& state);
+
 signals:
     void themeModeChanged(const QString& mode);
     void accentPresetChanged(const QString& preset);
