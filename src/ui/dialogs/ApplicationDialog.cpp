@@ -273,11 +273,11 @@ void ApplicationDialog::setupInterviewsTab() {
     auto* buttons = new QHBoxLayout();
     buttons->setContentsMargins(0, 0, 0, 0);
     buttons->setSpacing(8);
-    m_addInterviewBtn = new QPushButton(tr("+ Interview"), page);
+    m_addInterviewBtn = new QPushButton(tr("+ &Interview"), page);
     m_addInterviewBtn->setObjectName(u"InterviewsAddBtn"_s);
-    m_editInterviewBtn = new QPushButton(tr("Edit..."), page);
+    m_editInterviewBtn = new QPushButton(tr("&Edit..."), page);
     m_editInterviewBtn->setObjectName(u"InterviewsEditBtn"_s);
-    m_deleteInterviewBtn = new QPushButton(tr("Delete..."), page);
+    m_deleteInterviewBtn = new QPushButton(tr("&Delete..."), page);
     m_deleteInterviewBtn->setObjectName(u"InterviewsDeleteBtn"_s);
     buttons->addWidget(m_addInterviewBtn);
     buttons->addWidget(m_editInterviewBtn);
@@ -429,6 +429,15 @@ void ApplicationDialog::updateInterviewButtons() {
     m_addInterviewBtn->setEnabled(hasRow);
     m_editInterviewBtn->setEnabled(hasRow && hasSelection);
     m_deleteInterviewBtn->setEnabled(hasRow && hasSelection);
+
+    // An unsaved application has no id to hang an interview off, so the button is
+    // disabled and the tooltip says why instead of leaving the user guessing.
+    m_addInterviewBtn->setToolTip(hasRow ? tr("Add an interview to this application")
+                                         : tr("Save the application first to add interviews"));
+    m_editInterviewBtn->setToolTip(hasSelection ? tr("Edit the selected interview")
+                                                : tr("Select an interview to edit it"));
+    m_deleteInterviewBtn->setToolTip(hasSelection ? tr("Delete the selected interview")
+                                                  : tr("Select an interview to delete it"));
 }
 
 int ApplicationDialog::selectedInterviewId() const {

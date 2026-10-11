@@ -381,3 +381,8 @@ Kanban for applications, per-company contacts directory, salary comparison chart
 - 1.3 — `insert()` writes an initial `status_history` row (NULL → initial status).
 - 1.3 — applications CSV column set fixed to 22 English names: §3.3 A1 first, then every remaining `applications` field; no id column.
 - 1.4 — `AgendaItem` loses `color` (handled by UI `AgendaKindStyle`) and gains `past` (boolean).
+- 1.5 — `AgendaService` requires a `TrackRepository&` (was an optional pointer); it only supplies the study-target subtitle.
+- 1.5 — `InterviewRepository::inRange` keeps inclusive `start_at >= ? AND start_at <= ?` bounds; `AgendaService` passes the last second `23:59:59`. Stored date-times are whole-second `yyyy-MM-ddTHH:mm:ss` (no fractional seconds, no offset), so text comparison is exact and the half-open form was not needed.
+- 1.5 — `CalendarPage` takes explicit repository/service references (no `AppContext&`), matching `JobsPage`.
+- 1.5 — `StatusStyle::label(InterviewType)` / `label(InterviewOutcome)` centralize interview type and outcome labels for tables and dialogs.
+- 1.5 — `AgendaItem::past` is a neutral fact; the UI dims only past interviews. Overdue follow-ups and study targets still need attention and are never drawn as "done".

@@ -90,56 +90,65 @@ void InterviewDialog::setupUi() {
 
     m_appCombo = new QComboBox(this);
     m_appCombo->setObjectName(u"InterviewApplicationCombo"_s);
-    form->addRow(tr("Application *"), m_appCombo);
+    m_appCombo->setToolTip(tr("The application this interview belongs to"));
+    form->addRow(tr("&Application *"), m_appCombo);
 
     m_dateEdit = new QDateEdit(this);
     m_dateEdit->setObjectName(u"InterviewDateEdit"_s);
     m_dateEdit->setCalendarPopup(true);
+    m_dateEdit->setToolTip(tr("Interview date"));
     m_timeEdit = new QTimeEdit(this);
     m_timeEdit->setObjectName(u"InterviewTimeEdit"_s);
     m_timeEdit->setDisplayFormat(u"HH:mm"_s);
+    m_timeEdit->setToolTip(tr("Start time"));
     auto* whenRow = new QWidget(this);
     auto* whenLayout = new QHBoxLayout(whenRow);
     whenLayout->setContentsMargins(0, 0, 0, 0);
     whenLayout->setSpacing(8);
     whenLayout->addWidget(m_dateEdit, 1);
     whenLayout->addWidget(m_timeEdit, 0);
-    form->addRow(tr("When *"), whenRow);
+    form->addRow(tr("&When *"), whenRow);
 
     m_durationSpin = new QSpinBox(this);
     m_durationSpin->setObjectName(u"InterviewDurationSpin"_s);
     m_durationSpin->setRange(0, 1440);
     m_durationSpin->setValue(60);
     m_durationSpin->setSuffix(tr(" min"));
-    form->addRow(tr("Duration"), m_durationSpin);
+    m_durationSpin->setToolTip(tr("Expected duration in minutes"));
+    form->addRow(tr("&Duration"), m_durationSpin);
 
     m_typeCombo = new QComboBox(this);
     m_typeCombo->setObjectName(u"InterviewTypeCombo"_s);
+    m_typeCombo->setToolTip(tr("Which round this is"));
     for (const InterviewType type : kTypes) {
         m_typeCombo->addItem(Theme::StatusStyle::label(type), static_cast<int>(type));
     }
-    form->addRow(tr("Type"), m_typeCombo);
+    form->addRow(tr("&Type"), m_typeCombo);
 
     m_outcomeCombo = new QComboBox(this);
     m_outcomeCombo->setObjectName(u"InterviewOutcomeCombo"_s);
+    m_outcomeCombo->setToolTip(tr("Result so far"));
     for (const InterviewOutcome outcome : kOutcomes) {
         m_outcomeCombo->addItem(Theme::StatusStyle::label(outcome), static_cast<int>(outcome));
     }
-    form->addRow(tr("Outcome"), m_outcomeCombo);
+    form->addRow(tr("&Outcome"), m_outcomeCombo);
 
     m_placeEdit = new QLineEdit(this);
     m_placeEdit->setObjectName(u"InterviewPlaceEdit"_s);
     m_placeEdit->setPlaceholderText(tr("Zoom, on-site address..."));
-    form->addRow(tr("Place"), m_placeEdit);
+    m_placeEdit->setToolTip(tr("Where the interview takes place"));
+    form->addRow(tr("&Place"), m_placeEdit);
 
     m_interviewerEdit = new QLineEdit(this);
     m_interviewerEdit->setObjectName(u"InterviewInterviewerEdit"_s);
-    form->addRow(tr("Interviewer"), m_interviewerEdit);
+    m_interviewerEdit->setToolTip(tr("Who you will talk to"));
+    form->addRow(tr("&Interviewer"), m_interviewerEdit);
 
     m_notesEdit = new QTextEdit(this);
     m_notesEdit->setObjectName(u"InterviewNotesEdit"_s);
     m_notesEdit->setPlaceholderText(tr("Preparation notes, questions to ask..."));
-    form->addRow(tr("Notes"), m_notesEdit);
+    m_notesEdit->setToolTip(tr("Preparation notes"));
+    form->addRow(tr("&Notes"), m_notesEdit);
 
     m_messageLabel = new QLabel(this);
     m_messageLabel->setObjectName(u"FieldErrorLabel"_s);
@@ -148,12 +157,17 @@ void InterviewDialog::setupUi() {
     layout->addWidget(m_messageLabel);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
-    m_saveBtn = buttons->addButton(tr("Save"), QDialogButtonBox::AcceptRole);
+    buttons->button(QDialogButtonBox::Cancel)->setToolTip(tr("Discard changes (Esc)"));
+    m_saveBtn = buttons->addButton(tr("&Save"), QDialogButtonBox::AcceptRole);
     m_saveBtn->setObjectName(u"DialogSaveBtn"_s);
     m_saveBtn->setProperty("primary", true);
+    m_saveBtn->setDefault(true);
+    m_saveBtn->setAutoDefault(true);
+    m_saveBtn->setToolTip(tr("Save the interview (Enter)"));
     if (m_mode == Edit) {
-        m_deleteBtn = buttons->addButton(tr("Delete"), QDialogButtonBox::DestructiveRole);
+        m_deleteBtn = buttons->addButton(tr("&Delete"), QDialogButtonBox::DestructiveRole);
         m_deleteBtn->setObjectName(u"DialogDeleteBtn"_s);
+        m_deleteBtn->setToolTip(tr("Delete this interview"));
     }
     layout->addWidget(buttons);
 

@@ -27,6 +27,7 @@ private slots:
     void removeDeletesRow();
     void byApplicationFiltersRows();
     void inRangeIsInclusiveAndOrdered();
+    void inRangeIncludesLastSecond();
     void nextUpcomingSkipsPast();
 
 private:
@@ -187,6 +188,31 @@ void tst_InterviewRepository::inRangeIsInclusiveAndOrdered() {
 
     QCOMPARE(m_interviews->inRange(QDateTime(QDate(2026, 11, 1), QTime(0, 0)),
                                    QDateTime(QDate(2026, 11, 30), QTime(23, 59)))
+                 .size(),
+             0);
+}
+
+void tst_InterviewRepository::inRangeIncludesLastSecond() {
+    // The app stores whole-second local text (`yyyy-MM-ddTHH:mm:ss`, no fractional
+    // seconds and no offset), so an interview at 23:59:59 compares equal to the
+    // inclusive upper bound and must be found on its last day.
+    const QDate lastDay(2026, 10, 12);
+    const int id = addInterview(QDateTime(lastDay, QTime(23, 59, 59)));
+    QVERIFY(id > 0);
+
+    QCOMPARE(m_db->scalar(u"SELECT start_at FROM interviews WHERE id = %1"_s
+                             .arg(QString::number(id)))
+                 .toString(),
+             u"2026-10-12T23:59:59"_s);
+
+    const auto range = m_interviews->inRange(QDateTime(lastDay, QTime(0, 0, 0)),
+                                             QDateTime(lastDay, QTime(23, 59, 59)));
+    QCOMPARE(range.size(), 1);
+    QCOMPARE(range.first().id, id);
+
+    // One second into the next day is outside the bound.
+    QCOMPARE(m_interviews->inRange(QDateTime(lastDay.addDays(1), QTime(0, 0, 0)),
+                                   QDateTime(lastDay.addDays(1), QTime(23, 59, 59)))
                  .size(),
              0);
 }

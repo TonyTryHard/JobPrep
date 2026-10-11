@@ -131,7 +131,10 @@ private slots:
     void testInterviewDialogCreateAndEdit();
     void testInterviewDialogValidation();
     void testInterviewDialogDeleteWithConfirmation();
+    void testInterviewDialogKeyboardShortcuts();
+    void testInterviewTabDisabledUntilSaved();
     void testApplicationDialogInterviewsTabEditable();
+    void testHeaderNewInterviewFromJobsRoutesToCalendar();
     void testJobsPageThemes();
     void testHeaderSearchFiltersJobsTable();
     void testNewEntryPointsOpenOneDialog();
@@ -677,6 +680,59 @@ void tst_UiSmoke::testInterviewDialogDeleteWithConfirmation() {
     QCOMPARE(m_jobsCtx->interviews().all().size(), 0);
 }
 
+void tst_UiSmoke::testInterviewDialogKeyboardShortcuts() {
+    resetJobsData();
+    addApplication(u"Acme"_s, u"Developer"_s);
+    const int appId = m_jobsCtx->applications().all().first().id;
+
+    // Esc cancels a clean form straight away (no discard prompt needed).
+    InterviewDialog cancelDialog(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                                 InterviewDialog::Create);
+    cancelDialog.show();
+    cancelDialog.setFocus();
+    QTest::keyClick(&cancelDialog, Qt::Key_Escape);
+    QVERIFY(!cancelDialog.isVisible());
+
+    // Save is the default button, so Enter accepts a valid form.
+    InterviewDialog saveDialog(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                               InterviewDialog::Create);
+    saveDialog.setApplicationId(appId);
+    saveDialog.show();
+    auto* saveBtn = buttonNamed(&saveDialog, u"DialogSaveBtn"_s);
+    QVERIFY(saveBtn != nullptr);
+    QVERIFY(saveBtn->isDefault());
+    saveDialog.setFocus();
+    QTest::keyClick(&saveDialog, Qt::Key_Return);
+    QCOMPARE(m_jobsCtx->interviews().byApplication(appId).size(), 1);
+    QVERIFY(!saveDialog.isVisible());
+}
+
+void tst_UiSmoke::testInterviewTabDisabledUntilSaved() {
+    resetJobsData();
+
+    // Create mode has no application id yet, so "+ Interview" is disabled and explains
+    // why; clicking it must not open a dialog or write anything.
+    ApplicationDialog create(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                             ApplicationDialog::Create);
+    auto* addBtn = buttonNamed(&create, u"InterviewsAddBtn"_s);
+    QVERIFY(addBtn != nullptr);
+    QVERIFY(!addBtn->isEnabled());
+    QVERIFY(!addBtn->toolTip().isEmpty());
+
+    const int before = m_jobsCtx->interviews().all().size();
+    addBtn->click();
+    QCOMPARE(m_jobsCtx->interviews().all().size(), before);
+    QCOMPARE(m_jobsCtx->applications().count(), 0);
+
+    // Once saved, the same button is enabled.
+    addApplication(u"Umbrella"_s, u"Lead"_s);
+    const int appId = m_jobsCtx->applications().all().first().id;
+    ApplicationDialog edit(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                           ApplicationDialog::Edit);
+    edit.setApplication(*m_jobsCtx->applications().byId(appId));
+    QVERIFY(buttonNamed(&edit, u"InterviewsAddBtn"_s)->isEnabled());
+}
+
 void tst_UiSmoke::testApplicationDialogInterviewsTabEditable() {
     resetJobsData();
     addApplication(u"Umbrella"_s, u"Lead"_s);
@@ -840,6 +896,38 @@ void tst_UiSmoke::testHeaderNewApplicationOnCalendarPage() {
     applicationAction->trigger();
     QCOMPARE(dialogs, 1);
     QCOMPARE(m_window->pageStack()->currentIndex(), 2);
+}
+
+void tst_UiSmoke::testHeaderNewInterviewFromJobsRoutesToCalendar() {
+    // From the Jobs page the header "Interview" entry opens exactly one InterviewDialog
+    // on the Calendar page, preselected to the day the calendar is showing (Amendment B1).
+    m_window->sidebar()->setCurrentPage(2);
+    emit m_window->sidebar()->pageSelected(2);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 2);
+
+    auto* calendar = m_window->findChild<JobPrep::Ui::Pages::CalendarPage*>();
+    QVERIFY(calendar != nullptr);
+    const QDate shownDay = calendar->selectedDay();
+
+    auto* interviewAction = m_window->findChild<QAction*>(u"HeaderNewInterview"_s);
+    QVERIFY(interviewAction != nullptr && interviewAction->isEnabled());
+
+    int dialogs = 0;
+    withNextModal([&dialogs, shownDay](QWidget* modal) {
+        dialogs = countInterviewDialogs();
+        QCOMPARE(dialogs, 1);
+        auto* dialog = qobject_cast<InterviewDialog*>(modal);
+        QVERIFY(dialog != nullptr);
+        QCOMPARE(childNamed<QDateEdit>(dialog, u"InterviewDateEdit"_s)->date(), shownDay);
+        dialog->reject();
+    });
+    interviewAction->trigger();
+    QCOMPARE(dialogs, 1);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 3);
+
+    // Leave the shared window where later slots expect it.
+    m_window->sidebar()->setCurrentPage(0);
+    emit m_window->sidebar()->pageSelected(0);
 }
 
 void tst_UiSmoke::testJobsContextMenuAddInterviewEndToEnd() {
