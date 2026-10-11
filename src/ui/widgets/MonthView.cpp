@@ -144,6 +144,11 @@ void MonthView::stepSelection(int days) {
     selectDate(m_selectedDay.addDays(days));
 }
 
+QDate MonthView::startOfWeek(QDate day) const {
+    const int offset = (day.dayOfWeek() - m_firstDayOfWeek + 7) % 7;
+    return day.addDays(-offset);
+}
+
 void MonthView::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton) {
         QWidget::mousePressEvent(event);
@@ -183,6 +188,12 @@ void MonthView::keyPressEvent(QKeyEvent* event) {
             return;
         case Qt::Key_PageDown:
             setSelectedDay(m_selectedDay.addMonths(1));
+            return;
+        case Qt::Key_Home:
+            setSelectedDay(startOfWeek(m_selectedDay));
+            return;
+        case Qt::Key_End:
+            setSelectedDay(startOfWeek(m_selectedDay).addDays(kColumns - 1));
             return;
         case Qt::Key_Return:
         case Qt::Key_Enter:

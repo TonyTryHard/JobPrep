@@ -80,6 +80,7 @@ private:
     QRect gridRect() const;
     QRect cellRect(int row, int column) const;
     QDate dateAt(QPoint position) const;
+    QDate startOfWeek(QDate day) const;
     void selectDate(QDate day);
     void stepSelection(int days);
 

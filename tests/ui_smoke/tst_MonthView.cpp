@@ -1,5 +1,7 @@
 #include <QtTest>
+#include <QLineEdit>
 #include <QSignalSpy>
+#include <QVBoxLayout>
 #include "services/SettingsService.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
@@ -41,6 +43,8 @@ private slots:
     void todayFromProviderAndInitialSelection();
     void clickingOutOfMonthDayFollowsMonth();
     void keyboardNavigation();
+    void homeEndSelectWeekBounds();
+    void tabFocusEntersAndLeaves();
     void pageUpDownMoveMonth();
     void activateKeysEmitDayActivated();
     void doubleClickEmitsDayActivated();
@@ -142,6 +146,58 @@ void tst_MonthView::keyboardNavigation() {
     QCOMPARE(view->selectedDay(), QDate(2026, 10, 11));
 
     delete view;
+}
+
+void tst_MonthView::homeEndSelectWeekBounds() {
+    CalendarFixture fixture;
+    MonthView* view = makeView(fixture.theme, [] { return kToday; });
+
+    // Monday-first: week of Sun 11 Oct 2026 runs Mon 5 Oct .. Sun 11 Oct.
+    view->setFirstDayOfWeek(Qt::Monday);
+    view->setSelectedDay(QDate(2026, 10, 11));
+    view->setFocus();
+    QTest::keyClick(view, Qt::Key_Home);
+    QCOMPARE(view->selectedDay(), QDate(2026, 10, 5));
+    QTest::keyClick(view, Qt::Key_End);
+    QCOMPARE(view->selectedDay(), QDate(2026, 10, 11));
+
+    // Sunday-first: the same day is Sunday, so it starts its own week.
+    view->setFirstDayOfWeek(Qt::Sunday);
+    view->setSelectedDay(QDate(2026, 10, 11));
+    QTest::keyClick(view, Qt::Key_Home);
+    QCOMPARE(view->selectedDay(), QDate(2026, 10, 11));
+    QTest::keyClick(view, Qt::Key_End);
+    QCOMPARE(view->selectedDay(), QDate(2026, 10, 17));
+
+    delete view;
+}
+
+void tst_MonthView::tabFocusEntersAndLeaves() {
+    CalendarFixture fixture;
+    QWidget host;
+    auto* layout = new QVBoxLayout(&host);
+    auto* before = new QLineEdit(&host);
+    auto* view = new MonthView(fixture.theme, [] { return kToday; }, &host);
+    auto* after = new QLineEdit(&host);
+    layout->addWidget(before);
+    layout->addWidget(view);
+    layout->addWidget(after);
+    host.resize(640, 520);
+    host.show();
+    QCoreApplication::processEvents();
+
+    // MonthView opts into the tab chain (StrongFocus includes TabFocus).
+    QVERIFY(view->focusPolicy() & Qt::TabFocus);
+
+    before->setFocus();
+    QVERIFY(before->hasFocus());
+    QTest::keyClick(before, Qt::Key_Tab);
+    QVERIFY(view->hasFocus());
+
+    QTest::keyClick(view, Qt::Key_Tab);
+    QVERIFY(after->hasFocus());
+    QTest::keyClick(after, Qt::Key_Backtab);
+    QVERIFY(view->hasFocus());
 }
 
 void tst_MonthView::pageUpDownMoveMonth() {

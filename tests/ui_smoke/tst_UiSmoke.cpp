@@ -828,13 +828,14 @@ void tst_UiSmoke::testInterviewTabDisabledUntilSaved() {
     resetJobsData();
 
     // Create mode has no application id yet, so "+ Interview" is disabled and explains
-    // why; clicking it must not open a dialog or write anything.
+    // why ("Save the application first..."); clicking it must not open a dialog or write
+    // anything. This is the disabled case (C0 item 1), not a save-first-on-click case.
     ApplicationDialog create(m_jobsCtx->applications(), m_jobsCtx->interviews(),
                              ApplicationDialog::Create);
     auto* addBtn = buttonNamed(&create, u"InterviewsAddBtn"_s);
     QVERIFY(addBtn != nullptr);
     QVERIFY(!addBtn->isEnabled());
-    QVERIFY(!addBtn->toolTip().isEmpty());
+    QVERIFY(addBtn->toolTip().contains(u"Save"_s));
 
     const int before = m_jobsCtx->interviews().all().size();
     addBtn->click();
@@ -1324,10 +1325,6 @@ void tst_UiSmoke::testCalendarScreenshots() {
         const QImage image = m_calendar->grab().toImage();
         QVERIFY(!image.isNull());
         QVERIFY(image.save(QDir(dir).filePath(name + u".png"_s)));
-        // A 150% rendering for the report, since the offscreen platform is fixed at 100%.
-        const QImage scaled = image.scaled(image.size() * 1.5, Qt::KeepAspectRatio,
-                                           Qt::SmoothTransformation);
-        QVERIFY(scaled.save(QDir(dir).filePath(name + u"@1.5x.png"_s)));
     };
     const auto forBothThemes = [&save](const QString& name) {
         save(JobPrep::Ui::Theme::ThemeMode::Light, name + u"-light"_s);
