@@ -17,6 +17,9 @@ public:
 
     static QColor color(Domain::Priority priority);
     static QString label(Domain::Priority priority);
+
+    static QString label(Domain::InterviewType type);
+    static QString label(Domain::InterviewOutcome outcome);
 };
 
 }  // namespace JobPrep::Ui::Theme

@@ -62,6 +62,10 @@ private slots:
     void onSave();
     void onFormChanged();
     void onTabChanged(int index);
+    void onAddInterview();
+    void onEditInterview();
+    void onDeleteInterview();
+    void onInterviewSelectionChanged();
 
 private:
     void setupUi();
@@ -71,6 +75,9 @@ private:
     void setupTimelineTab();
     void loadFrom(const JobPrep::Domain::JobApplication& app);
     void reloadReadOnlyTabs();
+    void reloadInterviewsTable();
+    void updateInterviewButtons();
+    int selectedInterviewId() const;
     void updateDirtyState();
     /// Returns false and shows inline messages when company, position or the salary
     /// range are wrong. A malformed contact e-mail only warns.
@@ -109,9 +116,13 @@ private:
     QTextEdit* m_notesEdit{nullptr};
     QWidget* m_interviewsPage{nullptr};
     QWidget* m_timelinePage{nullptr};
+    QLabel* m_interviewsHint{nullptr};
     QTableWidget* m_interviewsTable{nullptr};
     QTableWidget* m_timelineTable{nullptr};
     QPushButton* m_saveBtn{nullptr};
+    QPushButton* m_addInterviewBtn{nullptr};
+    QPushButton* m_editInterviewBtn{nullptr};
+    QPushButton* m_deleteInterviewBtn{nullptr};
 };
 
 }  // namespace JobPrep::Ui::Dialogs

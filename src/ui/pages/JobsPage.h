@@ -79,6 +79,8 @@ protected:
 private slots:
     void onRowsChanged();
     void onContextMenuRequested(const QPoint& position);
+    /// Opens the new-interview dialog with `appId` preselected (context menu).
+    void openAddInterview(int appId);
 
 private:
     void setupUi(QVBoxLayout* layout);

@@ -27,6 +27,7 @@
 #include "services/ExportService.h"
 #include "ui/delegates/StatusBadgeDelegate.h"
 #include "ui/dialogs/ApplicationDialog.h"
+#include "ui/dialogs/InterviewDialog.h"
 #include "ui/theme/StatusStyle.h"
 #include "ui/widgets/ChipBar.h"
 #include "ui/widgets/EmptyState.h"
@@ -242,10 +243,12 @@ void JobsPage::setupContextMenu() {
         });
     }
 
-    // Interviews are a separate entity and arrive with the calendar page in M3.
+    // Interviews are a separate entity, handled by InterviewDialog (SPEC §3.3 A6).
     QAction* addInterview = m_contextMenu->addAction(tr("Add interview..."));
-    addInterview->setEnabled(false);
-    addInterview->setToolTip(tr("Arrives in M3"));
+    addInterview->setObjectName(u"JobsAddInterviewAction"_s);
+    connect(addInterview, &QAction::triggered, this, [this]() {
+        if (const auto id = selectedId()) openAddInterview(*id);
+    });
 
     QAction* openUrl = m_contextMenu->addAction(tr("Open posting URL"));
     openUrl->setToolTip(tr("Only http and https links can be opened"));
@@ -384,6 +387,13 @@ void JobsPage::newApplication() {
                                           Ui::Dialogs::ApplicationDialog::Create, this);
     if (dialog.exec() != QDialog::Accepted) return;
     selectId(dialog.application().id);
+}
+
+void JobsPage::openAddInterview(int appId) {
+    Ui::Dialogs::InterviewDialog dialog(m_apps, m_interviews,
+                                        Ui::Dialogs::InterviewDialog::Create, this);
+    dialog.setApplicationId(appId);
+    dialog.exec();
 }
 
 void JobsPage::editApplication(int id) {

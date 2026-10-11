@@ -109,4 +109,38 @@ QString StatusStyle::label(Domain::Priority priority) {
     return QString();
 }
 
+QString StatusStyle::label(Domain::InterviewType type) {
+    switch (type) {
+        case Domain::InterviewType::Hr:
+            return QCoreApplication::translate("StatusStyle", "HR screen");
+        case Domain::InterviewType::Technical:
+            return QCoreApplication::translate("StatusStyle", "Technical");
+        case Domain::InterviewType::LiveCoding:
+            return QCoreApplication::translate("StatusStyle", "Live coding");
+        case Domain::InterviewType::SystemDesign:
+            return QCoreApplication::translate("StatusStyle", "System design");
+        case Domain::InterviewType::Behavioral:
+            return QCoreApplication::translate("StatusStyle", "Behavioral");
+        case Domain::InterviewType::Final:
+            return QCoreApplication::translate("StatusStyle", "Final");
+        case Domain::InterviewType::Other:
+            return QCoreApplication::translate("StatusStyle", "Other");
+    }
+    return QString();
+}
+
+QString StatusStyle::label(Domain::InterviewOutcome outcome) {
+    switch (outcome) {
+        case Domain::InterviewOutcome::Pending:
+            return QCoreApplication::translate("StatusStyle", "Pending");
+        case Domain::InterviewOutcome::Passed:
+            return QCoreApplication::translate("StatusStyle", "Passed");
+        case Domain::InterviewOutcome::Failed:
+            return QCoreApplication::translate("StatusStyle", "Failed");
+        case Domain::InterviewOutcome::Cancelled:
+            return QCoreApplication::translate("StatusStyle", "Cancelled");
+    }
+    return QString();
+}
+
 }  // namespace JobPrep::Ui::Theme

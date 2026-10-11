@@ -3,7 +3,9 @@
 #include <QComboBox>
 #include <QDateEdit>
 #include <QFile>
+#include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
@@ -27,6 +29,7 @@
 #include "ui/Sidebar.h"
 #include "ui/dialogs/ApplicationDialog.h"
 #include "ui/dialogs/InterviewDialog.h"
+#include "ui/pages/CalendarPage.h"
 #include "ui/pages/JobsPage.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
@@ -128,9 +131,12 @@ private slots:
     void testInterviewDialogCreateAndEdit();
     void testInterviewDialogValidation();
     void testInterviewDialogDeleteWithConfirmation();
+    void testApplicationDialogInterviewsTabEditable();
     void testJobsPageThemes();
     void testHeaderSearchFiltersJobsTable();
     void testNewEntryPointsOpenOneDialog();
+    void testHeaderNewApplicationOnCalendarPage();
+    void testJobsContextMenuAddInterviewEndToEnd();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -671,6 +677,52 @@ void tst_UiSmoke::testInterviewDialogDeleteWithConfirmation() {
     QCOMPARE(m_jobsCtx->interviews().all().size(), 0);
 }
 
+void tst_UiSmoke::testApplicationDialogInterviewsTabEditable() {
+    resetJobsData();
+    addApplication(u"Umbrella"_s, u"Lead"_s);
+    const int appId = m_jobsCtx->applications().all().first().id;
+
+    // A new application has no interviews tab and says to save first.
+    ApplicationDialog create(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                             ApplicationDialog::Create);
+    auto* createTabs = childNamed<QTabWidget>(&create, u"ApplicationDialogTabs"_s);
+    QVERIFY(!createTabs->isTabEnabled(2));
+    QVERIFY(childNamed<QLabel>(&create, u"InterviewsHintLabel"_s)->text().contains(u"Save"_s));
+
+    // A saved application has an editable tab that saves interviews immediately.
+    ApplicationDialog edit(m_jobsCtx->applications(), m_jobsCtx->interviews(),
+                           ApplicationDialog::Edit);
+    edit.setApplication(*m_jobsCtx->applications().byId(appId));
+    auto* tabs = childNamed<QTabWidget>(&edit, u"ApplicationDialogTabs"_s);
+    QVERIFY(tabs->isTabEnabled(2));
+    tabs->setCurrentIndex(2);
+    auto* table = childNamed<QTableWidget>(&edit, u"InterviewsTable"_s);
+    QCOMPARE(table->rowCount(), 0);
+    auto* addBtn = buttonNamed(&edit, u"InterviewsAddBtn"_s);
+    QVERIFY(addBtn->isEnabled());
+    QVERIFY(buttonNamed(&edit, u"InterviewsEditBtn"_s)->isEnabled() == false);
+
+    withNextModal([](QWidget* modal) {
+        auto* dialog = qobject_cast<InterviewDialog*>(modal);
+        QVERIFY(dialog != nullptr);
+        childNamed<QDateEdit>(dialog, u"InterviewDateEdit"_s)->setDate(QDate(2026, 5, 4));
+        buttonNamed(dialog, u"DialogSaveBtn"_s)->click();
+    });
+    addBtn->click();
+    QCOMPARE(table->rowCount(), 1);
+    QCOMPARE(m_jobsCtx->interviews().byApplication(appId).size(), 1);
+
+    // Selecting a row enables Edit and Delete; deleting with confirmation clears it.
+    table->selectRow(0);
+    QVERIFY(buttonNamed(&edit, u"InterviewsEditBtn"_s)->isEnabled());
+    auto* deleteBtn = buttonNamed(&edit, u"InterviewsDeleteBtn"_s);
+    QVERIFY(deleteBtn->isEnabled());
+    answerNextMessageBox([](QMessageBox* box) { box->button(QMessageBox::Yes)->click(); });
+    deleteBtn->click();
+    QCOMPARE(table->rowCount(), 0);
+    QCOMPARE(m_jobsCtx->interviews().byApplication(appId).size(), 0);
+}
+
 void tst_UiSmoke::testJobsPageThemes() {
     resetJobsData();
     addApplication(u"Acme"_s, u"Developer"_s, ApplicationStatus::Technical);
@@ -736,10 +788,9 @@ void tst_UiSmoke::testNewEntryPointsOpenOneDialog() {
     QVERIFY(applicationAction != nullptr);
     QVERIFY(pageAddBtn != nullptr);
 
-    // Only Application works yet; the other two say which milestone brings them.
+    // Application and Interview both work now; Study session says which milestone brings it.
     QVERIFY(applicationAction->isEnabled());
-    QVERIFY(interviewAction != nullptr && !interviewAction->isEnabled());
-    QCOMPARE(interviewAction->toolTip(), u"Arrives in M3");
+    QVERIFY(interviewAction != nullptr && interviewAction->isEnabled());
     QVERIFY(sessionAction != nullptr && !sessionAction->isEnabled());
     QCOMPARE(sessionAction->toolTip(), u"Arrives in M4");
 
@@ -767,6 +818,79 @@ void tst_UiSmoke::testNewEntryPointsOpenOneDialog() {
     pageAddBtn->click();
     QCOMPARE(dialogs, 1);
     QCOMPARE(m_ctx->applications().count(), 3);
+}
+
+void tst_UiSmoke::testHeaderNewApplicationOnCalendarPage() {
+    // On the Calendar page the header "Application" entry must still open one
+    // ApplicationDialog, and must switch to the Jobs page (Amendment B1).
+    m_window->sidebar()->setCurrentPage(3);
+    emit m_window->sidebar()->pageSelected(3);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 3);
+
+    auto* applicationAction = m_window->findChild<QAction*>(u"HeaderNewApplication"_s);
+    QVERIFY(applicationAction != nullptr);
+
+    int dialogs = 0;
+    withNextModal([&dialogs](QWidget* modal) {
+        dialogs = countApplicationDialogs();
+        auto* dialog = qobject_cast<ApplicationDialog*>(modal);
+        QVERIFY(dialog != nullptr);
+        dialog->reject();
+    });
+    applicationAction->trigger();
+    QCOMPARE(dialogs, 1);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 2);
+}
+
+void tst_UiSmoke::testJobsContextMenuAddInterviewEndToEnd() {
+    JobApplication app;
+    app.company = u"EndToEnd Co"_s;
+    app.position = u"Test Engineer"_s;
+    QVERIFY(m_ctx->applications().insert(app));
+
+    m_window->sidebar()->setCurrentPage(2);
+    emit m_window->sidebar()->pageSelected(2);
+    auto* jobs = m_window->findChild<JobPrep::Ui::Pages::JobsPage*>();
+    QVERIFY(jobs != nullptr);
+    auto* view = jobs->findChild<QTableView*>(u"JobsTableView"_s);
+    QVERIFY(view != nullptr);
+
+    int row = -1;
+    for (int r = 0; r < view->model()->rowCount(); ++r) {
+        const int id = view->model()
+                           ->index(r, ApplicationTableModel::CompanyColumn)
+                           .data(ApplicationTableModel::IdRole)
+                           .toInt();
+        if (id == app.id) {
+            row = r;
+            break;
+        }
+    }
+    QVERIFY(row >= 0);
+    view->setCurrentIndex(view->model()->index(row, ApplicationTableModel::CompanyColumn));
+
+    // The context menu cannot be popped up offscreen, so trigger its action directly.
+    auto* menu = jobs->findChild<QMenu*>(u"JobsContextMenu"_s);
+    QVERIFY(menu != nullptr);
+    QAction* addInterview = menu->findChild<QAction*>(u"JobsAddInterviewAction"_s);
+    QVERIFY(addInterview != nullptr);
+
+    const QDate day(2026, 5, 4);
+    withNextModal([day](QWidget* modal) {
+        auto* dialog = qobject_cast<InterviewDialog*>(modal);
+        QVERIFY(dialog != nullptr);
+        childNamed<QDateEdit>(dialog, u"InterviewDateEdit"_s)->setDate(day);
+        buttonNamed(dialog, u"DialogSaveBtn"_s)->click();
+    });
+    addInterview->trigger();
+    QCOMPARE(m_ctx->interviews().byApplication(app.id).size(), 1);
+
+    // The Calendar page reflects the marker on that day.
+    m_window->sidebar()->setCurrentPage(3);
+    emit m_window->sidebar()->pageSelected(3);
+    auto* calendar = m_window->findChild<JobPrep::Ui::Pages::CalendarPage*>();
+    QVERIFY(calendar != nullptr);
+    QVERIFY(calendar->hasItemsOn(day));
 }
 
 void tst_UiSmoke::testZeroWarnings() {

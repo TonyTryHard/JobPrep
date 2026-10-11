@@ -18,6 +18,7 @@ class Sidebar;
 class PageBase;
 
 namespace Pages {
+class CalendarPage;
 class JobsPage;
 }  // namespace Pages
 
@@ -46,6 +47,10 @@ private:
     void focusCurrentPageSearch();
     /// Runs the primary action of the page that is actually showing.
     void triggerCurrentPageNew();
+    /// Header "+ New -> Application": switch to Jobs and open the add-application dialog.
+    void newApplicationFromHeader();
+    /// Header "+ New -> Interview": switch to Calendar and open a dated interview dialog.
+    void newInterviewFromHeader();
     void goToPage(int pageIndex);
 
     App::AppContext& m_ctx;
@@ -59,6 +64,8 @@ private:
     /// The header search and the "+ New" menu are bound to this page, hence the index.
     Pages::JobsPage* m_jobsPage{nullptr};
     int m_jobsIndex{-1};
+    Pages::CalendarPage* m_calendarPage{nullptr};
+    int m_calendarIndex{-1};
 
     QLabel* m_statusStreakLabel{nullptr};
     QLabel* m_statusProcessesLabel{nullptr};

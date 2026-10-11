@@ -22,6 +22,7 @@
 #include "data/DbFormat.h"
 #include "data/InterviewRepository.h"
 #include "domain/EnumStrings.h"
+#include "ui/dialogs/InterviewDialog.h"
 #include "ui/theme/StatusStyle.h"
 
 using namespace Qt::StringLiterals;
@@ -250,6 +251,13 @@ void ApplicationDialog::setupInterviewsTab() {
     auto* page = m_interviewsPage;
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(12);
+
+    m_interviewsHint = new QLabel(page);
+    m_interviewsHint->setObjectName(u"InterviewsHintLabel"_s);
+    m_interviewsHint->setWordWrap(true);
+    layout->addWidget(m_interviewsHint);
+
     m_interviewsTable = new QTableWidget(page);
     m_interviewsTable->setObjectName(u"InterviewsTable"_s);
     m_interviewsTable->setColumnCount(4);
@@ -258,9 +266,34 @@ void ApplicationDialog::setupInterviewsTab() {
     m_interviewsTable->horizontalHeader()->setStretchLastSection(true);
     m_interviewsTable->verticalHeader()->setVisible(false);
     m_interviewsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_interviewsTable->setSelectionMode(QAbstractItemView::NoSelection);
-    layout->addWidget(m_interviewsTable);
+    m_interviewsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_interviewsTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    layout->addWidget(m_interviewsTable, 1);
+
+    auto* buttons = new QHBoxLayout();
+    buttons->setContentsMargins(0, 0, 0, 0);
+    buttons->setSpacing(8);
+    m_addInterviewBtn = new QPushButton(tr("+ Interview"), page);
+    m_addInterviewBtn->setObjectName(u"InterviewsAddBtn"_s);
+    m_editInterviewBtn = new QPushButton(tr("Edit..."), page);
+    m_editInterviewBtn->setObjectName(u"InterviewsEditBtn"_s);
+    m_deleteInterviewBtn = new QPushButton(tr("Delete..."), page);
+    m_deleteInterviewBtn->setObjectName(u"InterviewsDeleteBtn"_s);
+    buttons->addWidget(m_addInterviewBtn);
+    buttons->addWidget(m_editInterviewBtn);
+    buttons->addWidget(m_deleteInterviewBtn);
+    buttons->addStretch(1);
+    layout->addLayout(buttons);
+
     m_tabs->addTab(page, tr("Interviews"));
+
+    connect(m_addInterviewBtn, &QPushButton::clicked, this, &ApplicationDialog::onAddInterview);
+    connect(m_editInterviewBtn, &QPushButton::clicked, this, &ApplicationDialog::onEditInterview);
+    connect(m_deleteInterviewBtn, &QPushButton::clicked, this, &ApplicationDialog::onDeleteInterview);
+    connect(m_interviewsTable, &QTableWidget::itemSelectionChanged, this,
+            &ApplicationDialog::onInterviewSelectionChanged);
+    connect(m_interviewsTable, &QTableWidget::cellDoubleClicked, this,
+            [this](int, int) { onEditInterview(); });
 }
 
 void ApplicationDialog::setupTimelineTab() {
@@ -338,36 +371,71 @@ void ApplicationDialog::reloadReadOnlyTabs() {
     m_tabs->setTabEnabled(m_tabs->indexOf(m_interviewsPage), hasRow);
     m_tabs->setTabEnabled(m_tabs->indexOf(m_timelinePage), hasRow);
 
+    // Interviews are saved straight away; they are never part of "Discard changes?".
+    m_interviewsHint->setText(
+        hasRow ? tr("Interview changes are saved immediately and are not part of the Overview "
+                   "\"Discard changes?\" prompt.")
+               : tr("Save the application first to add interviews."));
+
     m_interviewsTable->setRowCount(0);
     m_timelineTable->setRowCount(0);
-    if (!hasRow) return;
+
+    if (hasRow) {
+        reloadInterviewsTable();
+
+        const auto history = m_apps.statusHistory(m_app.id);
+        m_timelineTable->setRowCount(history.size());
+        for (int row = 0; row < history.size(); ++row) {
+            const auto& change = history.at(row);
+            m_timelineTable->setItem(row, 0, new QTableWidgetItem(
+                JobPrep::Data::DbFormat::toText(change.changedAt.date())));
+            m_timelineTable->setItem(row, 1, new QTableWidgetItem(
+                change.fromStatus.has_value() ? Theme::StatusStyle::label(*change.fromStatus)
+                                              : tr("—")));
+            m_timelineTable->setItem(row, 2, new QTableWidgetItem(
+                Theme::StatusStyle::label(change.toStatus)));
+        }
+    }
+
+    updateInterviewButtons();
+}
+
+void ApplicationDialog::reloadInterviewsTable() {
+    m_interviewsTable->setRowCount(0);
+    if (m_app.id == 0) return;
 
     const auto interviews = m_interviews.byApplication(m_app.id);
     m_interviewsTable->setRowCount(interviews.size());
     for (int row = 0; row < interviews.size(); ++row) {
         const auto& interview = interviews.at(row);
-        m_interviewsTable->setItem(row, 0, new QTableWidgetItem(
-            JobPrep::Data::DbFormat::toText(interview.startAt.date())));
+        auto* whenItem = new QTableWidgetItem(
+            u"%1 %2"_s.arg(JobPrep::Data::DbFormat::toText(interview.startAt.date()),
+                           interview.startAt.time().toString(u"HH:mm"_s)));
+        // The id drives Edit and Delete without re-reading the selection order.
+        whenItem->setData(Qt::UserRole, interview.id);
+        m_interviewsTable->setItem(row, 0, whenItem);
         m_interviewsTable->setItem(row, 1, new QTableWidgetItem(
-            JobPrep::Domain::EnumStrings::toString(interview.type)));
+            Theme::StatusStyle::label(interview.type)));
         m_interviewsTable->setItem(row, 2, new QTableWidgetItem(
             tr("%1 min").arg(interview.durationMin)));
         m_interviewsTable->setItem(row, 3, new QTableWidgetItem(
-            JobPrep::Domain::EnumStrings::toString(interview.outcome)));
+            Theme::StatusStyle::label(interview.outcome)));
     }
+}
 
-    const auto history = m_apps.statusHistory(m_app.id);
-    m_timelineTable->setRowCount(history.size());
-    for (int row = 0; row < history.size(); ++row) {
-        const auto& change = history.at(row);
-        m_timelineTable->setItem(row, 0, new QTableWidgetItem(
-            JobPrep::Data::DbFormat::toText(change.changedAt.date())));
-        m_timelineTable->setItem(row, 1, new QTableWidgetItem(
-            change.fromStatus.has_value() ? Theme::StatusStyle::label(*change.fromStatus)
-                                          : tr("—")));
-        m_timelineTable->setItem(row, 2, new QTableWidgetItem(
-            Theme::StatusStyle::label(change.toStatus)));
-    }
+void ApplicationDialog::updateInterviewButtons() {
+    const bool hasRow = m_app.id != 0;
+    const bool hasSelection = selectedInterviewId() != 0;
+    m_addInterviewBtn->setEnabled(hasRow);
+    m_editInterviewBtn->setEnabled(hasRow && hasSelection);
+    m_deleteInterviewBtn->setEnabled(hasRow && hasSelection);
+}
+
+int ApplicationDialog::selectedInterviewId() const {
+    const int row = m_interviewsTable->currentRow();
+    if (row < 0) return 0;
+    const QTableWidgetItem* item = m_interviewsTable->item(row, 0);
+    return item != nullptr ? item->data(Qt::UserRole).toInt() : 0;
 }
 
 void ApplicationDialog::setApplication(const JobPrep::Domain::JobApplication& app) {
@@ -425,6 +493,45 @@ void ApplicationDialog::onTabChanged(int index) {
     }
     // The tables show saved rows, so they must not suggest unsaved edits.
     reloadReadOnlyTabs();
+}
+
+void ApplicationDialog::onAddInterview() {
+    if (m_app.id == 0) return;
+    InterviewDialog dialog(m_apps, m_interviews, InterviewDialog::Create, this);
+    dialog.setApplicationId(m_app.id);
+    if (dialog.exec() == QDialog::Accepted) reloadInterviewsTable();
+    updateInterviewButtons();
+}
+
+void ApplicationDialog::onEditInterview() {
+    const int id = selectedInterviewId();
+    if (id == 0) return;
+    const auto stored = m_interviews.byId(id);
+    if (!stored) return;
+    InterviewDialog dialog(m_apps, m_interviews, InterviewDialog::Edit, this);
+    dialog.setInterview(*stored);
+    if (dialog.exec() == QDialog::Accepted) reloadInterviewsTable();
+    updateInterviewButtons();
+}
+
+void ApplicationDialog::onDeleteInterview() {
+    const int id = selectedInterviewId();
+    if (id == 0) return;
+    const auto answer =
+        QMessageBox::question(this, tr("Delete interview"),
+                              tr("Delete this interview? This cannot be undone."),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes) return;
+    if (!m_interviews.remove(id)) {
+        showMessage(tr("Could not delete: %1").arg(m_interviews.lastError()));
+        return;
+    }
+    reloadInterviewsTable();
+    updateInterviewButtons();
+}
+
+void ApplicationDialog::onInterviewSelectionChanged() {
+    updateInterviewButtons();
 }
 
 void ApplicationDialog::updateDirtyState() {

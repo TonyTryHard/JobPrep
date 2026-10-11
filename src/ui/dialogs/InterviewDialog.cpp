@@ -17,7 +17,7 @@
 #include <QVBoxLayout>
 #include "data/ApplicationRepository.h"
 #include "data/InterviewRepository.h"
-#include "domain/EnumStrings.h"
+#include "ui/theme/StatusStyle.h"
 
 using namespace Qt::StringLiterals;
 
@@ -43,40 +43,6 @@ QList<ApplicationStatus> openStatuses() {
     return {ApplicationStatus::Wishlist, ApplicationStatus::Applied,
             ApplicationStatus::HrScreen, ApplicationStatus::Technical,
             ApplicationStatus::Final,    ApplicationStatus::Offer};
-}
-
-QString typeLabel(InterviewType type) {
-    switch (type) {
-        case InterviewType::Hr:
-            return InterviewDialog::tr("HR screen");
-        case InterviewType::Technical:
-            return InterviewDialog::tr("Technical");
-        case InterviewType::LiveCoding:
-            return InterviewDialog::tr("Live coding");
-        case InterviewType::SystemDesign:
-            return InterviewDialog::tr("System design");
-        case InterviewType::Behavioral:
-            return InterviewDialog::tr("Behavioral");
-        case InterviewType::Final:
-            return InterviewDialog::tr("Final");
-        case InterviewType::Other:
-            return InterviewDialog::tr("Other");
-    }
-    return QString();
-}
-
-QString outcomeLabel(InterviewOutcome outcome) {
-    switch (outcome) {
-        case InterviewOutcome::Pending:
-            return InterviewDialog::tr("Pending");
-        case InterviewOutcome::Passed:
-            return InterviewDialog::tr("Passed");
-        case InterviewOutcome::Failed:
-            return InterviewDialog::tr("Failed");
-        case InterviewOutcome::Cancelled:
-            return InterviewDialog::tr("Cancelled");
-    }
-    return QString();
 }
 
 QString applicationLabel(const JobApplication& app) {
@@ -150,14 +116,14 @@ void InterviewDialog::setupUi() {
     m_typeCombo = new QComboBox(this);
     m_typeCombo->setObjectName(u"InterviewTypeCombo"_s);
     for (const InterviewType type : kTypes) {
-        m_typeCombo->addItem(typeLabel(type), static_cast<int>(type));
+        m_typeCombo->addItem(Theme::StatusStyle::label(type), static_cast<int>(type));
     }
     form->addRow(tr("Type"), m_typeCombo);
 
     m_outcomeCombo = new QComboBox(this);
     m_outcomeCombo->setObjectName(u"InterviewOutcomeCombo"_s);
     for (const InterviewOutcome outcome : kOutcomes) {
-        m_outcomeCombo->addItem(outcomeLabel(outcome), static_cast<int>(outcome));
+        m_outcomeCombo->addItem(Theme::StatusStyle::label(outcome), static_cast<int>(outcome));
     }
     form->addRow(tr("Outcome"), m_outcomeCombo);
 

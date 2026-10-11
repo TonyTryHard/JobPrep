@@ -123,7 +123,11 @@ void MainWindow::setupUi() {
                                      m_ctx.exportService(), m_pageStack);
     m_pages.append(m_jobsPage);
     m_jobsIndex = static_cast<int>(m_pages.size()) - 1;
-    m_pages.append(new Pages::CalendarPage(m_pageStack));
+    m_calendarPage = new Pages::CalendarPage(
+        m_ctx.interviews(), m_ctx.applications(), m_ctx.topics(), m_ctx.agendaService(),
+        m_ctx.settings(), m_ctx.themeManager(), m_pageStack);
+    m_pages.append(m_calendarPage);
+    m_calendarIndex = static_cast<int>(m_pages.size()) - 1;
     m_pages.append(new Pages::SettingsPage(m_ctx.settings(), m_ctx.themeManager(), m_pageStack));
 
     for (auto* page : m_pages) {
@@ -178,13 +182,11 @@ QMenu* MainWindow::setupNewMenu(QWidget* parent) {
 
     QAction* application = menu->addAction(tr("Application"));
     application->setObjectName(u"HeaderNewApplication"_s);
-    connect(application, &QAction::triggered, this, &MainWindow::triggerCurrentPageNew);
+    connect(application, &QAction::triggered, this, &MainWindow::newApplicationFromHeader);
 
-    // Interviews and study sessions have no page yet; they arrive in M3 and M4.
     QAction* interview = menu->addAction(tr("Interview"));
     interview->setObjectName(u"HeaderNewInterview"_s);
-    interview->setEnabled(false);
-    interview->setToolTip(tr("Arrives in M3"));
+    connect(interview, &QAction::triggered, this, &MainWindow::newInterviewFromHeader);
 
     QAction* session = menu->addAction(tr("Study session"));
     session->setObjectName(u"HeaderNewSession"_s);
@@ -208,6 +210,18 @@ void MainWindow::triggerCurrentPageNew() {
     auto* page = m_pages.value(m_pageStack->currentIndex(), nullptr);
     if (!page) return;
     page->triggerNew();
+}
+
+void MainWindow::newApplicationFromHeader() {
+    if (m_jobsIndex < 0) return;
+    goToPage(m_jobsIndex);
+    m_jobsPage->newApplication();
+}
+
+void MainWindow::newInterviewFromHeader() {
+    if (m_calendarIndex < 0) return;
+    goToPage(m_calendarIndex);
+    m_calendarPage->newInterview(m_calendarPage->selectedDay());
 }
 
 void MainWindow::setupConnections() {
