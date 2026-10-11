@@ -9,6 +9,7 @@
 #include "data/SessionRepository.h"
 #include "data/TopicRepository.h"
 #include "data/TrackRepository.h"
+#include "services/AgendaService.h"
 #include "services/ExportService.h"
 #include "services/SeedService.h"
 #include "services/SettingsService.h"
@@ -47,6 +48,7 @@ AppContext::AppContext(const QString& databasePath) {
     m_interviews = std::make_unique<Data::InterviewRepository>(*m_database);
     m_reminderLog = std::make_unique<Data::ReminderLogRepository>(*m_database);
 
+    m_agendaService = std::make_unique<Services::AgendaService>(*m_interviews, *m_applications, *m_topics, m_tracks.get());
     m_seedService = std::make_unique<Services::SeedService>(*m_tracks, *m_topics);
     m_exportService = std::make_unique<Services::ExportService>();
     m_settings = std::make_unique<Services::SettingsService>();
@@ -81,6 +83,10 @@ Data::InterviewRepository& AppContext::interviews() const {
 
 Data::ReminderLogRepository& AppContext::reminderLog() const {
     return *m_reminderLog;
+}
+
+Services::AgendaService& AppContext::agendaService() const {
+    return *m_agendaService;
 }
 
 Services::ExportService& AppContext::exportService() const {

@@ -380,3 +380,4 @@ Kanban for applications, per-company contacts directory, salary comparison chart
 - 1.3 — `sampleDataPrompted` setting added for the first-launch sample-data prompt.
 - 1.3 — `insert()` writes an initial `status_history` row (NULL → initial status).
 - 1.3 — applications CSV column set fixed to 22 English names: §3.3 A1 first, then every remaining `applications` field; no id column.
+- 1.4 — `AgendaItem` loses `color` (handled by UI `AgendaKindStyle`) and gains `past` (boolean).

@@ -25,6 +25,9 @@ public:
     /// Applications with one of `statuses`; an empty list yields an empty result.
     QList<Domain::JobApplication> byStatuses(const QList<Domain::ApplicationStatus>& statuses) const;
 
+    /// Applications with next_action_date in [from, to] inclusive and non-closed status.
+    QList<Domain::JobApplication> byNextActionDateRange(QDate from, QDate to) const;
+
     /// Inserts `application`, fills its id, timestamps and the initial history row.
     bool insert(Domain::JobApplication& application);
     bool update(const Domain::JobApplication& application);

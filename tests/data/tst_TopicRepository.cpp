@@ -14,6 +14,7 @@ using JobPrep::Data::TrackRepository;
 using JobPrep::Domain::StudySession;
 using JobPrep::Domain::Subtask;
 using JobPrep::Domain::Topic;
+using JobPrep::Domain::TopicStatus;
 using JobPrep::Domain::Track;
 using JobPrep::Tests::MessageCapture;
 using JobPrep::Tests::TestDatabase;
@@ -35,6 +36,7 @@ private slots:
     void reorderSubtasksRewritesOrder();
     void unknownIdsFailWithoutChangedSignal();
     void queriesByTrackAndCount();
+    void byTargetDateRangeQueries();
 
 private:
     int addTrack(const QString& name);
@@ -325,6 +327,63 @@ void tst_TopicRepository::queriesByTrackAndCount() {
     orphan.title = u"Orphan"_s;
     QVERIFY(!m_topics->insert(orphan));
     QCOMPARE(m_topics->count(), 3);
+}
+
+void tst_TopicRepository::byTargetDateRangeQueries() {
+    const int trackId = addTrack(u"C++"_s);
+
+    // 1. Open topic (backlog) with target date in range
+    Topic t1;
+    t1.trackId = trackId;
+    t1.title = u"Move semantics"_s;
+    t1.status = TopicStatus::Backlog;
+    t1.targetDate = QDate(2026, 10, 5);
+    QVERIFY(m_topics->insert(t1));
+
+    // 2. Open topic (in_progress) with target date at start bound
+    Topic t2;
+    t2.trackId = trackId;
+    t2.title = u"RAII"_s;
+    t2.status = TopicStatus::InProgress;
+    t2.targetDate = QDate(2026, 10, 1);
+    QVERIFY(m_topics->insert(t2));
+
+    // 3. Done topic with target date in range (should be excluded)
+    Topic t3;
+    t3.trackId = trackId;
+    t3.title = u"Auto keyword"_s;
+    t3.status = TopicStatus::Done;
+    t3.targetDate = QDate(2026, 10, 5);
+    QVERIFY(m_topics->insert(t3));
+
+    // 4. Topic with target date before range
+    Topic t4;
+    t4.trackId = trackId;
+    t4.title = u"Pointers"_s;
+    t4.status = TopicStatus::Backlog;
+    t4.targetDate = QDate(2026, 9, 30);
+    QVERIFY(m_topics->insert(t4));
+
+    // 5. Topic with target date after range
+    Topic t5;
+    t5.trackId = trackId;
+    t5.title = u"Coroutines"_s;
+    t5.status = TopicStatus::Backlog;
+    t5.targetDate = QDate(2026, 10, 11);
+    QVERIFY(m_topics->insert(t5));
+
+    // 6. Topic with null target date
+    Topic t6;
+    t6.trackId = trackId;
+    t6.title = u"Lambdas"_s;
+    t6.status = TopicStatus::Backlog;
+    QVERIFY(m_topics->insert(t6));
+
+    const auto res = m_topics->byTargetDateRange(QDate(2026, 10, 1), QDate(2026, 10, 10));
+    QCOMPARE(res.size(), 2);
+    // Ordered by target_date, position, id
+    QCOMPARE(res[0].title, u"RAII"_s);
+    QCOMPARE(res[1].title, u"Move semantics"_s);
 }
 
 QTEST_GUILESS_MAIN(tst_TopicRepository)

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <optional>
-#include <QColor>
 #include <QDate>
 #include <QDateTime>
 #include <QTime>
@@ -120,7 +119,7 @@ struct AgendaItem {
     QString               title;
     QString               subtitle;
     int                   refId{0};
-    QColor                color;
+    bool                  past{false};
 };
 
 }  // namespace JobPrep::Domain

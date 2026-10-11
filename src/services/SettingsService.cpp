@@ -98,4 +98,34 @@ void SettingsService::setSampleDataPrompted(bool prompted) {
     m_settings->setValue(u"app/sampleDataPrompted"_s, prompted);
 }
 
+bool SettingsService::calendarLayerInterviews() const {
+    return m_settings->value(u"calendar/layerInterviews"_s, true).toBool();
+}
+
+void SettingsService::setCalendarLayerInterviews(bool enabled) {
+    if (calendarLayerInterviews() == enabled) return;
+    m_settings->setValue(u"calendar/layerInterviews"_s, enabled);
+    emit calendarLayerInterviewsChanged(enabled);
+}
+
+bool SettingsService::calendarLayerFollowUps() const {
+    return m_settings->value(u"calendar/layerFollowUps"_s, true).toBool();
+}
+
+void SettingsService::setCalendarLayerFollowUps(bool enabled) {
+    if (calendarLayerFollowUps() == enabled) return;
+    m_settings->setValue(u"calendar/layerFollowUps"_s, enabled);
+    emit calendarLayerFollowUpsChanged(enabled);
+}
+
+bool SettingsService::calendarLayerTargets() const {
+    return m_settings->value(u"calendar/layerTargets"_s, true).toBool();
+}
+
+void SettingsService::setCalendarLayerTargets(bool enabled) {
+    if (calendarLayerTargets() == enabled) return;
+    m_settings->setValue(u"calendar/layerTargets"_s, enabled);
+    emit calendarLayerTargetsChanged(enabled);
+}
+
 }  // namespace JobPrep::Services

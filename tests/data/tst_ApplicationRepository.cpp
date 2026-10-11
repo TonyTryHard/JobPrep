@@ -39,6 +39,7 @@ private slots:
     void countsByStatusAndTotals();
     void statusHistoryIsOrderedAndComplete();
     void unknownIdFailsWithoutChangedSignal();
+    void byNextActionDateRangeQueries();
 
 private:
     int addApplication(const QString& company, ApplicationStatus status = ApplicationStatus::Applied);
@@ -369,6 +370,77 @@ void tst_ApplicationRepository::unknownIdFailsWithoutChangedSignal() {
     QCOMPARE(m_apps->lastError(), QString());
     QVERIFY(!m_apps->remove(999));
     QCOMPARE(spy.count(), 0);
+}
+
+void tst_ApplicationRepository::byNextActionDateRangeQueries() {
+    // 1. Applied app within range
+    JobApplication app1;
+    app1.company = u"App1"_s;
+    app1.position = u"Dev"_s;
+    app1.status = ApplicationStatus::Applied;
+    app1.nextAction = u"Follow up 1"_s;
+    app1.nextActionDate = QDate(2026, 10, 5);
+    QVERIFY(m_apps->insert(app1));
+
+    // 2. Wishlist app within range
+    JobApplication app2;
+    app2.company = u"App2"_s;
+    app2.position = u"Dev"_s;
+    app2.status = ApplicationStatus::Wishlist;
+    app2.nextAction = u"Follow up 2"_s;
+    app2.nextActionDate = QDate(2026, 10, 1);
+    QVERIFY(m_apps->insert(app2));
+
+    // 3. Rejected app within range (should be excluded as closed)
+    JobApplication app3;
+    app3.company = u"App3"_s;
+    app3.position = u"Dev"_s;
+    app3.status = ApplicationStatus::Rejected;
+    app3.nextAction = u"Follow up 3"_s;
+    app3.nextActionDate = QDate(2026, 10, 5);
+    QVERIFY(m_apps->insert(app3));
+
+    // 4. Accepted app within range (closed)
+    JobApplication app4;
+    app4.company = u"App4"_s;
+    app4.position = u"Dev"_s;
+    app4.status = ApplicationStatus::Accepted;
+    app4.nextAction = u"Follow up 4"_s;
+    app4.nextActionDate = QDate(2026, 10, 5);
+    QVERIFY(m_apps->insert(app4));
+
+    // 5. App with date before range
+    JobApplication app5;
+    app5.company = u"App5"_s;
+    app5.position = u"Dev"_s;
+    app5.status = ApplicationStatus::Applied;
+    app5.nextAction = u"Follow up 5"_s;
+    app5.nextActionDate = QDate(2026, 9, 30);
+    QVERIFY(m_apps->insert(app5));
+
+    // 6. App with date after range
+    JobApplication app6;
+    app6.company = u"App6"_s;
+    app6.position = u"Dev"_s;
+    app6.status = ApplicationStatus::Applied;
+    app6.nextAction = u"Follow up 6"_s;
+    app6.nextActionDate = QDate(2026, 10, 11);
+    QVERIFY(m_apps->insert(app6));
+
+    // 7. App with null nextActionDate
+    JobApplication app7;
+    app7.company = u"App7"_s;
+    app7.position = u"Dev"_s;
+    app7.status = ApplicationStatus::Applied;
+    app7.nextAction = u"Follow up 7"_s;
+    QVERIFY(m_apps->insert(app7));
+
+    // Query inclusive bounds [2026-10-01, 2026-10-10]
+    const auto res = m_apps->byNextActionDateRange(QDate(2026, 10, 1), QDate(2026, 10, 10));
+    QCOMPARE(res.size(), 2);
+    // Ordered by next_action_date, id
+    QCOMPARE(res[0].company, u"App2"_s);
+    QCOMPARE(res[1].company, u"App1"_s);
 }
 
 QTEST_GUILESS_MAIN(tst_ApplicationRepository)

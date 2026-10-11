@@ -161,6 +161,26 @@ QList<Domain::JobApplication> ApplicationRepository::byStatuses(
     return applications;
 }
 
+QList<Domain::JobApplication> ApplicationRepository::byNextActionDateRange(QDate from,
+                                                                           QDate to) const {
+    QList<Domain::JobApplication> applications;
+    SqlStatement statement(
+        m_database,
+        selectApplications() +
+            u" WHERE next_action_date >= ? AND next_action_date <= ? "
+            u"AND status NOT IN ('rejected', 'withdrawn', 'ghosted', 'accepted') "
+            u"ORDER BY next_action_date, id"_s);
+    statement.bind(1, DbFormat::toText(from));
+    statement.bind(2, DbFormat::toText(to));
+    if (!statement.exec()) return applications;
+    while (statement.query().next()) {
+        if (auto application = readApplication(m_database, statement.query())) {
+            applications.append(*application);
+        }
+    }
+    return applications;
+}
+
 bool ApplicationRepository::insert(Domain::JobApplication& application) {
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;

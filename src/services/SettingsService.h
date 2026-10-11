@@ -44,6 +44,15 @@ public:
     bool sampleDataPrompted() const;
     void setSampleDataPrompted(bool prompted);
 
+    bool calendarLayerInterviews() const;
+    void setCalendarLayerInterviews(bool enabled);
+
+    bool calendarLayerFollowUps() const;
+    void setCalendarLayerFollowUps(bool enabled);
+
+    bool calendarLayerTargets() const;
+    void setCalendarLayerTargets(bool enabled);
+
 signals:
     void themeModeChanged(const QString& mode);
     void accentPresetChanged(const QString& preset);
@@ -51,6 +60,9 @@ signals:
     void weeklyGoalMinutesChanged(int minutes);
     void firstDayOfWeekChanged(int day);
     void closeToTrayChanged(bool enabled);
+    void calendarLayerInterviewsChanged(bool enabled);
+    void calendarLayerFollowUpsChanged(bool enabled);
+    void calendarLayerTargetsChanged(bool enabled);
 
 private:
     std::unique_ptr<QSettings> m_settings;

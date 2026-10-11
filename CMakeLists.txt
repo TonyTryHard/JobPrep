@@ -86,6 +86,8 @@ add_library(jobprep_core STATIC
     src/data/ReminderLogRepository.cpp
 
     # Services
+    src/services/AgendaService.h
+    src/services/AgendaService.cpp
     src/services/SettingsService.h
     src/services/SettingsService.cpp
     src/services/SeedService.h

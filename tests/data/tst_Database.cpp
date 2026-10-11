@@ -34,6 +34,7 @@ private slots:
     void foreignKeyDeleteActionsMatchSchema();
     void foreignKeysCascadeAndSetNull();
     void failedStatementReportsError();
+    void twoLiveDatabasesAreIndependent();
 
 private:
     std::unique_ptr<TestDatabase> m_db;
@@ -271,6 +272,30 @@ void tst_Database::failedStatementReportsError() {
     // A failing statement is a real data-layer problem, so it reaches qCWarning.
     QVERIFY2(!capture.messages().isEmpty(), "a failed statement must log a warning");
     QVERIFY(capture.contains(u"does_not_exist"_s));
+}
+
+void tst_Database::twoLiveDatabasesAreIndependent() {
+    auto first = std::make_unique<TestDatabase>(u"tst_iso_1"_s);
+    QVERIFY(first->open(u":memory:"_s));
+    QVERIFY(first->db().isOpen());
+
+    auto second = std::make_unique<TestDatabase>(u"tst_iso_2"_s);
+    QVERIFY(second->open(u":memory:"_s));
+    QVERIFY(second->db().isOpen());
+
+    QVERIFY(first->db().connectionName() != second->db().connectionName());
+
+    QVERIFY(first->exec(u"CREATE TABLE t1 (id INTEGER)"_s));
+    QVERIFY(second->exec(u"CREATE TABLE t2 (id INTEGER)"_s));
+
+    // Destroy the first database and connection
+    first.reset();
+
+    // The second database remains open and fully functional
+    QVERIFY(second->db().isOpen());
+    QCOMPARE(second->scalar(u"SELECT 1"_s).toInt(), 1);
+    QVERIFY(second->hasTable(u"t2"_s));
+    QVERIFY(!second->hasTable(u"t1"_s));
 }
 
 QTEST_GUILESS_MAIN(tst_Database)
