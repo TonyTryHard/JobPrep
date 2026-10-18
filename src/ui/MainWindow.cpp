@@ -60,6 +60,10 @@ MainWindow::MainWindow(App::AppContext& ctx, QWidget* parent)
 MainWindow::~MainWindow() = default;
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+    // Flush pending editor changes before the repositories go away.
+    for (auto* page : std::as_const(m_pages)) {
+        page->flushEdits();
+    }
     m_ctx.settings().setWindowGeometry(saveGeometry());
     m_ctx.settings().setWindowState(saveState());
     QMainWindow::closeEvent(event);
@@ -118,7 +122,10 @@ void MainWindow::setupUi() {
     m_pageStack = new QStackedWidget(rightContainer);
 
     m_pages.append(new Pages::HomePage(m_pageStack));
-    m_pages.append(new Pages::StudyPage(m_pageStack));
+    m_studyPage = new Pages::StudyPage(m_ctx.topics(), m_ctx.tracks(), m_ctx.settings(),
+                                       m_ctx.themeManager(), m_pageStack);
+    m_pages.append(m_studyPage);
+    m_studyIndex = static_cast<int>(m_pages.size()) - 1;
     m_jobsPage = new Pages::JobsPage(m_ctx.applications(), m_ctx.interviews(),
                                      m_ctx.exportService(), m_pageStack);
     m_pages.append(m_jobsPage);

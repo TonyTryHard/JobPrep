@@ -20,6 +20,7 @@ class PageBase;
 namespace Pages {
 class CalendarPage;
 class JobsPage;
+class StudyPage;
 }  // namespace Pages
 
 /// Main application window shell for JobPrep.
@@ -64,6 +65,8 @@ private:
     /// The header search and the "+ New" menu are bound to this page, hence the index.
     Pages::JobsPage* m_jobsPage{nullptr};
     int m_jobsIndex{-1};
+    Pages::StudyPage* m_studyPage{nullptr};
+    int m_studyIndex{-1};
     Pages::CalendarPage* m_calendarPage{nullptr};
     int m_calendarIndex{-1};
 

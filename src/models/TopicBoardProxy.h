@@ -28,9 +28,15 @@ public:
     std::optional<int> trackFilter() const { return m_trackId; }
     void setTrackFilter(std::optional<int> trackId);
 
+    QString searchFilter() const { return m_searchText; }
+    void setSearchFilter(const QString& text);
+
     Qt::ItemFlags flags(const QModelIndex& index) const override;
     QStringList mimeTypes() const override;
     QMimeData* mimeData(const QModelIndexList& indexes) const override;
+    /// Cards drag with MoveAction; the default Copy-only list views would otherwise
+    /// have their drop rejected by a Move-only target.
+    Qt::DropActions supportedDragActions() const override;
     Qt::DropActions supportedDropActions() const override;
     bool canDropMimeData(const QMimeData* data,
                          Qt::DropAction action,
@@ -46,10 +52,15 @@ public:
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
 
+signals:
+    /// The drop reached us but the repository write failed (B10): show a toast.
+    void dropFailed(const QString& reason);
+
 private:
     Domain::TopicStatus m_status;
     Data::TopicRepository& m_topics;
     std::optional<int> m_trackId;
+    QString m_searchText;
 };
 
 }  // namespace JobPrep::Models

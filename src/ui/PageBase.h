@@ -24,6 +24,9 @@ public:
     /// Opens the page's primary "add" flow (QKeySequence::New).
     virtual void triggerNew() {}
 
+    /// Saves pending in-page edits (window close). Pages with an editor panel override.
+    virtual void flushEdits() {}
+
 private:
     QString m_title;
 };

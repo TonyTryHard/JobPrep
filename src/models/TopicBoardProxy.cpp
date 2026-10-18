@@ -26,6 +26,13 @@ void TopicBoardProxy::setTrackFilter(std::optional<int> trackId) {
     invalidateFilter();
 }
 
+void TopicBoardProxy::setSearchFilter(const QString& text) {
+    const QString trimmed = text.trimmed();
+    if (m_searchText == trimmed) return;
+    m_searchText = trimmed;
+    invalidateFilter();
+}
+
 bool TopicBoardProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
     if (!sourceModel()) return false;
     const auto idx = sourceModel()->index(sourceRow, 0, sourceParent);
@@ -35,6 +42,15 @@ bool TopicBoardProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
     if (m_trackId.has_value()) {
         const int trackId = idx.data(TopicListModel::TrackIdRole).toInt();
         if (trackId != *m_trackId) return false;
+    }
+
+    if (!m_searchText.isEmpty()) {
+        const QString title = idx.data(Qt::DisplayRole).toString();
+        const QString tags = idx.data(TopicListModel::TagsRole).toString();
+        if (!title.contains(m_searchText, Qt::CaseInsensitive) &&
+            !tags.contains(m_searchText, Qt::CaseInsensitive)) {
+            return false;
+        }
     }
 
     return true;
@@ -68,6 +84,10 @@ QMimeData* TopicBoardProxy::mimeData(const QModelIndexList& indexes) const {
     auto* mime = new QMimeData();
     mime->setData(QString::fromLatin1(kTopicMimeType), QByteArray::number(topicId));
     return mime;
+}
+
+Qt::DropActions TopicBoardProxy::supportedDragActions() const {
+    return Qt::MoveAction;
 }
 
 Qt::DropActions TopicBoardProxy::supportedDropActions() const {
@@ -141,7 +161,11 @@ bool TopicBoardProxy::dropMimeData(const QMimeData* data,
         visibleIds.insert(destRow, topicId);
     }
 
-    return m_topics.moveTopic(topicId, m_status, visibleIds);
+    if (!m_topics.moveTopic(topicId, m_status, visibleIds)) {
+        emit dropFailed(m_topics.lastError());
+        return false;
+    }
+    return true;
 }
 
 }  // namespace JobPrep::Models

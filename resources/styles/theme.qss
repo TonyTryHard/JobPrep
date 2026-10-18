@@ -347,6 +347,160 @@ QPushButton[calendarLayer="true"]:checked {
     font-weight: 600;
 }
 
+/* Track filter chips (ChipBar, M4) */
+QPushButton[chip="true"] {
+    background-color: @surfaceAlt;
+    border: 1px solid @border;
+    border-radius: 16px;
+    padding: 5px 12px;
+    font-weight: 500;
+}
+
+QPushButton[chip="true"]:hover {
+    background-color: @surface;
+    border-color: @accent;
+}
+
+QPushButton[chip="true"]:checked {
+    background-color: @surfaceAlt;
+    border: 1px solid @accent;
+    color: @accent;
+    font-weight: 600;
+}
+
+/* Study board columns (M4 B2) */
+#StudyColumnWidget,
+#StudyColumnBacklog,
+#StudyColumnInProgress,
+#StudyColumnReview,
+#StudyColumnDone {
+    background-color: @surface;
+    border: 1px solid @border;
+    border-radius: 12px;
+}
+
+#StudyColumnHeader {
+    background: transparent;
+    border: none;
+}
+
+#StudyColumnTitle {
+    font-size: 10pt;
+    font-weight: 600;
+    color: @text;
+}
+
+#StudyColumnCount {
+    font-size: 9pt;
+    color: @textMuted;
+    background-color: @surfaceAlt;
+    border: 1px solid @border;
+    border-radius: 10px;
+    padding: 1px 8px;
+}
+
+#StudyColumnQuickAdd {
+    background-color: @surfaceAlt;
+    border: 1px dashed @border;
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: @text;
+}
+
+#StudyColumnQuickAdd:focus {
+    border: 1px solid @accent;
+    color: @text;
+}
+
+#StudyColumnQuickAdd[placeholderEnabled="true"] {
+    color: @textMuted;
+}
+
+#StudyColumnList {
+    background: transparent;
+    border: none;
+}
+
+#StudyColumnList::item {
+    border: none;
+    padding: 0px;
+}
+
+#StudyDetailPanel {
+    background-color: @surface;
+    border: 1px solid @border;
+    border-radius: 12px;
+}
+
+#StudyDetailHeading {
+    font-size: 12pt;
+    font-weight: 600;
+    color: @text;
+}
+
+#StudyDetailCloseBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    color: @textMuted;
+}
+
+#StudyDetailCloseBtn:hover {
+    background-color: @surfaceAlt;
+    color: @text;
+}
+
+#StudyDetailCheckList {
+    background-color: @bg;
+    border: 1px solid @border;
+    border-radius: 8px;
+}
+
+#StudyDetailCheckList::item {
+    border-radius: 6px;
+    padding: 3px 6px;
+}
+
+#StudyDetailCheckList::item:hover {
+    background-color: @surfaceAlt;
+}
+
+#StudyDetailResources {
+    background-color: @bg;
+    border: 1px solid @border;
+    border-radius: 8px;
+}
+
+QHeaderView::section {
+    background-color: @surfaceAlt;
+    color: @textMuted;
+    border: none;
+    border-bottom: 1px solid @border;
+    padding: 4px 8px;
+    font-size: 9pt;
+}
+
+/* Study toolbar / detail message labels (B10) */
+#StudyMessageLabel,
+#StudyDetailMessageLabel {
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+#StudyMessageLabel[kind="error"],
+#StudyDetailMessageLabel[kind="error"] {
+    background-color: @surfaceAlt;
+    color: @danger;
+    border: 1px solid @danger;
+}
+
+#StudyMessageLabel[kind="hint"],
+#StudyDetailMessageLabel[kind="hint"] {
+    background-color: @surfaceAlt;
+    color: @textMuted;
+    border: 1px solid @border;
+}
+
 /* Tooltips */
 QToolTip {
     background-color: @surface;

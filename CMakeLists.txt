@@ -126,6 +126,8 @@ add_library(jobprep_core STATIC
     src/ui/delegates/StatusBadgeDelegate.cpp
     src/ui/delegates/AgendaItemDelegate.h
     src/ui/delegates/AgendaItemDelegate.cpp
+    src/ui/delegates/TopicCardDelegate.h
+    src/ui/delegates/TopicCardDelegate.cpp
 
     # Widgets & Base Pages
     src/ui/widgets/EmptyState.h
@@ -136,6 +138,10 @@ add_library(jobprep_core STATIC
     src/ui/widgets/MonthView.cpp
     src/ui/widgets/SelectionRestorer.h
     src/ui/widgets/SelectionRestorer.cpp
+    src/ui/widgets/TopicBoardColumn.h
+    src/ui/widgets/TopicBoardColumn.cpp
+    src/ui/widgets/TopicDetailPanel.h
+    src/ui/widgets/TopicDetailPanel.cpp
     src/ui/PageBase.h
     src/ui/PageBase.cpp
 
