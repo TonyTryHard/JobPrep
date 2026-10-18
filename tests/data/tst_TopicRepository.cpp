@@ -489,10 +489,12 @@ void tst_TopicRepository::moveTopicUnknownIdAndNoOp() {
 
     // Unknown id in orderedIds
     QVERIFY(!m_topics->moveTopic(t1, TopicStatus::Backlog, {t1, 999}));
+    QVERIFY(!m_topics->lastError().isEmpty());
     QCOMPARE(spy.count(), 0);
 
     // Missing id from orderedIds
     QVERIFY(!m_topics->moveTopic(t1, TopicStatus::Backlog, {t2}));
+    QVERIFY(!m_topics->lastError().isEmpty());
     QCOMPARE(spy.count(), 0);
 }
 

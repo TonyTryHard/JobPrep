@@ -33,6 +33,7 @@
 #include "domain/Structs.h"
 #include "models/AgendaListModel.h"
 #include "models/ApplicationTableModel.h"
+#include "models/TopicListModel.h"
 #include "services/ExportService.h"
 #include "services/SettingsService.h"
 #include "ui/MainWindow.h"
@@ -46,6 +47,7 @@
 #include "ui/theme/Tokens.h"
 #include "ui/widgets/ChipBar.h"
 #include "ui/widgets/MonthView.h"
+#include "ui/widgets/SelectionRestorer.h"
 
 using namespace Qt::StringLiterals;
 
@@ -181,6 +183,7 @@ private slots:
     void testCalendarSplitterStatePersisted();
     void testCalendarThemes();
     void testCalendarScreenshots();
+    void testSelectionRestorerSurvivesReset();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -1346,6 +1349,78 @@ void tst_UiSmoke::testCalendarScreenshots() {
     monthView()->setSelectedDay(today.addDays(3));
     QCoreApplication::processEvents();
     forBothThemes(u"calendar-selected"_s);
+}
+
+void tst_UiSmoke::testSelectionRestorerSurvivesReset() {
+    JobPrep::App::AppContext ctx(u":memory:"_s);
+    auto& trackRepo = ctx.tracks();
+    auto& topicRepo = ctx.topics();
+
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(trackRepo.insert(tr));
+    const int trackId = trackRepo.all().first().id;
+
+    Topic t1;
+    t1.trackId = trackId;
+    t1.title = u"Alpha"_s;
+    t1.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(topicRepo.insert(t1));
+    const int id1 = topicRepo.all().last().id;
+
+    Topic t2;
+    t2.trackId = trackId;
+    t2.title = u"Beta"_s;
+    t2.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(topicRepo.insert(t2));
+    const int id2 = topicRepo.all().last().id;
+
+    Topic t3;
+    t3.trackId = trackId;
+    t3.title = u"Gamma"_s;
+    t3.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(topicRepo.insert(t3));
+    const int id3 = topicRepo.all().last().id;
+
+    JobPrep::Models::TopicListModel model(topicRepo, trackRepo);
+    QListView view;
+    view.setModel(&model);
+    JobPrep::Ui::Widgets::SelectionRestorer restorer(&view, JobPrep::Models::TopicListModel::IdRole);
+
+    // Select row 1 (t2)
+    view.setCurrentIndex(model.index(1, 0));
+    QCOMPARE(view.currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt(), id2);
+
+    // 1. Insert: adding a topic resets the model
+    Topic t4;
+    t4.trackId = trackId;
+    t4.title = u"Zeta"_s;
+    t4.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(topicRepo.insert(t4));
+    QCOMPARE(view.currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt(), id2);
+
+    // 2. Reorder: moveTopic resets the model
+    QVERIFY(topicRepo.moveTopic(id2, JobPrep::Domain::TopicStatus::Backlog, {id3, id2, id1, t4.id}));
+    QCOMPARE(view.currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt(), id2);
+
+    // 3. Delete another item: removes id1
+    QVERIFY(topicRepo.remove(id1));
+    QCOMPARE(view.currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt(), id2);
+
+    // 4. Delete the selected item itself: selection cleared, no crash
+    QVERIFY(topicRepo.remove(id2));
+    QVERIFY(!view.currentIndex().isValid() ||
+            view.currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt() != id2);
+
+    // 5. Scroll preservation and manual preserveAround
+    view.setCurrentIndex(model.index(0, 0));
+    restorer.capture();
+    QCOMPARE(restorer.savedId(),
+             model.index(0, 0).data(JobPrep::Models::TopicListModel::IdRole).toInt());
+    bool actionRan = false;
+    restorer.preserveAround([&]() { actionRan = true; });
+    QVERIFY(actionRan);
 }
 
 void tst_UiSmoke::testZeroWarnings() {

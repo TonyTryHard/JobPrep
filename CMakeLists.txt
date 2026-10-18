@@ -134,6 +134,8 @@ add_library(jobprep_core STATIC
     src/ui/widgets/ChipBar.cpp
     src/ui/widgets/MonthView.h
     src/ui/widgets/MonthView.cpp
+    src/ui/widgets/SelectionRestorer.h
+    src/ui/widgets/SelectionRestorer.cpp
     src/ui/PageBase.h
     src/ui/PageBase.cpp
 
