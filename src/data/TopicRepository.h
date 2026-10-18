@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <QHash>
 #include <QList>
 #include "data/Repository.h"
 #include "domain/Structs.h"
@@ -8,6 +9,12 @@
 namespace JobPrep::Data {
 
 class Database;
+
+/// Batched subtask counts (done and total) for a topic.
+struct TopicSubtaskProgress {
+    int done{0};
+    int total{0};
+};
 
 /// CRUD for topics and their checklist items (SPEC §5 `topics`, `subtasks`).
 /// Topics and subtasks share one `changed()` signal so views reload together.
@@ -31,9 +38,20 @@ public:
     /// Rewrites `position` of every topic in `orderedIds` (board reorder).
     bool updatePositions(const QList<int>& orderedIds);
 
+    /// Moves `id` to `targetStatus` and arranges visible topics in the target column
+    /// to match `orderedIds`. Topics hidden by a track filter keep their relative order.
+    /// Runs atomically in one transaction and emits one changed() signal.
+    /// A no-op move writes nothing and emits nothing.
+    /// An unknown id returns false, keeps lastError(), and rolls back.
+    bool moveTopic(int id, Domain::TopicStatus targetStatus, const QList<int>& orderedIds);
+
     bool remove(int id);
     int count() const;
     bool isEmpty() const;
+
+    /// Returns subtask progress counts (done and total) for all topics with subtasks
+    /// in a single batched query (SPEC §8, A6).
+    QHash<int, TopicSubtaskProgress> subtaskProgress() const;
 
     QList<Domain::Subtask> subtasks(int topicId) const;
 

@@ -1,5 +1,7 @@
 #include "data/TopicRepository.h"
 
+#include <QMap>
+#include <QSet>
 #include <QSqlQuery>
 #include <QVariant>
 #include "data/Database.h"
@@ -211,6 +213,132 @@ bool TopicRepository::updatePositions(const QList<int>& orderedIds) {
     return commitAndNotify(m_database, transaction);
 }
 
+bool TopicRepository::moveTopic(int id, Domain::TopicStatus targetStatus, const QList<int>& orderedIds) {
+    const auto targetTopic = byId(id);
+    if (!acceptExisting(m_database, targetTopic.has_value(), u"topic"_s, id)) return false;
+
+    if (!orderedIds.contains(id)) {
+        m_database.setExpectedError(
+            u"Topic %1 is not in target orderedIds."_s.arg(QString::number(id)));
+        return false;
+    }
+
+    QSet<int> seen;
+    for (const int oid : orderedIds) {
+        if (seen.contains(oid)) {
+            m_database.setExpectedError(
+                u"Duplicate id %1 in orderedIds."_s.arg(QString::number(oid)));
+            return false;
+        }
+        seen.insert(oid);
+        if (!acceptExisting(m_database, byId(oid).has_value(), u"topic"_s, oid)) return false;
+    }
+
+    SqlStatement targetTopicsQuery(
+        m_database, selectTopics() + u" WHERE status = ? ORDER BY position, id"_s);
+    targetTopicsQuery.bind(1, Domain::EnumStrings::toString(targetStatus));
+    if (!targetTopicsQuery.exec()) return false;
+
+    QList<Domain::Topic> existingTargetTopics;
+    while (targetTopicsQuery.query().next()) {
+        if (auto t = readTopic(m_database, targetTopicsQuery.query())) {
+            existingTargetTopics.append(*t);
+        }
+    }
+
+    // Check no-op: same status and exact same visible order
+    if (targetTopic->status == targetStatus) {
+        QList<int> currentVisibleOrder;
+        for (const auto& t : existingTargetTopics) {
+            if (orderedIds.contains(t.id)) {
+                currentVisibleOrder.append(t.id);
+            }
+        }
+        if (currentVisibleOrder == orderedIds) {
+            return true;
+        }
+    }
+
+    // Construct the new order of all topics in targetStatus
+    QList<Domain::Topic> baseTopics;
+    for (const auto& t : existingTargetTopics) {
+        if (t.id != id) {
+            baseTopics.append(t);
+        }
+    }
+
+    QList<int> newTargetStatusIds;
+    int visibleIdx = 0;
+    for (const auto& t : baseTopics) {
+        if (orderedIds.contains(t.id)) {
+            if (visibleIdx < orderedIds.size()) {
+                newTargetStatusIds.append(orderedIds.at(visibleIdx++));
+            }
+        } else {
+            newTargetStatusIds.append(t.id);
+        }
+    }
+    while (visibleIdx < orderedIds.size()) {
+        newTargetStatusIds.append(orderedIds.at(visibleIdx++));
+    }
+
+    auto transaction = m_database.transaction();
+    if (!transaction.isActive()) return false;
+
+    if (targetTopic->status != targetStatus) {
+        SqlStatement updateStatusStmt(
+            m_database, u"UPDATE topics SET status = ?, updated_at = ? WHERE id = ?"_s);
+        updateStatusStmt.bind(1, Domain::EnumStrings::toString(targetStatus));
+        updateStatusStmt.bind(2, DbFormat::now());
+        updateStatusStmt.bind(3, id);
+        if (!updateStatusStmt.exec()) return false;
+        if (updateStatusStmt.rowsAffected() != 1) {
+            return reportMissingRow(m_database, u"topic"_s, id);
+        }
+    }
+
+    SqlStatement allQuery(m_database, selectTopics() + u" ORDER BY position, id"_s);
+    if (!allQuery.exec()) return false;
+
+    QMap<Domain::TopicStatus, QList<int>> statusBuckets;
+    while (allQuery.query().next()) {
+        const int tid = allQuery.query().value(0).toInt();
+        const auto optStatus =
+            Domain::EnumStrings::topicStatusFromString(allQuery.query().value(3).toString());
+        if (optStatus) {
+            if (tid != id) {
+                statusBuckets[*optStatus].append(tid);
+            }
+        }
+    }
+
+    statusBuckets[targetStatus] = newTargetStatusIds;
+
+    const QList<Domain::TopicStatus> statusOrder = {
+        Domain::TopicStatus::Backlog,
+        Domain::TopicStatus::InProgress,
+        Domain::TopicStatus::Review,
+        Domain::TopicStatus::Done,
+    };
+
+    QList<int> globalOrderedIds;
+    for (const auto st : statusOrder) {
+        globalOrderedIds.append(statusBuckets.value(st));
+    }
+
+    SqlStatement posStmt(m_database, u"UPDATE topics SET position = ? WHERE id = ?"_s);
+    for (int pos = 0; pos < globalOrderedIds.size(); ++pos) {
+        posStmt.bind(1, pos);
+        posStmt.bind(2, globalOrderedIds.at(pos));
+        if (!posStmt.exec()) return false;
+        if (posStmt.rowsAffected() != 1) {
+            return reportMissingRow(m_database, u"topic"_s, globalOrderedIds.at(pos));
+        }
+    }
+
+    return commitAndNotify(m_database, transaction);
+}
+
 bool TopicRepository::remove(int id) {
     if (!acceptExisting(m_database, byId(id).has_value(), u"topic"_s, id)) return false;
 
@@ -342,6 +470,21 @@ bool TopicRepository::reorderSubtasks(int topicId, const QList<int>& orderedIds)
         }
     }
     return commitAndNotify(m_database, transaction);
+}
+
+QHash<int, TopicSubtaskProgress> TopicRepository::subtaskProgress() const {
+    QHash<int, TopicSubtaskProgress> result;
+    SqlStatement statement(
+        m_database,
+        u"SELECT topic_id, COUNT(*), COALESCE(SUM(done), 0) FROM subtasks GROUP BY topic_id"_s);
+    if (!statement.exec()) return result;
+    while (statement.query().next()) {
+        const int topicId = statement.query().value(0).toInt();
+        const int total = statement.query().value(1).toInt();
+        const int done = statement.query().value(2).toInt();
+        result.insert(topicId, TopicSubtaskProgress{done, total});
+    }
+    return result;
 }
 
 int TopicRepository::subtaskCount(int topicId) const {

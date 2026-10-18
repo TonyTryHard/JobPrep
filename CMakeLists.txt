@@ -59,6 +59,8 @@ add_library(jobprep_core STATIC
     src/domain/Structs.h
     src/domain/EnumStrings.h
     src/domain/EnumStrings.cpp
+    src/domain/TopicProgress.h
+    src/domain/TopicProgress.cpp
 
     # Data layer
     src/data/DataLogging.h
@@ -102,6 +104,10 @@ add_library(jobprep_core STATIC
     src/models/ApplicationFilterProxy.cpp
     src/models/AgendaListModel.h
     src/models/AgendaListModel.cpp
+    src/models/TopicListModel.h
+    src/models/TopicListModel.cpp
+    src/models/TopicBoardProxy.h
+    src/models/TopicBoardProxy.cpp
 
     # Theme & Tokens
     src/ui/theme/Tokens.h

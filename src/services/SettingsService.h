@@ -56,6 +56,15 @@ public:
     QByteArray calendarSplitterState() const;
     void setCalendarSplitterState(const QByteArray& state);
 
+    QByteArray studySplitterState() const;
+    void setStudySplitterState(const QByteArray& state);
+
+    QString studyViewMode() const;
+    void setStudyViewMode(const QString& mode);
+
+    int studyTrackFilter() const;
+    void setStudyTrackFilter(int trackId);
+
 signals:
     void themeModeChanged(const QString& mode);
     void accentPresetChanged(const QString& preset);
@@ -66,6 +75,9 @@ signals:
     void calendarLayerInterviewsChanged(bool enabled);
     void calendarLayerFollowUpsChanged(bool enabled);
     void calendarLayerTargetsChanged(bool enabled);
+    void studySplitterStateChanged(const QByteArray& state);
+    void studyViewModeChanged(const QString& mode);
+    void studyTrackFilterChanged(int trackId);
 
 private:
     std::unique_ptr<QSettings> m_settings;

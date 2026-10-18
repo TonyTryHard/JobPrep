@@ -37,6 +37,12 @@ private slots:
     void unknownIdsFailWithoutChangedSignal();
     void queriesByTrackAndCount();
     void byTargetDateRangeQueries();
+    void moveTopicAcrossStatus();
+    void moveTopicReorderInsideColumn();
+    void moveTopicTrackFilteredPreservesHiddenOrder();
+    void moveTopicAppendAtEnd();
+    void moveTopicUnknownIdAndNoOp();
+    void subtaskProgressBatchedQuery();
 
 private:
     int addTrack(const QString& name);
@@ -384,6 +390,144 @@ void tst_TopicRepository::byTargetDateRangeQueries() {
     // Ordered by target_date, position, id
     QCOMPARE(res[0].title, u"RAII"_s);
     QCOMPARE(res[1].title, u"Move semantics"_s);
+}
+
+void tst_TopicRepository::moveTopicAcrossStatus() {
+    const int trackId = addTrack(u"C++"_s);
+    const int t1 = addTopic(u"Topic 1"_s, trackId);
+    const int t2 = addTopic(u"Topic 2"_s, trackId);
+
+    QVERIFY(m_topics->setStatus(t2, TopicStatus::InProgress));
+
+    QSignalSpy spy(m_topics.get(), &TopicRepository::changed);
+    QVERIFY(m_topics->moveTopic(t1, TopicStatus::InProgress, {t1, t2}));
+    QCOMPARE(spy.count(), 1);
+
+    const auto stored1 = m_topics->byId(t1);
+    QVERIFY(stored1.has_value());
+    QCOMPARE(stored1->status, TopicStatus::InProgress);
+
+    const auto inProg = m_topics->all();
+    int pos1 = -1, pos2 = -1;
+    for (const auto& t : inProg) {
+        if (t.id == t1) pos1 = t.position;
+        if (t.id == t2) pos2 = t.position;
+    }
+    QVERIFY(pos1 < pos2);
+}
+
+void tst_TopicRepository::moveTopicReorderInsideColumn() {
+    const int trackId = addTrack(u"C++"_s);
+    const int t1 = addTopic(u"One"_s, trackId);
+    const int t2 = addTopic(u"Two"_s, trackId);
+    const int t3 = addTopic(u"Three"_s, trackId);
+
+    QSignalSpy spy(m_topics.get(), &TopicRepository::changed);
+    QVERIFY(m_topics->moveTopic(t3, TopicStatus::Backlog, {t3, t1, t2}));
+    QCOMPARE(spy.count(), 1);
+
+    const auto all = m_topics->all();
+    QCOMPARE(all.size(), 3);
+    QCOMPARE(all[0].id, t3);
+    QCOMPARE(all[1].id, t1);
+    QCOMPARE(all[2].id, t2);
+}
+
+void tst_TopicRepository::moveTopicTrackFilteredPreservesHiddenOrder() {
+    const int cpp = addTrack(u"C++"_s);
+    const int eng = addTrack(u"English"_s);
+
+    const int c1 = addTopic(u"C++ 1"_s, cpp);
+    const int e1 = addTopic(u"English 1"_s, eng);
+    const int c2 = addTopic(u"C++ 2"_s, cpp);
+    const int e2 = addTopic(u"English 2"_s, eng);
+
+    QSignalSpy spy(m_topics.get(), &TopicRepository::changed);
+    QVERIFY(m_topics->moveTopic(c2, TopicStatus::Backlog, {c2, c1}));
+    QCOMPARE(spy.count(), 1);
+
+    const auto cppTopics = m_topics->byTrack(cpp);
+    QCOMPARE(cppTopics.size(), 2);
+    QCOMPARE(cppTopics[0].id, c2);
+    QCOMPARE(cppTopics[1].id, c1);
+
+    const auto engTopics = m_topics->byTrack(eng);
+    QCOMPARE(engTopics.size(), 2);
+    QCOMPARE(engTopics[0].id, e1);
+    QCOMPARE(engTopics[1].id, e2);
+}
+
+void tst_TopicRepository::moveTopicAppendAtEnd() {
+    const int trackId = addTrack(u"C++"_s);
+    const int t1 = addTopic(u"One"_s, trackId);
+    const int t2 = addTopic(u"Two"_s, trackId);
+    QVERIFY(m_topics->setStatus(t1, TopicStatus::Review));
+
+    QSignalSpy spy(m_topics.get(), &TopicRepository::changed);
+    QVERIFY(m_topics->moveTopic(t2, TopicStatus::Review, {t1, t2}));
+    QCOMPARE(spy.count(), 1);
+
+    QCOMPARE(m_topics->byId(t2)->status, TopicStatus::Review);
+    QVERIFY(m_topics->byId(t1)->position < m_topics->byId(t2)->position);
+}
+
+void tst_TopicRepository::moveTopicUnknownIdAndNoOp() {
+    const int trackId = addTrack(u"C++"_s);
+    const int t1 = addTopic(u"One"_s, trackId);
+    const int t2 = addTopic(u"Two"_s, trackId);
+
+    QSignalSpy spy(m_topics.get(), &TopicRepository::changed);
+
+    // No-op move
+    QVERIFY(m_topics->moveTopic(t1, TopicStatus::Backlog, {t1, t2}));
+    QCOMPARE(spy.count(), 0);
+
+    // Unknown id
+    QVERIFY(!m_topics->moveTopic(999, TopicStatus::Backlog, {999}));
+    QVERIFY(!m_topics->lastError().isEmpty());
+    QCOMPARE(spy.count(), 0);
+
+    // Unknown id in orderedIds
+    QVERIFY(!m_topics->moveTopic(t1, TopicStatus::Backlog, {t1, 999}));
+    QCOMPARE(spy.count(), 0);
+
+    // Missing id from orderedIds
+    QVERIFY(!m_topics->moveTopic(t1, TopicStatus::Backlog, {t2}));
+    QCOMPARE(spy.count(), 0);
+}
+
+void tst_TopicRepository::subtaskProgressBatchedQuery() {
+    const int trackId = addTrack(u"C++"_s);
+    const int t1 = addTopic(u"Topic 1"_s, trackId);
+    const int t2 = addTopic(u"Topic 2"_s, trackId);
+    const int t3 = addTopic(u"Topic 3"_s, trackId);
+
+    Subtask s1; s1.topicId = t1; s1.text = u"Sub 1"_s; s1.done = true;
+    QVERIFY(m_topics->addSubtask(s1));
+    Subtask s2; s2.topicId = t1; s2.text = u"Sub 2"_s; s2.done = false;
+    QVERIFY(m_topics->addSubtask(s2));
+
+    Subtask s3; s3.topicId = t2; s3.text = u"Sub 3"_s; s3.done = true;
+    QVERIFY(m_topics->addSubtask(s3));
+    Subtask s4; s4.topicId = t2; s4.text = u"Sub 4"_s; s4.done = true;
+    QVERIFY(m_topics->addSubtask(s4));
+    Subtask s5; s5.topicId = t2; s5.text = u"Sub 5"_s; s5.done = true;
+    QVERIFY(m_topics->addSubtask(s5));
+
+    const auto progress = m_topics->subtaskProgress();
+    QCOMPARE(progress.size(), 2);
+
+    QVERIFY(progress.contains(t1));
+    QCOMPARE(progress.value(t1).done, 1);
+    QCOMPARE(progress.value(t1).total, 2);
+
+    QVERIFY(progress.contains(t2));
+    QCOMPARE(progress.value(t2).done, 3);
+    QCOMPARE(progress.value(t2).total, 3);
+
+    QVERIFY(!progress.contains(t3));
+    QCOMPARE(progress.value(t3).done, 0);
+    QCOMPARE(progress.value(t3).total, 0);
 }
 
 QTEST_GUILESS_MAIN(tst_TopicRepository)

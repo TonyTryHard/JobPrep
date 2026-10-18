@@ -5,6 +5,8 @@ set(MODELS_TESTS
     tst_AgendaListModel
     tst_ApplicationTableModel
     tst_ApplicationFilterProxy
+    tst_TopicListModel
+    tst_TopicBoardProxy
 )
 
 foreach(test_name IN LISTS MODELS_TESTS)

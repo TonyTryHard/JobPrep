@@ -136,4 +136,38 @@ void SettingsService::setCalendarSplitterState(const QByteArray& state) {
     m_settings->setValue(u"calendar/splitterState"_s, state);
 }
 
+QByteArray SettingsService::studySplitterState() const {
+    return m_settings->value(u"study/splitterState"_s).toByteArray();
+}
+
+void SettingsService::setStudySplitterState(const QByteArray& state) {
+    if (studySplitterState() == state) return;
+    m_settings->setValue(u"study/splitterState"_s, state);
+    emit studySplitterStateChanged(state);
+}
+
+QString SettingsService::studyViewMode() const {
+    const QString mode = m_settings->value(u"study/viewMode"_s, u"board"_s).toString();
+    if (mode == u"board"_s || mode == u"list"_s) {
+        return mode;
+    }
+    return u"board"_s;
+}
+
+void SettingsService::setStudyViewMode(const QString& mode) {
+    if (studyViewMode() == mode) return;
+    m_settings->setValue(u"study/viewMode"_s, mode);
+    emit studyViewModeChanged(mode);
+}
+
+int SettingsService::studyTrackFilter() const {
+    return m_settings->value(u"study/trackFilter"_s, -1).toInt();
+}
+
+void SettingsService::setStudyTrackFilter(int trackId) {
+    if (studyTrackFilter() == trackId) return;
+    m_settings->setValue(u"study/trackFilter"_s, trackId);
+    emit studyTrackFilterChanged(trackId);
+}
+
 }  // namespace JobPrep::Services
