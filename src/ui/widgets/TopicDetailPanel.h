@@ -61,6 +61,8 @@ public:
 
     /// "Log time" stays disabled until M4 step C provides SessionDialog.
     void setSessionLogEnabled(bool enabled);
+    /// Focuses the first editor (title), used when Enter opens the detail panel (B1).
+    void focusFirstEditor();
 
 signals:
     /// A repository write failed (SPEC §8, B10): the page shows a message and reloads.

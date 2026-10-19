@@ -68,6 +68,7 @@ StudyPage::StudyPage(Data::TopicRepository& topics, Data::TrackRepository& track
 
     // Ensure detail panel tracks are up to date (constructor may have set with empty list).
     m_detail->setTracks(m_tracks.all());
+    m_trackFilter = m_settings.studyTrackFilter();
     refreshChips();
     applyFilters();
     refreshViewState();
@@ -373,6 +374,7 @@ void StudyPage::onColumnActivated(int id) {
     m_detail->setTracks(m_tracks.all());
     m_detail->loadFrom(id);
     setDetailVisible(true);
+    m_detail->focusFirstEditor();
 }
 
 void StudyPage::onDeleteRequested(int id) {

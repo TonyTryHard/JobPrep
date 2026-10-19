@@ -63,13 +63,14 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     if (!m_opener) {
         m_opener = [](const QUrl& url) { return QDesktopServices::openUrl(url); };
     }
+    setObjectName(u"StudyDetailPanel"_s);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
     auto* card = new QWidget(this);
-    card->setObjectName(u"StudyDetailPanel"_s);
+    card->setObjectName(u"StudyDetailPanelCard"_s);
     auto* cardLayout = new QVBoxLayout(card);
     cardLayout->setContentsMargins(16, 16, 16, 16);
     cardLayout->setSpacing(12);
@@ -366,6 +367,13 @@ void TopicDetailPanel::setSessionLogEnabled(bool enabled) {
     m_logTimeBtn->setEnabled(enabled);
 }
 
+void TopicDetailPanel::focusFirstEditor() {
+    if (m_titleEdit && m_titleEdit->isEnabled()) {
+        m_titleEdit->setFocus(Qt::OtherFocusReason);
+        m_titleEdit->selectAll();
+    }
+}
+
 bool TopicDetailPanel::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::FocusOut && m_topicId && !m_loading) {
         // Autosave when focus leaves an editor (B5). Guard against the focus-out of a
@@ -383,6 +391,16 @@ bool TopicDetailPanel::eventFilter(QObject* watched, QEvent* event) {
             flush();
             emit closeRequested();
             return true;
+        }
+
+        if (watched == m_checkList && keyEvent->key() == Qt::Key_Space &&
+            !keyEvent->modifiers().testFlag(Qt::AltModifier) &&
+            !keyEvent->modifiers().testFlag(Qt::ControlModifier)) {
+            auto* item = m_checkList->currentItem();
+            if (item && (item->flags() & Qt::ItemIsUserCheckable)) {
+                item->setCheckState(item->checkState() == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+                return true;
+            }
         }
 
         if (watched == m_checkList && keyEvent->modifiers().testFlag(Qt::AltModifier) &&
@@ -695,6 +713,14 @@ void TopicDetailPanel::addResource() {
     const QString title = m_resourceTitleEdit->text().trimmed();
     const QString url = m_resourceUrlEdit->text().trimmed();
     if (title.isEmpty() && url.isEmpty()) return;
+
+    if (!url.isEmpty()) {
+        const QUrl parsed(url, QUrl::StrictMode);
+        if (!isHttpOrHttps(parsed)) {
+            showMessage(tr("Only http and https links can be added."), "error");
+            return;
+        }
+    }
 
     const int row = m_resourcesTable->rowCount();
     m_resourcesTable->insertRow(row);

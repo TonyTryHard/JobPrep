@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPixmap>
@@ -22,19 +23,24 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextEdit>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QTimer>
 #include <QToolButton>
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
 #include "data/Database.h"
 #include "data/InterviewRepository.h"
+#include "data/SessionRepository.h"
 #include "data/TopicRepository.h"
 #include "data/TrackRepository.h"
 #include "domain/Structs.h"
 #include "models/AgendaListModel.h"
 #include "models/ApplicationTableModel.h"
+#include "models/TopicBoardProxy.h"
 #include "models/TopicListModel.h"
 #include "services/ExportService.h"
+#include "services/SeedService.h"
 #include "services/SettingsService.h"
 #include "ui/MainWindow.h"
 #include "ui/Sidebar.h"
@@ -43,11 +49,14 @@
 #include "ui/dialogs/InterviewDialog.h"
 #include "ui/pages/CalendarPage.h"
 #include "ui/pages/JobsPage.h"
+#include "ui/pages/StudyPage.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
 #include "ui/widgets/ChipBar.h"
 #include "ui/widgets/MonthView.h"
 #include "ui/widgets/SelectionRestorer.h"
+#include "ui/widgets/TopicBoardColumn.h"
+#include "ui/widgets/TopicDetailPanel.h"
 
 using namespace Qt::StringLiterals;
 
@@ -58,7 +67,10 @@ using JobPrep::Domain::ApplicationStatus;
 using JobPrep::Domain::Interview;
 using JobPrep::Domain::InterviewType;
 using JobPrep::Domain::JobApplication;
+using JobPrep::Domain::StudySession;
+using JobPrep::Domain::Subtask;
 using JobPrep::Domain::Topic;
+using JobPrep::Domain::TopicStatus;
 using JobPrep::Domain::Track;
 using JobPrep::Models::ApplicationTableModel;
 using JobPrep::Ui::Dialogs::ApplicationDialog;
@@ -184,6 +196,18 @@ private slots:
     void testCalendarThemes();
     void testCalendarScreenshots();
     void testSelectionRestorerSurvivesReset();
+    void testStudyBoardSeededAndTrackFilter();
+    void testStudyQuickAdd();
+    void testStudyKeyboardMoveAndReorder();
+    void testStudyChecklistTickSurvivesReset();
+    void testStudyBoardRealDnDDropEvent();
+    void testStudyDetailPanelAutosaveAndValidation();
+    void testStudyDeleteTopicKeepsSessions();
+    void testStudyTrackFilterPersistenceAndFallback();
+    void testStudyOverdueChipWithFixedClock();
+    void testStudyPageApi();
+    void testChipBarJobsAndCalendarRegression();
+    void testStudyScreenshots();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -213,12 +237,19 @@ private:
     /// Inserts a track and one non-done topic targeting `day`; returns the track id.
     int addStudyTarget(const QDate& day);
 
+    /// Rebuilds an isolated context plus a standalone StudyPage with a fixed "today".
+    void resetStudyData(const QDate& today = QDate(2026, 10, 19));
+    JobPrep::Ui::Pages::StudyPage* studyPage() { return m_study.get(); }
+    JobPrep::Ui::Widgets::TopicBoardColumn* studyColumn(JobPrep::Domain::TopicStatus status) const;
+
     std::unique_ptr<JobPrep::App::AppContext> m_ctx;
     std::unique_ptr<JobPrep::Ui::MainWindow> m_window;
     std::unique_ptr<JobPrep::App::AppContext> m_jobsCtx;
     std::unique_ptr<JobPrep::Ui::Pages::JobsPage> m_jobs;
     std::unique_ptr<JobPrep::App::AppContext> m_calCtx;
     std::unique_ptr<JobPrep::Ui::Pages::CalendarPage> m_calendar;
+    std::unique_ptr<JobPrep::App::AppContext> m_studyCtx;
+    std::unique_ptr<JobPrep::Ui::Pages::StudyPage> m_study;
 };
 
 void tst_UiSmoke::initTestCase() {
@@ -418,6 +449,34 @@ int tst_UiSmoke::addStudyTarget(const QDate& day) {
         QTest::qFail("failed to insert topic", __FILE__, __LINE__);
     }
     return track.id;
+}
+
+void tst_UiSmoke::resetStudyData(const QDate& today) {
+    m_study.reset();
+    m_studyCtx = std::make_unique<JobPrep::App::AppContext>(u":memory:"_s);
+    QVERIFY(m_studyCtx->database().isOpen());
+
+    m_studyCtx->settings().setStudyTrackFilter(-1);
+
+    m_study = std::make_unique<JobPrep::Ui::Pages::StudyPage>(
+        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->settings(),
+        m_studyCtx->themeManager(), nullptr, [today]() { return today; });
+    m_study->resize(1200, 720);
+    m_study->show();
+    QCoreApplication::processEvents();
+}
+
+JobPrep::Ui::Widgets::TopicBoardColumn* tst_UiSmoke::studyColumn(JobPrep::Domain::TopicStatus status) const {
+    const QString name = [&]() {
+        switch (status) {
+            case JobPrep::Domain::TopicStatus::Backlog: return u"StudyColumnBacklog"_s;
+            case JobPrep::Domain::TopicStatus::InProgress: return u"StudyColumnInProgress"_s;
+            case JobPrep::Domain::TopicStatus::Review: return u"StudyColumnReview"_s;
+            case JobPrep::Domain::TopicStatus::Done: return u"StudyColumnDone"_s;
+        }
+        return u""_s;
+    }();
+    return childNamed<JobPrep::Ui::Widgets::TopicBoardColumn>(m_study.get(), name);
 }
 
 void tst_UiSmoke::testJobsPageEmptyStates() {
@@ -1423,6 +1482,685 @@ void tst_UiSmoke::testSelectionRestorerSurvivesReset() {
     QVERIFY(actionRan);
 }
 
+void tst_UiSmoke::testStudyBoardSeededAndTrackFilter() {
+    const QDate today(2026, 10, 19);
+    m_study.reset();
+    m_studyCtx = std::make_unique<JobPrep::App::AppContext>(u":memory:"_s);
+    QVERIFY(m_studyCtx->database().isOpen());
+    JobPrep::Services::SeedService seeder(m_studyCtx->tracks(), m_studyCtx->topics());
+    QVERIFY(seeder.loadSampleTopics());
+    m_studyCtx->settings().setStudyTrackFilter(-1);
+
+    m_study = std::make_unique<JobPrep::Ui::Pages::StudyPage>(
+        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->settings(),
+        m_studyCtx->themeManager(), nullptr, [today]() { return today; });
+    m_study->resize(1200, 720);
+    m_study->show();
+    QCoreApplication::processEvents();
+
+    QCOMPARE(studyPage()->currentViewIndex(), 1);
+    QVERIFY(studyPage()->visibleTopicCount() > 0);
+
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    auto* inProgress = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+    auto* review = studyColumn(JobPrep::Domain::TopicStatus::Review);
+    auto* done = studyColumn(JobPrep::Domain::TopicStatus::Done);
+    QVERIFY(backlog && inProgress && review && done);
+    const int totalInitial = studyPage()->visibleTopicCount();
+
+    auto* chips = childNamed<JobPrep::Ui::Widgets::ChipBar>(m_study.get(), u"StudyTrackChips"_s);
+    QVERIFY(chips != nullptr);
+    const auto allTracks = m_studyCtx->tracks().all();
+    QVERIFY(allTracks.size() >= 2);
+    const auto track1 = allTracks.at(0);
+    const auto track2 = allTracks.at(1);
+
+    // Filter by track 1
+    chips->button(track1.id)->click();
+    QCoreApplication::processEvents();
+    const int track1Count = studyPage()->visibleTopicCount();
+    QVERIFY(track1Count > 0);
+    QVERIFY(track1Count < totalInitial);
+
+    for (auto* col : {backlog, inProgress, review, done}) {
+        for (int r = 0; r < col->itemCount(); ++r) {
+            const auto id = col->topicIdAt(r);
+            QVERIFY(id.has_value());
+            const auto topic = m_studyCtx->topics().byId(*id);
+            QVERIFY(topic.has_value());
+            QCOMPARE(topic->trackId, track1.id);
+        }
+    }
+
+    // Filter by track 2
+    chips->button(track2.id)->click();
+    QCoreApplication::processEvents();
+    const int track2Count = studyPage()->visibleTopicCount();
+    QVERIFY(track2Count > 0);
+    for (auto* col : {backlog, inProgress, review, done}) {
+        for (int r = 0; r < col->itemCount(); ++r) {
+            const auto id = col->topicIdAt(r);
+            QVERIFY(id.has_value());
+            const auto topic = m_studyCtx->topics().byId(*id);
+            QVERIFY(topic.has_value());
+            QCOMPARE(topic->trackId, track2.id);
+        }
+    }
+
+    // Reset filter to All
+    chips->button(-1)->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(studyPage()->visibleTopicCount(), totalInitial);
+}
+
+void tst_UiSmoke::testStudyQuickAdd() {
+    resetStudyData();
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    QVERIFY(backlog);
+    auto* quickAdd = childNamed<QLineEdit>(backlog, u"StudyColumnQuickAdd"_s);
+    QVERIFY(quickAdd);
+    QVERIFY(!quickAdd->isEnabled());
+    QVERIFY(quickAdd->placeholderText().contains(u"Add a track"_s));
+    QVERIFY(quickAdd->toolTip().contains(u"need at least one track"_s));
+
+    Track tr1;
+    tr1.name = u"C++"_s;
+    tr1.color = u"#3b82f6"_s;
+    tr1.position = 0;
+    QVERIFY(m_studyCtx->tracks().insert(tr1));
+    const int tr1Id = m_studyCtx->tracks().all().last().id;
+
+    Track tr2;
+    tr2.name = u"English"_s;
+    tr2.color = u"#10b981"_s;
+    tr2.position = 1;
+    QVERIFY(m_studyCtx->tracks().insert(tr2));
+    const int tr2Id = m_studyCtx->tracks().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    QVERIFY(quickAdd->isEnabled());
+    QVERIFY(quickAdd->placeholderText().contains(u"Adds to: C++"_s));
+    QVERIFY(quickAdd->toolTip().contains(u"Adds to: C++"_s));
+
+    const auto statuses = {
+        JobPrep::Domain::TopicStatus::Backlog,
+        JobPrep::Domain::TopicStatus::InProgress,
+        JobPrep::Domain::TopicStatus::Review,
+        JobPrep::Domain::TopicStatus::Done
+    };
+
+    for (const auto status : statuses) {
+        auto* col = studyColumn(status);
+        auto* edit = childNamed<QLineEdit>(col, u"StudyColumnQuickAdd"_s);
+        QVERIFY(edit->isEnabled());
+        const QString title = u"Topic for %1"_s.arg(static_cast<int>(status));
+        edit->setText(title);
+        QTest::keyClick(edit, Qt::Key_Return);
+        QCoreApplication::processEvents();
+
+        const auto topics = m_studyCtx->topics().all();
+        const auto it = std::find_if(topics.begin(), topics.end(), [&](const Topic& t) {
+            return t.title == title;
+        });
+        QVERIFY(it != topics.end());
+        QCOMPARE(it->status, status);
+        QCOMPARE(it->trackId, tr1Id);
+        QCOMPARE(it->priority, JobPrep::Domain::Priority::Normal);
+    }
+
+    auto* chips = childNamed<JobPrep::Ui::Widgets::ChipBar>(m_study.get(), u"StudyTrackChips"_s);
+    chips->button(tr2Id)->click();
+    QCoreApplication::processEvents();
+    QVERIFY(quickAdd->placeholderText().contains(u"Adds to: English"_s));
+    QVERIFY(quickAdd->toolTip().contains(u"Adds to: English"_s));
+
+    quickAdd->setText(u"Temporary text"_s);
+    QTest::keyClick(quickAdd, Qt::Key_Escape);
+    QCOMPARE(quickAdd->text(), QString());
+}
+
+void tst_UiSmoke::testStudyKeyboardMoveAndReorder() {
+    resetStudyData();
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t1;
+    t1.trackId = trId;
+    t1.title = u"Card 1"_s;
+    t1.status = JobPrep::Domain::TopicStatus::Backlog;
+    t1.position = 0;
+    QVERIFY(m_studyCtx->topics().insert(t1));
+    const int t1Id = m_studyCtx->topics().all().last().id;
+
+    Topic t2;
+    t2.trackId = trId;
+    t2.title = u"Card 2"_s;
+    t2.status = JobPrep::Domain::TopicStatus::Backlog;
+    t2.position = 1;
+    QVERIFY(m_studyCtx->topics().insert(t2));
+    const int t2Id = m_studyCtx->topics().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    auto* inProgress = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+    auto* list = childNamed<QListView>(backlog, u"StudyColumnList"_s);
+    QVERIFY(list);
+    list->setFocus();
+    list->setCurrentIndex(backlog->proxy()->index(0, 0));
+    QCOMPARE(backlog->currentTopicId(), std::optional<int>(t1Id));
+
+    // 1. Alt+Right moves to InProgress
+    QTest::keyClick(list, Qt::Key_Right, Qt::AltModifier);
+    QCoreApplication::processEvents();
+    QCOMPARE(m_studyCtx->topics().byId(t1Id)->status, JobPrep::Domain::TopicStatus::InProgress);
+
+    // 2. Alt+Left moves back to Backlog
+    auto* progList = childNamed<QListView>(inProgress, u"StudyColumnList"_s);
+    progList->setFocus();
+    progList->setCurrentIndex(inProgress->proxy()->index(0, 0));
+    QTest::keyClick(progList, Qt::Key_Left, Qt::AltModifier);
+    QCoreApplication::processEvents();
+    QCOMPARE(m_studyCtx->topics().byId(t1Id)->status, JobPrep::Domain::TopicStatus::Backlog);
+
+    // 3. Alt+Down reorders Card 1 below Card 2
+    list->setFocus();
+    backlog->selectTopicId(t1Id);
+    QTest::keyClick(list, Qt::Key_Down, Qt::AltModifier);
+    QCoreApplication::processEvents();
+    QVERIFY(m_studyCtx->topics().byId(t1Id)->position > m_studyCtx->topics().byId(t2Id)->position);
+
+    // 4. Alt+Up reorders Card 1 back above Card 2
+    QTest::keyClick(list, Qt::Key_Up, Qt::AltModifier);
+    QCoreApplication::processEvents();
+    QVERIFY(m_studyCtx->topics().byId(t1Id)->position < m_studyCtx->topics().byId(t2Id)->position);
+
+    // 5. Left/Right without Alt navigates focus between columns
+    list->setFocus();
+    QTest::keyClick(list, Qt::Key_Right, Qt::NoModifier);
+    QCoreApplication::processEvents();
+    QCOMPARE(QApplication::focusWidget(), inProgress->list());
+
+    // 6. Context menu "Move to" -> Done
+    list->setFocus();
+    backlog->selectTopicId(t1Id);
+    auto* menu = childNamed<QMenu>(backlog, u"StudyContextMenu"_s);
+    auto* moveMenu = childNamed<QMenu>(menu, u"StudyMoveToMenu"_s);
+    QVERIFY(moveMenu);
+    auto* doneAction = childNamed<QAction>(moveMenu, u"StudyMoveTo3"_s);
+    QVERIFY(doneAction);
+    doneAction->trigger();
+    QCoreApplication::processEvents();
+    QCOMPARE(m_studyCtx->topics().byId(t1Id)->status, JobPrep::Domain::TopicStatus::Done);
+}
+
+void tst_UiSmoke::testStudyChecklistTickSurvivesReset() {
+    resetStudyData();
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t1;
+    t1.trackId = trId;
+    t1.title = u"Topic with checklist"_s;
+    t1.status = JobPrep::Domain::TopicStatus::InProgress;
+    QVERIFY(m_studyCtx->topics().insert(t1));
+    const int t1Id = m_studyCtx->topics().all().last().id;
+
+    Subtask s1;
+    s1.topicId = t1Id;
+    s1.text = u"Subtask 1"_s;
+    s1.done = false;
+    s1.position = 0;
+    QVERIFY(m_studyCtx->topics().addSubtask(s1));
+
+    Subtask s2;
+    s2.topicId = t1Id;
+    s2.text = u"Subtask 2"_s;
+    s2.done = false;
+    s2.position = 1;
+    QVERIFY(m_studyCtx->topics().addSubtask(s2));
+
+    QCoreApplication::processEvents();
+
+    auto* progCol = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+    progCol->selectTopicId(t1Id);
+    QCoreApplication::processEvents();
+
+    auto* detail = studyPage()->detailPanel();
+    QVERIFY(detail);
+    auto* checkList = childNamed<QListWidget>(detail, u"StudyDetailCheckList"_s);
+    QVERIFY(checkList);
+    QCOMPARE(checkList->count(), 2);
+
+    QModelIndex cardIndex = progCol->proxy()->index(progCol->indexOfTopic(t1Id), 0);
+    QCOMPARE(cardIndex.data(JobPrep::Models::TopicListModel::ProgressRole).toInt(), 0);
+
+    checkList->setFocus();
+    checkList->setCurrentRow(0);
+
+    QTest::keyClick(checkList, Qt::Key_Space);
+    QCoreApplication::processEvents();
+
+    const auto subs = m_studyCtx->topics().subtasks(t1Id);
+    QVERIFY(subs.first().done);
+
+    cardIndex = progCol->proxy()->index(progCol->indexOfTopic(t1Id), 0);
+    QCOMPARE(cardIndex.data(JobPrep::Models::TopicListModel::ProgressRole).toInt(), 50);
+    QCOMPARE(cardIndex.data(JobPrep::Models::TopicListModel::DoneSubtasksRole).toInt(), 1);
+
+    QCOMPARE(progCol->currentTopicId(), std::optional<int>(t1Id));
+    QVERIFY(detail->hasFocusInEditor() || QApplication::focusWidget() == static_cast<QWidget*>(checkList));
+}
+
+void tst_UiSmoke::testStudyBoardRealDnDDropEvent() {
+    resetStudyData();
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t1;
+    t1.trackId = trId;
+    t1.title = u"DnD Card"_s;
+    t1.status = JobPrep::Domain::TopicStatus::Backlog;
+    t1.position = 0;
+    QVERIFY(m_studyCtx->topics().insert(t1));
+    const int t1Id = m_studyCtx->topics().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    auto* inProgress = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+
+    auto* mimeData = new QMimeData;
+    mimeData->setData(u"application/x-jobprep-topic-id"_s, QByteArray::number(t1Id));
+    QVERIFY(inProgress->proxy()->canDropMimeData(mimeData, Qt::MoveAction, -1, -1, QModelIndex()));
+    QVERIFY(inProgress->proxy()->dropMimeData(mimeData, Qt::MoveAction, -1, -1, QModelIndex()));
+    delete mimeData;
+
+    QCoreApplication::processEvents();
+    QCOMPARE(m_studyCtx->topics().byId(t1Id)->status, JobPrep::Domain::TopicStatus::InProgress);
+
+    auto* dropMime = new QMimeData;
+    dropMime->setData(u"application/x-jobprep-topic-id"_s, QByteArray::number(t1Id));
+    QDropEvent dropEvent(QPointF(20, 20), Qt::MoveAction, dropMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(backlog->list()->viewport(), &dropEvent);
+    QCoreApplication::processEvents();
+}
+
+void tst_UiSmoke::testStudyDetailPanelAutosaveAndValidation() {
+    resetStudyData();
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t1;
+    t1.trackId = trId;
+    t1.title = u"Topic A"_s;
+    t1.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(m_studyCtx->topics().insert(t1));
+    const int t1Id = m_studyCtx->topics().all().last().id;
+
+    Topic t2;
+    t2.trackId = trId;
+    t2.title = u"Topic B"_s;
+    t2.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(m_studyCtx->topics().insert(t2));
+    const int t2Id = m_studyCtx->topics().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    backlog->selectTopicId(t1Id);
+    QCoreApplication::processEvents();
+
+    auto* detail = studyPage()->detailPanel();
+    QVERIFY(detail);
+    auto* titleEdit = childNamed<QLineEdit>(detail, u"StudyDetailTitleEdit"_s);
+    auto* notesEdit = childNamed<QTextEdit>(detail, u"StudyDetailNotesEdit"_s);
+    auto* tagsEdit = childNamed<QLineEdit>(detail, u"StudyDetailTagsEdit"_s);
+
+    titleEdit->setText(u"Topic A Modified"_s);
+    notesEdit->setPlainText(u"My notes"_s);
+    tagsEdit->setText(u"tag1, tag2"_s);
+
+    // Autosave on selection change
+    backlog->selectTopicId(t2Id);
+    QCoreApplication::processEvents();
+
+    const auto t1Db = m_studyCtx->topics().byId(t1Id);
+    QCOMPARE(t1Db->title, u"Topic A Modified"_s);
+    QCOMPARE(t1Db->notes, u"My notes"_s);
+    QCOMPARE(t1Db->tags, u"tag1, tag2"_s);
+
+    // Rejection of empty title on Topic B
+    titleEdit->setText(u""_s);
+    QVERIFY(!detail->flush());
+    auto* msgLabel = childNamed<QLabel>(detail, u"StudyDetailMessageLabel"_s);
+    QVERIFY(msgLabel->isVisible());
+    QVERIFY(msgLabel->text().contains(u"Title cannot be empty"_s));
+    QCOMPARE(m_studyCtx->topics().byId(t2Id)->title, u"Topic B"_s);
+
+    // Target date set and clear
+    auto* dateBtn = childNamed<QPushButton>(detail, u"StudyDetailDateClearBtn"_s);
+    QCOMPARE(dateBtn->text(), u"Set date"_s);
+    dateBtn->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(dateBtn->text(), u"Clear"_s);
+    QVERIFY(m_studyCtx->topics().byId(t2Id)->targetDate.has_value());
+
+    dateBtn->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(dateBtn->text(), u"Set date"_s);
+    QVERIFY(!m_studyCtx->topics().byId(t2Id)->targetDate.has_value());
+
+    // Resources http/https validation
+    auto* resTitle = childNamed<QLineEdit>(detail, u"StudyDetailResourceTitleEdit"_s);
+    auto* resUrl = childNamed<QLineEdit>(detail, u"StudyDetailResourceUrlEdit"_s);
+    auto* resAddBtn = childNamed<QPushButton>(detail, u"StudyDetailResourceAddBtn"_s);
+    auto* resTable = childNamed<QTableWidget>(detail, u"StudyDetailResourcesTable"_s);
+
+    resTitle->setText(u"Bad JS"_s);
+    resUrl->setText(u"javascript:alert(1)"_s);
+    resAddBtn->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(resTable->rowCount(), 0);
+    QVERIFY(msgLabel->isVisible());
+    QVERIFY(msgLabel->text().contains(u"Only http and https"_s));
+
+    resTitle->setText(u"Bad File"_s);
+    resUrl->setText(u"file:///etc/passwd"_s);
+    resAddBtn->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(resTable->rowCount(), 0);
+
+    resTitle->setText(u"CppReference"_s);
+    resUrl->setText(u"https://en.cppreference.com"_s);
+    resAddBtn->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(resTable->rowCount(), 1);
+
+    resTable->selectRow(0);
+    auto* resOpenBtn = childNamed<QPushButton>(detail, u"StudyDetailResourceOpenBtn"_s);
+    QVERIFY(resOpenBtn->isEnabled());
+}
+
+void tst_UiSmoke::testStudyDeleteTopicKeepsSessions() {
+    resetStudyData();
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t;
+    t.trackId = trId;
+    t.title = u"Topic To Delete"_s;
+    t.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(m_studyCtx->topics().insert(t));
+    const int tId = m_studyCtx->topics().all().last().id;
+
+    JobPrep::Domain::StudySession session;
+    session.topicId = tId;
+    session.sessionDate = QDate(2026, 10, 19);
+    session.minutes = 45;
+    QVERIFY(m_studyCtx->sessions().insert(session));
+    const int sId = m_studyCtx->sessions().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    answerNextMessageBox([](QMessageBox* box) {
+        box->button(QMessageBox::Yes)->click();
+    });
+
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    backlog->selectTopicId(tId);
+    auto* menu = childNamed<QMenu>(backlog, u"StudyContextMenu"_s);
+    auto* deleteAction = childNamed<QAction>(menu, u"StudyDeleteTopicAction"_s);
+    QVERIFY(deleteAction);
+    deleteAction->trigger();
+    QCoreApplication::processEvents();
+
+    QVERIFY(!m_studyCtx->topics().byId(tId).has_value());
+
+    const auto sessionDb = m_studyCtx->sessions().byId(sId);
+    QVERIFY(sessionDb.has_value());
+    QVERIFY(!sessionDb->topicId.has_value());
+    QCOMPARE(sessionDb->minutes, 45);
+}
+
+void tst_UiSmoke::testStudyTrackFilterPersistenceAndFallback() {
+    resetStudyData();
+    Track tr1;
+    tr1.name = u"Track 1"_s;
+    tr1.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr1));
+
+    Track tr2;
+    tr2.name = u"Track 2"_s;
+    tr2.color = u"#10b981"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr2));
+    const int tr2Id = m_studyCtx->tracks().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    auto* chips = childNamed<JobPrep::Ui::Widgets::ChipBar>(m_study.get(), u"StudyTrackChips"_s);
+    auto* btn = chips->button(tr2Id);
+    QVERIFY(btn);
+    btn->click();
+    QCoreApplication::processEvents();
+
+    QCOMPARE(m_studyCtx->settings().studyTrackFilter(), tr2Id);
+
+    auto newPage = std::make_unique<JobPrep::Ui::Pages::StudyPage>(
+        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->settings(),
+        m_studyCtx->themeManager());
+    auto* newChips = childNamed<JobPrep::Ui::Widgets::ChipBar>(newPage.get(), u"StudyTrackChips"_s);
+    QCOMPARE(newChips->currentId(), tr2Id);
+
+    QVERIFY(m_studyCtx->tracks().remove(tr2Id));
+    QCoreApplication::processEvents();
+
+    QCOMPARE(chips->currentId(), -1);
+    QCOMPARE(m_studyCtx->settings().studyTrackFilter(), -1);
+}
+
+void tst_UiSmoke::testStudyOverdueChipWithFixedClock() {
+    const QDate today(2026, 10, 19);
+    resetStudyData(today);
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t1;
+    t1.trackId = trId;
+    t1.title = u"Overdue topic"_s;
+    t1.status = JobPrep::Domain::TopicStatus::InProgress;
+    t1.targetDate = today.addDays(-1);
+    QVERIFY(m_studyCtx->topics().insert(t1));
+    const int t1Id = m_studyCtx->topics().all().last().id;
+
+    Topic t2;
+    t2.trackId = trId;
+    t2.title = u"Due today"_s;
+    t2.status = JobPrep::Domain::TopicStatus::InProgress;
+    t2.targetDate = today;
+    QVERIFY(m_studyCtx->topics().insert(t2));
+    const int t2Id = m_studyCtx->topics().all().last().id;
+
+    Topic t3;
+    t3.trackId = trId;
+    t3.title = u"Done past topic"_s;
+    t3.status = JobPrep::Domain::TopicStatus::Done;
+    t3.targetDate = today.addDays(-5);
+    QVERIFY(m_studyCtx->topics().insert(t3));
+    const int t3Id = m_studyCtx->topics().all().last().id;
+
+    Topic t4;
+    t4.trackId = trId;
+    t4.title = u"No target date"_s;
+    t4.status = JobPrep::Domain::TopicStatus::InProgress;
+    QVERIFY(m_studyCtx->topics().insert(t4));
+    const int t4Id = m_studyCtx->topics().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    auto* progCol = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+    auto* doneCol = studyColumn(JobPrep::Domain::TopicStatus::Done);
+
+    const int r1 = progCol->indexOfTopic(t1Id);
+    const int r2 = progCol->indexOfTopic(t2Id);
+    const int r3 = doneCol->indexOfTopic(t3Id);
+    const int r4 = progCol->indexOfTopic(t4Id);
+
+    QVERIFY(progCol->proxy()->index(r1, 0).data(JobPrep::Models::TopicListModel::OverdueRole).toBool());
+    QVERIFY(!progCol->proxy()->index(r2, 0).data(JobPrep::Models::TopicListModel::OverdueRole).toBool());
+    QVERIFY(!doneCol->proxy()->index(r3, 0).data(JobPrep::Models::TopicListModel::OverdueRole).toBool());
+    QVERIFY(!progCol->proxy()->index(r4, 0).data(JobPrep::Models::TopicListModel::OverdueRole).toBool());
+}
+
+void tst_UiSmoke::testStudyPageApi() {
+    resetStudyData();
+    Track tr1;
+    tr1.name = u"Track A"_s;
+    tr1.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr1));
+    const int tr1Id = m_studyCtx->tracks().all().last().id;
+
+    Track tr2;
+    tr2.name = u"Track B"_s;
+    tr2.color = u"#10b981"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr2));
+    const int tr2Id = m_studyCtx->tracks().all().last().id;
+
+    Topic t;
+    t.trackId = tr2Id;
+    t.title = u"Special Algorithm"_s;
+    t.status = JobPrep::Domain::TopicStatus::Review;
+    QVERIFY(m_studyCtx->topics().insert(t));
+    const int tId = m_studyCtx->topics().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    studyPage()->triggerNew();
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    auto* quickAdd = childNamed<QLineEdit>(backlog, u"StudyColumnQuickAdd"_s);
+    QCOMPARE(QApplication::focusWidget(), quickAdd);
+
+    auto* chips = childNamed<JobPrep::Ui::Widgets::ChipBar>(m_study.get(), u"StudyTrackChips"_s);
+    auto* btn = chips->button(tr1Id);
+    QVERIFY(btn);
+    btn->click();
+    studyPage()->setSearchText(u"xyz"_s);
+    QCoreApplication::processEvents();
+    QCOMPARE(studyPage()->visibleTopicCount(), 0);
+
+    QVERIFY(studyPage()->selectTopic(tId));
+    QCoreApplication::processEvents();
+    QCOMPARE(chips->currentId(), -1);
+    QCOMPARE(studyPage()->searchText(), QString());
+    QVERIFY(studyPage()->isDetailVisible());
+    auto* detail = studyPage()->detailPanel();
+    QVERIFY(detail);
+    QCOMPARE(detail->currentTopicId(), std::optional<int>(tId));
+
+    QVERIFY(!studyPage()->selectTopic(99999));
+}
+
+void tst_UiSmoke::testChipBarJobsAndCalendarRegression() {
+    resetJobsData();
+    addApplication(u"Company A"_s, u"Role A"_s, ApplicationStatus::Applied);
+    addApplication(u"Company B"_s, u"Role B"_s, ApplicationStatus::Technical);
+    addApplication(u"Company C"_s, u"Role C"_s, ApplicationStatus::Offer);
+    addApplication(u"Company D"_s, u"Role D"_s, ApplicationStatus::Rejected);
+
+    auto* jobsChips = childNamed<JobPrep::Ui::Widgets::ChipBar>(m_jobs.get(), u"JobsStatusChips"_s);
+    QVERIFY(jobsChips != nullptr);
+    const auto buttons = jobsChips->findChildren<QPushButton*>();
+    QCOMPARE(buttons.size(), 5);
+
+    for (auto* btn : buttons) {
+        QVERIFY(btn->property("chip").toBool());
+    }
+
+    buttons.at(2)->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(jobsPage()->visibleRowCount(), 1);
+    QCOMPARE(companyAt(0), u"Company B"_s);
+
+    buttons.at(0)->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(jobsPage()->visibleRowCount(), 4);
+
+    const QDate today(2026, 10, 11);
+    resetCalendarData(today);
+    addApplicationWithInterview(u"Acme"_s, today, 10);
+    addStudyTarget(today);
+
+    auto* interviewChip = childNamed<QPushButton>(m_calendar.get(), u"CalendarLayerInterviewBtn"_s);
+    auto* targetChip = childNamed<QPushButton>(m_calendar.get(), u"CalendarLayerTargetBtn"_s);
+    QVERIFY(interviewChip && targetChip);
+    QVERIFY(interviewChip->property("calendarLayer").toBool());
+    QVERIFY(targetChip->property("calendarLayer").toBool());
+
+    QCOMPARE(agendaList()->model()->rowCount(), 2);
+    targetChip->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(agendaList()->model()->rowCount(), 1);
+}
+
+void tst_UiSmoke::testStudyScreenshots() {
+    const QString dir = qEnvironmentVariable("JOBPREP_REPORT_IMG_DIR");
+    if (dir.isEmpty()) QSKIP("JOBPREP_REPORT_IMG_DIR is not set");
+    QVERIFY(QDir().mkpath(dir));
+
+    const QDate today(2026, 10, 19);
+    resetStudyData(today);
+
+    const auto save = [this, dir](JobPrep::Ui::Theme::ThemeMode mode, const QString& name) {
+        m_studyCtx->themeManager().setThemeMode(mode);
+        QCoreApplication::processEvents();
+        const QImage image = m_study->grab().toImage();
+        QVERIFY(!image.isNull());
+        QVERIFY(image.save(QDir(dir).filePath(name + u".png"_s)));
+    };
+    const auto forBothThemes = [&save](const QString& name) {
+        save(JobPrep::Ui::Theme::ThemeMode::Light, name + u"-light"_s);
+        save(JobPrep::Ui::Theme::ThemeMode::Dark, name + u"-dark"_s);
+    };
+
+    // 1. Empty board
+    forBothThemes(u"study-board-empty"_s);
+
+    // 2. Board with cards
+    JobPrep::Services::SeedService seeder(m_studyCtx->tracks(), m_studyCtx->topics());
+    QVERIFY(seeder.loadSampleTopics());
+    m_studyCtx->tracks().changed();
+    m_studyCtx->topics().changed();
+    QCoreApplication::processEvents();
+    forBothThemes(u"study-board"_s);
+
+    // 3. Detail panel open
+    const auto allTopics = m_studyCtx->topics().all();
+    if (!allTopics.isEmpty()) {
+        studyPage()->selectTopic(allTopics.first().id);
+        QCoreApplication::processEvents();
+    }
+    forBothThemes(u"study-board-detail"_s);
+}
+
 void tst_UiSmoke::testZeroWarnings() {
     if (!s_capturedWarnings.isEmpty()) {
         const QString failures = s_capturedWarnings.join(u"\n"_s);
@@ -1432,6 +2170,8 @@ void tst_UiSmoke::testZeroWarnings() {
 }
 
 void tst_UiSmoke::cleanupTestCase() {
+    m_study.reset();
+    m_studyCtx.reset();
     m_jobs.reset();
     m_jobsCtx.reset();
     m_calendar.reset();

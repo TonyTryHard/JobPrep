@@ -54,7 +54,7 @@ QSize TopicCardDelegate::sizeHint(const QStyleOptionViewItem& option,
     int height = padding + titleMetrics.height();
     const int total = index.data(Models::TopicListModel::TotalSubtasksRole).toInt();
     if (total > 0) {
-        height += kGap + 6;
+        height += kGap + 6 + metrics.height() + kGap;
     }
     height += kGap + chipHeight + padding;
 

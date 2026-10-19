@@ -68,6 +68,7 @@ public:
     bool selectTopic(int id);
     void setDetailVisible(bool visible);
     bool isDetailVisible() const;
+    Widgets::TopicDetailPanel* detailPanel() const { return m_detail; }
 
     void setSearchText(const QString& text);
     QString searchText() const;

@@ -190,7 +190,7 @@ void TopicBoardColumn::setQuickAddTrack(int trackId, const QString& trackName) {
     } else {
         m_quickAdd->setEnabled(true);
         m_quickAdd->setPlaceholderText(tr("New topic... (Adds to: %1)").arg(trackName));
-        m_quickAdd->setToolTip(tr("Press Enter to add a topic to this column"));
+        m_quickAdd->setToolTip(tr("Press Enter to add a topic to this column (Adds to: %1)").arg(trackName));
     }
 }
 
@@ -206,7 +206,7 @@ bool TopicBoardColumn::eventFilter(QObject* watched, QEvent* event) {
 
         if (watched == m_quickAdd) {
             if (keyEvent->key() == Qt::Key_Escape) {
-                if (!m_quickAdd->text().trimmed().isEmpty()) {
+                if (!m_quickAdd->text().isEmpty()) {
                     m_quickAdd->clear();
                 } else {
                     emit quickAddDismissed();
