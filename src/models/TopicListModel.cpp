@@ -171,16 +171,7 @@ QVariant TopicListModel::data(const QModelIndex& index, int role) const {
         return topic.resources;
     } else if (role == TagsRole) {
         return topic.tags;
-    } else if (role == Qt::ToolTipRole) {
-        switch (topic.priority) {
-            case Domain::Priority::High:
-                return tr("Priority: High");
-            case Domain::Priority::Normal:
-                return tr("Priority: Normal");
-            case Domain::Priority::Low:
-                return tr("Priority: Low");
-        }
-        return {};
+
     } else if (role == SortRole) {
         switch (index.column()) {
             case TitleColumn:

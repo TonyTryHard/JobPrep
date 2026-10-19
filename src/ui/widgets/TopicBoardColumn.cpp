@@ -1,6 +1,5 @@
 #include "ui/widgets/TopicBoardColumn.h"
 
-#include <QHelpEvent>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QKeyEvent>
@@ -12,7 +11,6 @@
 #include <QPixmap>
 #include <QScrollBar>
 #include <QSignalBlocker>
-#include <QToolTip>
 #include <QVBoxLayout>
 #include "data/TopicRepository.h"
 #include "models/TopicBoardProxy.h"
@@ -197,11 +195,6 @@ void TopicBoardColumn::setQuickAddTrack(int trackId, const QString& trackName) {
 }
 
 bool TopicBoardColumn::eventFilter(QObject* watched, QEvent* event) {
-    if (event->type() == QEvent::ToolTip && watched == m_list->viewport()) {
-        openCardTooltip(static_cast<QHelpEvent*>(event)->pos());
-        return true;
-    }
-
     if (event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
         const bool alt = keyEvent->modifiers().testFlag(Qt::AltModifier);
@@ -293,39 +286,7 @@ void TopicBoardColumn::refreshHeader() {
     m_countLabel->setText(QString::number(itemCount()));
 }
 
-void TopicBoardColumn::openCardTooltip(const QPoint& viewportPos) {
-    const QModelIndex index = m_list->indexAt(viewportPos);
-    if (!index.isValid()) {
-        QToolTip::hideText();
-        return;
-    }
 
-    const QString title = index.data(Qt::DisplayRole).toString();
-    const QString trackName = index.data(Models::TopicListModel::TrackNameRole).toString();
-    const auto status = static_cast<Domain::TopicStatus>(
-        index.data(Models::TopicListModel::StatusRole).toInt());
-    const auto priority = static_cast<Domain::Priority>(
-        index.data(Models::TopicListModel::PriorityRole).toInt());
-    const int done = index.data(Models::TopicListModel::DoneSubtasksRole).toInt();
-    const int total = index.data(Models::TopicListModel::TotalSubtasksRole).toInt();
-    const bool overdue = index.data(Models::TopicListModel::OverdueRole).toBool();
-    const auto targetDate = index.data(Models::TopicListModel::TargetDateRole).toDate();
-    const QString tags = index.data(Models::TopicListModel::TagsRole).toString();
-
-    QStringList lines;
-    lines << title;
-    if (!trackName.isEmpty()) lines << tr("Track: %1").arg(trackName);
-    lines << tr("Status: %1").arg(Theme::StatusStyle::label(status));
-    lines << tr("Priority: %1").arg(Theme::StatusStyle::label(priority));
-    if (total > 0) lines << tr("Checklist: %1/%2").arg(done).arg(total);
-    if (targetDate.isValid()) {
-        lines << (overdue ? tr("Target: %1 (overdue)").arg(targetDate.toString(u"yyyy-MM-dd"_s))
-                          : tr("Target: %1").arg(targetDate.toString(u"yyyy-MM-dd"_s)));
-    }
-    if (!tags.isEmpty()) lines << tags;
-
-    QToolTip::showText(m_list->viewport()->mapToGlobal(viewportPos), lines.join(u"\n"_s), m_list);
-}
 
 void TopicBoardColumn::paintEvent(QPaintEvent* event) {
     QWidget::paintEvent(event);

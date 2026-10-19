@@ -51,6 +51,8 @@
 #include "ui/pages/CalendarPage.h"
 #include "ui/pages/JobsPage.h"
 #include "ui/pages/StudyPage.h"
+#include <QToolTip>
+#include "ui/theme/StatusStyle.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
 #include "ui/widgets/ChipBar.h"
@@ -85,7 +87,8 @@ QStringList s_capturedWarnings;
 /// per shown dialog. It is a limitation of the test platform plugin, not of our code,
 /// so it must not fail the zero-warning gate.
 bool isPlatformPluginNoise(const QString& msg) {
-    return msg.contains(u"does not support propagateSizeHints"_s);
+    return msg.contains(u"does not support propagateSizeHints"_s) ||
+           msg.contains(u"does not support raise"_s);
 }
 
 void testMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg) {
@@ -213,6 +216,8 @@ private slots:
     void testStudyPageSelectionRestoreAcrossOperations();
     void testStudyChecklistEditAndReorder();
     void testStudySplitterStatePersisted();
+    void testStudyPriorityTooltip();
+    void testStudyDragFeedbackIndicatorAndHighlight();
     void testStudyScreenshots();
     void testZeroWarnings();
     void cleanupTestCase();
@@ -2357,6 +2362,98 @@ void tst_UiSmoke::testStudySplitterStatePersisted() {
     auto* newSplitter = childNamed<QSplitter>(newPage.get(), u"StudySplitter"_s);
     QVERIFY(newSplitter);
     QCOMPARE(newSplitter->saveState(), saved);
+}
+
+void tst_UiSmoke::testStudyPriorityTooltip() {
+    resetStudyData();
+    JobPrep::Services::SeedService seeder(m_studyCtx->tracks(), m_studyCtx->topics());
+    QVERIFY(seeder.loadSampleTopics());
+    auto* backlogCol = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    QVERIFY(backlogCol != nullptr);
+    QVERIFY(backlogCol->itemCount() > 0);
+
+    const QModelIndex idx = backlogCol->list()->model()->index(0, 0);
+    QVERIFY(idx.isValid());
+
+    auto* delegate = backlogCol->list()->itemDelegate();
+    QVERIFY(delegate != nullptr);
+
+    QStyleOptionViewItem option;
+    option.rect = backlogCol->list()->visualRect(idx);
+    QHelpEvent help(QEvent::ToolTip, option.rect.center(), backlogCol->list()->mapToGlobal(option.rect.center()));
+    const bool handled = delegate->helpEvent(&help, backlogCol->list(), option, idx);
+    QVERIFY(handled);
+    const auto prio = static_cast<JobPrep::Domain::Priority>(
+        idx.data(JobPrep::Models::TopicListModel::PriorityRole).toInt());
+    const QString expected = QStringLiteral("Priority: %1").arg(JobPrep::Ui::Theme::StatusStyle::label(prio));
+    QCOMPARE(QToolTip::text(), expected);
+}
+
+void tst_UiSmoke::testStudyDragFeedbackIndicatorAndHighlight() {
+    resetStudyData();
+    JobPrep::Services::SeedService seeder(m_studyCtx->tracks(), m_studyCtx->topics());
+    QVERIFY(seeder.loadSampleTopics());
+    auto* backlogCol = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    QVERIFY(backlogCol != nullptr);
+    auto* list = qobject_cast<JobPrep::Ui::Widgets::TopicListView*>(backlogCol->list());
+    QVERIFY(list != nullptr);
+    QVERIFY(backlogCol->itemCount() > 0);
+
+    const auto topics = m_studyCtx->topics().all();
+    QVERIFY(!topics.isEmpty());
+    const int topicId = topics.first().id;
+
+    // 1. Synthesize drag enter + move
+    auto* moveMime = new QMimeData;
+    moveMime->setData(u"application/x-jobprep-topic-id"_s, QByteArray::number(topicId));
+    QDragEnterEvent enterEvent(QPoint(30, 20), Qt::MoveAction, moveMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(list, &enterEvent);
+    QDragMoveEvent moveEvent(QPoint(30, 20), Qt::MoveAction, moveMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(list, &moveEvent);
+
+    QVERIFY(list->isDragOver());
+    QVERIFY(!list->dropIndicatorRect().isNull());
+
+    // 2. Drag leave clears state
+    QDragLeaveEvent leaveEvent;
+    QCoreApplication::sendEvent(list, &leaveEvent);
+    QVERIFY(!list->isDragOver());
+    QVERIFY(list->dropIndicatorRect().isNull());
+
+    // 3. Drag enter + drop clears state
+    QCoreApplication::sendEvent(list, &enterEvent);
+    QCoreApplication::sendEvent(list, &moveEvent);
+    QVERIFY(list->isDragOver());
+    QVERIFY(!list->dropIndicatorRect().isNull());
+
+    QDropEvent dropEvent(QPointF(30, 20), Qt::MoveAction, moveMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(list, &dropEvent);
+    QVERIFY(!list->isDragOver());
+    QVERIFY(list->dropIndicatorRect().isNull());
+    delete moveMime;
+
+    // 4. Test empty column
+    auto* doneCol = studyColumn(JobPrep::Domain::TopicStatus::Done);
+    QVERIFY(doneCol != nullptr);
+    auto* doneList = qobject_cast<JobPrep::Ui::Widgets::TopicListView*>(doneCol->list());
+    QVERIFY(doneList != nullptr);
+    QCOMPARE(doneCol->itemCount(), 0);
+
+    auto* emptyMime = new QMimeData;
+    emptyMime->setData(u"application/x-jobprep-topic-id"_s, QByteArray::number(topicId));
+    QDragEnterEvent enterEmpty(QPoint(30, 20), Qt::MoveAction, emptyMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(doneList, &enterEmpty);
+    QDragMoveEvent moveEmpty(QPoint(30, 20), Qt::MoveAction, emptyMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(doneList, &moveEmpty);
+
+    QVERIFY(doneList->isDragOver());
+    // In empty column, whole-column highlight is active and item drop indicator line is null
+    QVERIFY(doneList->dropIndicatorRect().isNull());
+
+    QDragLeaveEvent leaveEmpty;
+    QCoreApplication::sendEvent(doneList, &leaveEmpty);
+    QVERIFY(!doneList->isDragOver());
+    delete emptyMime;
 }
 
 void tst_UiSmoke::testStudyScreenshots() {

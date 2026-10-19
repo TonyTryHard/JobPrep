@@ -99,7 +99,6 @@ private slots:
 
 private:
     void refreshHeader();
-    void openCardTooltip(const QPoint& viewportPos);
 
     Domain::TopicStatus m_status;
     Data::TopicRepository& m_topics;

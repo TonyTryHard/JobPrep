@@ -1,12 +1,15 @@
 #include "ui/delegates/TopicCardDelegate.h"
 
+#include <QAbstractItemView>
 #include <QCoreApplication>
 #include <QFontMetrics>
+#include <QHelpEvent>
 #include <QLocale>
 #include <QModelIndex>
 #include <QPainter>
 #include <QPainterPath>
 #include <QStyleOptionViewItem>
+#include <QToolTip>
 #include "models/TopicListModel.h"
 #include "ui/theme/StatusStyle.h"
 #include "ui/theme/ThemeManager.h"
@@ -159,6 +162,20 @@ void TopicCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
                                               Qt::ElideRight, static_cast<int>(titleRect.width())));
 
     painter->restore();
+}
+
+bool TopicCardDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view,
+                                  const QStyleOptionViewItem& option,
+                                  const QModelIndex& index) {
+    if (!event || !view) return false;
+    if (event->type() == QEvent::ToolTip && index.isValid()) {
+        const auto priority = static_cast<Domain::Priority>(
+            index.data(Models::TopicListModel::PriorityRole).toInt());
+        const QString text = tr("Priority: %1").arg(Theme::StatusStyle::label(priority));
+        QToolTip::showText(event->globalPos(), text, view);
+        return true;
+    }
+    return QStyledItemDelegate::helpEvent(event, view, option, index);
 }
 
 }  // namespace JobPrep::Ui::Delegates
