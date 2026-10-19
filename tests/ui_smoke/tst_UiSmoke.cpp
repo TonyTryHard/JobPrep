@@ -48,6 +48,8 @@
 #include "ui/dialogs/ApplicationDialog.h"
 #include "ui/dialogs/FollowUpDialog.h"
 #include "ui/dialogs/InterviewDialog.h"
+#include "ui/dialogs/SessionDialog.h"
+#include "ui/dialogs/TrackDialog.h"
 #include "ui/pages/CalendarPage.h"
 #include "ui/pages/JobsPage.h"
 #include "ui/pages/StudyPage.h"
@@ -80,6 +82,8 @@ using JobPrep::Models::ApplicationTableModel;
 using JobPrep::Ui::Dialogs::ApplicationDialog;
 using JobPrep::Ui::Dialogs::FollowUpDialog;
 using JobPrep::Ui::Dialogs::InterviewDialog;
+using JobPrep::Ui::Dialogs::SessionDialog;
+using JobPrep::Ui::Dialogs::TrackDialog;
 
 QStringList s_capturedWarnings;
 
@@ -160,6 +164,26 @@ int countInterviewDialogs() {
     return count;
 }
 
+/// Top-level SessionDialog widgets.
+int countSessionDialogs() {
+    int count = 0;
+    const auto widgets = QApplication::topLevelWidgets();
+    for (QWidget* widget : widgets) {
+        if (qobject_cast<SessionDialog*>(widget)) ++count;
+    }
+    return count;
+}
+
+/// Top-level TrackDialog widgets.
+int countTrackDialogs() {
+    int count = 0;
+    const auto widgets = QApplication::topLevelWidgets();
+    for (QWidget* widget : widgets) {
+        if (qobject_cast<TrackDialog*>(widget)) ++count;
+    }
+    return count;
+}
+
 }  // namespace
 
 class tst_UiSmoke : public QObject {
@@ -218,6 +242,13 @@ private slots:
     void testStudySplitterStatePersisted();
     void testStudyPriorityTooltip();
     void testStudyDragFeedbackIndicatorAndHighlight();
+    void testStudySessionDialogLogTime();
+    void testStudyTrackDialogCrudAndCascade();
+    void testHeaderNewSessionAndTopicRouting();
+    void testHeaderSearchDisabledOnStudyPage();
+    void testCalendarJumpToStudyTopic();
+    void testCalendarTopicDateAndTrackRename();
+    void testStudyListViewToggleSortAndDelegates();
     void testStudyScreenshots();
     void testZeroWarnings();
     void cleanupTestCase();
@@ -410,7 +441,7 @@ void tst_UiSmoke::resetCalendarData(const QDate& today) {
     m_calCtx->settings().setCalendarLayerTargets(true);
 
     m_calendar = std::make_unique<JobPrep::Ui::Pages::CalendarPage>(
-        m_calCtx->interviews(), m_calCtx->applications(), m_calCtx->topics(),
+        m_calCtx->interviews(), m_calCtx->applications(), m_calCtx->topics(), m_calCtx->tracks(),
         m_calCtx->agendaService(), m_calCtx->settings(), m_calCtx->themeManager(), nullptr,
         [today]() { return today; });
     m_calendar->resize(1200, 720);
@@ -470,7 +501,7 @@ void tst_UiSmoke::resetStudyData(const QDate& today) {
     m_studyCtx->settings().setStudyTrackFilter(-1);
 
     m_study = std::make_unique<JobPrep::Ui::Pages::StudyPage>(
-        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->settings(),
+        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->sessions(), m_studyCtx->settings(),
         m_studyCtx->themeManager(), nullptr, [today]() { return today; });
     m_study->resize(1200, 720);
     m_study->show();
@@ -1027,6 +1058,7 @@ void tst_UiSmoke::testHeaderSearchFiltersJobsTable() {
 void tst_UiSmoke::testNewEntryPointsOpenOneDialog() {
     auto* newBtn = m_window->findChild<QToolButton*>(u"HeaderNewBtn"_s);
     auto* applicationAction = m_window->findChild<QAction*>(u"HeaderNewApplication"_s);
+    auto* topicAction = m_window->findChild<QAction*>(u"HeaderNewTopic"_s);
     auto* interviewAction = m_window->findChild<QAction*>(u"HeaderNewInterview"_s);
     auto* sessionAction = m_window->findChild<QAction*>(u"HeaderNewSession"_s);
     auto* pageAddBtn = m_window->findChild<QPushButton*>(u"JobsAddBtn"_s);
@@ -1035,11 +1067,11 @@ void tst_UiSmoke::testNewEntryPointsOpenOneDialog() {
     QVERIFY(applicationAction != nullptr);
     QVERIFY(pageAddBtn != nullptr);
 
-    // Application and Interview both work now; Study session says which milestone brings it.
+    // Application, Interview, Topic, and Study session all work now.
     QVERIFY(applicationAction->isEnabled());
     QVERIFY(interviewAction != nullptr && interviewAction->isEnabled());
-    QVERIFY(sessionAction != nullptr && !sessionAction->isEnabled());
-    QCOMPARE(sessionAction->toolTip(), u"Arrives in M4");
+    QVERIFY(topicAction != nullptr && topicAction->isEnabled());
+    QVERIFY(sessionAction != nullptr && sessionAction->isEnabled());
 
     m_window->sidebar()->setCurrentPage(2);
     emit m_window->sidebar()->pageSelected(2);
@@ -1357,7 +1389,7 @@ void tst_UiSmoke::testCalendarSplitterStatePersisted() {
 
     // A fresh page in the same context restores exactly those sizes.
     JobPrep::Ui::Pages::CalendarPage second(
-        m_calCtx->interviews(), m_calCtx->applications(), m_calCtx->topics(),
+        m_calCtx->interviews(), m_calCtx->applications(), m_calCtx->topics(), m_calCtx->tracks(),
         m_calCtx->agendaService(), m_calCtx->settings(), m_calCtx->themeManager(), nullptr,
         [] { return QDate(2026, 10, 11); });
     second.resize(1200, 720);
@@ -1503,7 +1535,7 @@ void tst_UiSmoke::testStudyBoardSeededAndTrackFilter() {
     m_studyCtx->settings().setStudyTrackFilter(-1);
 
     m_study = std::make_unique<JobPrep::Ui::Pages::StudyPage>(
-        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->settings(),
+        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->sessions(), m_studyCtx->settings(),
         m_studyCtx->themeManager(), nullptr, [today]() { return today; });
     m_study->resize(1200, 720);
     m_study->show();
@@ -2022,7 +2054,7 @@ void tst_UiSmoke::testStudyTrackFilterPersistenceAndFallback() {
     QCOMPARE(m_studyCtx->settings().studyTrackFilter(), tr2Id);
 
     auto newPage = std::make_unique<JobPrep::Ui::Pages::StudyPage>(
-        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->settings(),
+        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->sessions(), m_studyCtx->settings(),
         m_studyCtx->themeManager());
     auto* newChips = childNamed<JobPrep::Ui::Widgets::ChipBar>(newPage.get(), u"StudyTrackChips"_s);
     QCOMPARE(newChips->currentId(), tr2Id);
@@ -2141,13 +2173,17 @@ void tst_UiSmoke::testStudyPageApi() {
 
     QVERIFY(!studyPage()->selectTopic(99999));
 
-    // Zero tracks: newTopic shows hint and does not focus quick-add
+    // Zero tracks: newTopic opens TrackDialog
     resetStudyData();
+    int trackDialogs = 0;
+    withNextModal([&trackDialogs](QWidget* modal) {
+        trackDialogs = countTrackDialogs();
+        auto* dlg = qobject_cast<TrackDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        dlg->reject();
+    });
     studyPage()->newTopic();
-    auto* emptyBacklog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
-    auto* emptyQuickAdd = childNamed<QLineEdit>(emptyBacklog, u"StudyColumnQuickAdd"_s);
-    QVERIFY(!emptyQuickAdd->isEnabled());
-    QVERIFY(QApplication::focusWidget() != emptyQuickAdd);
+    QCOMPARE(trackDialogs, 1);
 }
 
 void tst_UiSmoke::testChipBarJobsAndCalendarRegression() {
@@ -2357,7 +2393,7 @@ void tst_UiSmoke::testStudySplitterStatePersisted() {
     QVERIFY(!saved.isEmpty());
 
     auto newPage = std::make_unique<JobPrep::Ui::Pages::StudyPage>(
-        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->settings(),
+        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->sessions(), m_studyCtx->settings(),
         m_studyCtx->themeManager());
     auto* newSplitter = childNamed<QSplitter>(newPage.get(), u"StudySplitter"_s);
     QVERIFY(newSplitter);
@@ -2456,6 +2492,429 @@ void tst_UiSmoke::testStudyDragFeedbackIndicatorAndHighlight() {
     delete emptyMime;
 }
 
+void tst_UiSmoke::testStudySessionDialogLogTime() {
+    const QDate today(2026, 10, 19);
+    resetStudyData(today);
+
+    Track track;
+    track.name = u"Algorithms"_s;
+    track.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(track));
+    const int trackId = m_studyCtx->tracks().all().last().id;
+
+    Topic topic;
+    topic.trackId = trackId;
+    topic.title = u"Binary Search"_s;
+    topic.status = JobPrep::Domain::TopicStatus::InProgress;
+    QVERIFY(m_studyCtx->topics().insert(topic));
+    const int topicId = m_studyCtx->topics().all().last().id;
+
+    // Log a session directly via SessionDialog
+    withNextModal([topicId, today](QWidget* modal) {
+        auto* dlg = qobject_cast<SessionDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        auto* topicCombo = childNamed<QComboBox>(dlg, u"SessionTopicCombo"_s);
+        QVERIFY(topicCombo != nullptr);
+        QCOMPARE(topicCombo->currentData().toInt(), topicId);
+
+        auto* durationSpin = childNamed<QSpinBox>(dlg, u"SessionMinutesSpin"_s);
+        QVERIFY(durationSpin != nullptr);
+        durationSpin->setValue(45);
+
+        auto* dateEdit = childNamed<QDateEdit>(dlg, u"SessionDateEdit"_s);
+        QVERIFY(dateEdit != nullptr);
+        dateEdit->setDate(today);
+
+        auto* notesEdit = childNamed<QTextEdit>(dlg, u"SessionNoteEdit"_s);
+        QVERIFY(notesEdit != nullptr);
+        notesEdit->setPlainText(u"Practiced lower_bound and upper_bound"_s);
+
+        buttonNamed(dlg, u"SessionSaveBtn"_s)->click();
+    });
+
+    studyPage()->openSessionDialog(topicId);
+    QCoreApplication::processEvents();
+
+    // Verify session repository recorded the session and minutes
+    const auto sessions = m_studyCtx->sessions().byTopic(topicId);
+    QCOMPARE(sessions.size(), 1);
+    QCOMPARE(sessions.first().minutes, 45);
+    QCOMPARE(m_studyCtx->sessions().totalMinutesInRange(today, today), 45);
+
+    // Detail panel "Log time" button opens SessionDialog with this topic preselected
+    QVERIFY(studyPage()->selectTopic(topicId));
+    auto* detail = studyPage()->detailPanel();
+    QVERIFY(detail != nullptr);
+    auto* logTimeBtn = childNamed<QPushButton>(detail, u"StudyDetailLogTimeBtn"_s);
+    QVERIFY(logTimeBtn != nullptr);
+    QVERIFY(logTimeBtn->isEnabled());
+
+    bool dlgOpened = false;
+    withNextModal([&dlgOpened, topicId](QWidget* modal) {
+        dlgOpened = true;
+        auto* dlg = qobject_cast<SessionDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        auto* topicCombo = childNamed<QComboBox>(dlg, u"SessionTopicCombo"_s);
+        QCOMPARE(topicCombo->currentData().toInt(), topicId);
+        dlg->reject();
+    });
+    logTimeBtn->click();
+    QVERIFY(dlgOpened);
+}
+
+void tst_UiSmoke::testStudyTrackDialogCrudAndCascade() {
+    const QDate today(2026, 10, 19);
+    resetStudyData(today);
+
+    // Open TrackDialog to add a track
+    withNextModal([](QWidget* modal) {
+        auto* dlg = qobject_cast<TrackDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        auto* addBtn = buttonNamed(dlg, u"TrackNewBtn"_s);
+        QVERIFY(addBtn != nullptr);
+        addBtn->click();
+
+        auto* nameEdit = childNamed<QLineEdit>(dlg, u"TrackNameEdit"_s);
+        QVERIFY(nameEdit != nullptr);
+        nameEdit->setText(u"Rust"_s);
+
+        // Click swatch 0
+        auto* swatch = dlg->findChild<QPushButton*>(u"TrackSwatch_0"_s);
+        if (swatch) swatch->click();
+
+        buttonNamed(dlg, u"TrackSaveBtn"_s)->click();
+        buttonNamed(dlg, u"TrackCloseBtn"_s)->click();
+    });
+
+    studyPage()->openTrackDialog();
+    QCoreApplication::processEvents();
+
+    const auto tracks = m_studyCtx->tracks().all();
+    QCOMPARE(tracks.size(), 1);
+    QCOMPARE(tracks.first().name, u"Rust"_s);
+    const int rustTrackId = tracks.first().id;
+
+    // Add topic and session under Rust
+    Topic topic;
+    topic.trackId = rustTrackId;
+    topic.title = u"Lifetimes and Borrowing"_s;
+    topic.status = JobPrep::Domain::TopicStatus::InProgress;
+    QVERIFY(m_studyCtx->topics().insert(topic));
+    const int topicId = m_studyCtx->topics().all().last().id;
+
+    JobPrep::Domain::StudySession session;
+    session.topicId = topicId;
+    session.sessionDate = today;
+    session.minutes = 60;
+    QVERIFY(m_studyCtx->sessions().insert(session));
+    QCOMPARE(m_studyCtx->sessions().totalMinutesInRange(today, today), 60);
+
+    // Set track filter to Rust track
+    auto* chips = childNamed<JobPrep::Ui::Widgets::ChipBar>(m_study.get(), u"StudyTrackChips"_s);
+    QVERIFY(chips != nullptr);
+    if (chips->button(rustTrackId)) chips->button(rustTrackId)->click();
+    QCOMPARE(chips->currentId(), rustTrackId);
+
+    // Delete track with confirmation in TrackDialog
+    withNextModal([](QWidget* modal) {
+        auto* dlg = qobject_cast<TrackDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        auto* list = childNamed<QListWidget>(dlg, u"TrackListWidget"_s);
+        QVERIFY(list != nullptr);
+        QCOMPARE(list->count(), 1);
+        list->setCurrentRow(0);
+
+        answerNextMessageBox([](QMessageBox* box) {
+            box->button(QMessageBox::Yes)->click();
+        });
+
+        buttonNamed(dlg, u"TrackDeleteBtn"_s)->click();
+        buttonNamed(dlg, u"TrackCloseBtn"_s)->click();
+    });
+
+    studyPage()->openTrackDialog();
+    QCoreApplication::processEvents();
+
+    // Verify track is deleted, topic is deleted (cascade), sessions are retained, filter reset to -1
+    QVERIFY(m_studyCtx->tracks().all().isEmpty());
+    QVERIFY(m_studyCtx->topics().all().isEmpty());
+    QCOMPARE(m_studyCtx->sessions().totalMinutesInRange(today, today), 60);
+    QCOMPARE(chips->currentId(), -1);
+}
+
+void tst_UiSmoke::testHeaderNewSessionAndTopicRouting() {
+    resetStudyData();
+    Track track;
+    track.name = u"C++ Core"_s;
+    track.color = u"#2563eb"_s;
+    QVERIFY(m_ctx->tracks().insert(track));
+    const int trackId = m_ctx->tracks().all().last().id;
+
+    Topic topic;
+    topic.trackId = trackId;
+    topic.title = u"Move Semantics"_s;
+    QVERIFY(m_ctx->topics().insert(topic));
+    const int winTopicId = m_ctx->topics().all().last().id;
+
+    auto* topicAction = m_window->findChild<QAction*>(u"HeaderNewTopic"_s);
+    auto* sessionAction = m_window->findChild<QAction*>(u"HeaderNewSession"_s);
+    QVERIFY(topicAction != nullptr && topicAction->isEnabled());
+    QVERIFY(sessionAction != nullptr && sessionAction->isEnabled());
+
+    // From Jobs page (page index 2):
+    m_window->sidebar()->setCurrentPage(2);
+    emit m_window->sidebar()->pageSelected(2);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 2);
+
+    // 1. Topic action switches to Study (page index 1) and focuses quick-add
+    topicAction->trigger();
+    QCoreApplication::processEvents();
+    QCOMPARE(m_window->pageStack()->currentIndex(), 1);
+
+    // 2. From Jobs page, Session action opens exactly one SessionDialog
+    m_window->sidebar()->setCurrentPage(2);
+    emit m_window->sidebar()->pageSelected(2);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 2);
+
+    int dialogs = 0;
+    withNextModal([&dialogs](QWidget* modal) {
+        dialogs = countSessionDialogs();
+        QCOMPARE(dialogs, 1);
+        auto* dlg = qobject_cast<SessionDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        dlg->reject();
+    });
+    sessionAction->trigger();
+    QCOMPARE(dialogs, 1);
+
+    // 3. From Calendar page (page index 3), Session action opens exactly one SessionDialog
+    m_window->sidebar()->setCurrentPage(3);
+    emit m_window->sidebar()->pageSelected(3);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 3);
+
+    dialogs = 0;
+    withNextModal([&dialogs](QWidget* modal) {
+        dialogs = countSessionDialogs();
+        QCOMPARE(dialogs, 1);
+        auto* dlg = qobject_cast<SessionDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        dlg->reject();
+    });
+    sessionAction->trigger();
+    QCOMPARE(dialogs, 1);
+
+    // 4. On Study page with a topic selected, Session action opens SessionDialog with topic preselected
+    m_window->sidebar()->setCurrentPage(1);
+    emit m_window->sidebar()->pageSelected(1);
+    auto* studyPageWidget = qobject_cast<JobPrep::Ui::Pages::StudyPage*>(m_window->pageStack()->currentWidget());
+    QVERIFY(studyPageWidget != nullptr);
+    studyPageWidget->selectTopic(winTopicId);
+
+    dialogs = 0;
+    withNextModal([&dialogs, winTopicId](QWidget* modal) {
+        dialogs = countSessionDialogs();
+        QCOMPARE(dialogs, 1);
+        auto* dlg = qobject_cast<SessionDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        auto* combo = childNamed<QComboBox>(dlg, u"SessionTopicCombo"_s);
+        QCOMPARE(combo->currentData().toInt(), winTopicId);
+        dlg->reject();
+    });
+    sessionAction->trigger();
+    QCOMPARE(dialogs, 1);
+}
+
+void tst_UiSmoke::testHeaderSearchDisabledOnStudyPage() {
+    auto* searchEdit = m_window->findChild<QLineEdit*>(u"HeaderSearchEdit"_s);
+    QVERIFY(searchEdit != nullptr);
+
+    // Switch to Study page
+    m_window->sidebar()->setCurrentPage(1);
+    emit m_window->sidebar()->pageSelected(1);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 1);
+
+    QVERIFY(!searchEdit->isEnabled());
+    QCOMPARE(searchEdit->toolTip(), u"Use the search box on this page, Ctrl+F"_s);
+
+    // Switch to Jobs page
+    m_window->sidebar()->setCurrentPage(2);
+    emit m_window->sidebar()->pageSelected(2);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 2);
+
+    QVERIFY(searchEdit->isEnabled());
+
+    // Switch back to Study page
+    m_window->sidebar()->setCurrentPage(1);
+    emit m_window->sidebar()->pageSelected(1);
+    QVERIFY(!searchEdit->isEnabled());
+}
+
+void tst_UiSmoke::testCalendarJumpToStudyTopic() {
+    const QDate day(2026, 10, 20);
+    Track track;
+    track.name = u"System Design"_s;
+    track.color = u"#0d9488"_s;
+    QVERIFY(m_ctx->tracks().insert(track));
+    const int trackId = m_ctx->tracks().all().last().id;
+
+    Topic topic;
+    topic.trackId = trackId;
+    topic.title = u"Rate Limiter"_s;
+    topic.targetDate = day;
+    QVERIFY(m_ctx->topics().insert(topic));
+    const int topicId = m_ctx->topics().all().last().id;
+
+    // Switch to Calendar
+    m_window->sidebar()->setCurrentPage(3);
+    emit m_window->sidebar()->pageSelected(3);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 3);
+
+    // Call openTopic(topicId)
+    m_window->openTopic(topicId);
+    QCoreApplication::processEvents();
+
+    // Verify switched to Study page (index 1) and topic is selected
+    QCOMPARE(m_window->pageStack()->currentIndex(), 1);
+    auto* study = qobject_cast<JobPrep::Ui::Pages::StudyPage*>(m_window->pageStack()->currentWidget());
+    QVERIFY(study != nullptr);
+    QCOMPARE(study->selectedTopicId(), std::optional<int>(topicId));
+    QVERIFY(study->isDetailVisible());
+
+    // Now test jump when topic is hidden by track filter and search text
+    Track track2;
+    track2.name = u"Databases"_s;
+    track2.color = u"#e11d48"_s;
+    QVERIFY(m_ctx->tracks().insert(track2));
+    const int track2Id = m_ctx->tracks().all().last().id;
+
+    auto* studyChips = childNamed<JobPrep::Ui::Widgets::ChipBar>(study, u"StudyTrackChips"_s);
+    if (studyChips && studyChips->button(track2Id)) studyChips->button(track2Id)->click();
+    study->setSearchText(u"nonexistent_xyz"_s);
+    QCoreApplication::processEvents();
+
+    m_window->openTopic(topicId);
+    QCoreApplication::processEvents();
+
+    QCOMPARE(study->searchText(), QString());
+    auto* chips = childNamed<JobPrep::Ui::Widgets::ChipBar>(study, u"StudyTrackChips"_s);
+    QCOMPARE(chips->currentId(), -1);
+    QCOMPARE(study->selectedTopicId(), std::optional<int>(topicId));
+
+    // Test non-fatal message when topic was deleted
+    QVERIFY(m_ctx->topics().remove(topicId));
+    m_window->openTopic(topicId);
+    QCoreApplication::processEvents();
+    // Does not crash, stays responsive
+    QCOMPARE(m_window->pageStack()->currentIndex(), 1);
+}
+
+void tst_UiSmoke::testCalendarTopicDateAndTrackRename() {
+    const QDate today(2026, 10, 11);
+    resetCalendarData(today);
+
+    Track track;
+    track.name = u"Algorithms Track"_s;
+    track.color = u"#3b82f6"_s;
+    QVERIFY(m_calCtx->tracks().insert(track));
+    const int trackId = m_calCtx->tracks().all().last().id;
+
+    Topic topic;
+    topic.trackId = trackId;
+    topic.title = u"Dynamic Programming"_s;
+    topic.targetDate = today;
+    QVERIFY(m_calCtx->topics().insert(topic));
+
+    m_calCtx->topics().changed();
+    QCoreApplication::processEvents();
+
+    // Verify calendar month view has target marker
+    QVERIFY(monthView()->markersFor(today).kinds.contains(JobPrep::Domain::AgendaKind::StudyTarget));
+
+    // Rename track -> agenda subtitle updates
+    track.name = u"Advanced DP"_s;
+    QVERIFY(m_calCtx->tracks().update(track));
+    m_calCtx->tracks().changed();
+    QCoreApplication::processEvents();
+
+    auto* agenda = agendaList();
+    QVERIFY(agenda != nullptr);
+    auto* agendaModel = agenda->model();
+    QVERIFY(agendaModel != nullptr);
+    QVERIFY(agendaModel->rowCount() > 0);
+    bool foundUpdatedSubtitle = false;
+    for (int r = 0; r < agendaModel->rowCount(); ++r) {
+        const QString sub = agendaModel->index(r, 0).data(JobPrep::Models::AgendaListModel::SubtitleRole).toString();
+        if (sub.contains(u"Advanced DP"_s)) {
+            foundUpdatedSubtitle = true;
+            break;
+        }
+    }
+    QVERIFY(foundUpdatedSubtitle);
+
+    // Delete track -> cascade deletes topic, markers clear
+    QVERIFY(m_calCtx->tracks().remove(trackId));
+    m_calCtx->tracks().changed();
+    m_calCtx->topics().changed();
+    QCoreApplication::processEvents();
+
+    QVERIFY(!monthView()->markersFor(today).kinds.contains(JobPrep::Domain::AgendaKind::StudyTarget));
+}
+
+void tst_UiSmoke::testStudyListViewToggleSortAndDelegates() {
+    const QDate today(2026, 10, 19);
+    resetStudyData(today);
+
+    JobPrep::Services::SeedService seeder(m_studyCtx->tracks(), m_studyCtx->topics());
+    QVERIFY(seeder.loadSampleTopics());
+    m_studyCtx->tracks().changed();
+    m_studyCtx->topics().changed();
+    QCoreApplication::processEvents();
+
+    auto* listBtn = childNamed<QPushButton>(m_study.get(), u"StudyViewListBtn"_s);
+    auto* boardBtn = childNamed<QPushButton>(m_study.get(), u"StudyViewBoardBtn"_s);
+    QVERIFY(listBtn != nullptr);
+    QVERIFY(boardBtn != nullptr);
+
+    // Switch to list view
+    listBtn->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(m_studyCtx->settings().studyViewMode(), u"list"_s);
+    QCOMPARE(studyPage()->viewMode(), u"list"_s);
+
+    auto* tableView = studyPage()->tableView();
+    QVERIFY(tableView != nullptr);
+    QVERIFY(tableView->isVisible());
+
+    // Sort by TrackColumn, TitleColumn, StatusColumn, TargetDateColumn
+    tableView->sortByColumn(JobPrep::Models::TopicListModel::TrackColumn, Qt::AscendingOrder);
+    QCoreApplication::processEvents();
+    tableView->sortByColumn(JobPrep::Models::TopicListModel::TitleColumn, Qt::AscendingOrder);
+    QCoreApplication::processEvents();
+    tableView->sortByColumn(JobPrep::Models::TopicListModel::StatusColumn, Qt::DescendingOrder);
+    QCoreApplication::processEvents();
+
+    // Verify search works in list view
+    studyPage()->setSearchText(u"STL"_s);
+    QCoreApplication::processEvents();
+    QVERIFY(studyPage()->visibleTopicCount() >= 1);
+    studyPage()->setSearchText(QString());
+    QCoreApplication::processEvents();
+
+    // Double clicking row opens detail panel
+    const auto proxy = tableView->model();
+    QVERIFY(proxy != nullptr && proxy->rowCount() > 0);
+    const QModelIndex firstIdx = proxy->index(0, 0);
+    emit tableView->activated(firstIdx);
+    QCoreApplication::processEvents();
+    QVERIFY(studyPage()->isDetailVisible());
+
+    // Switch back to board view
+    boardBtn->click();
+    QCoreApplication::processEvents();
+    QCOMPARE(m_studyCtx->settings().studyViewMode(), u"board"_s);
+    QCOMPARE(studyPage()->viewMode(), u"board"_s);
+}
+
 void tst_UiSmoke::testStudyScreenshots() {
     const QString dir = qEnvironmentVariable("JOBPREP_REPORT_IMG_DIR");
     if (dir.isEmpty()) QSKIP("JOBPREP_REPORT_IMG_DIR is not set");
@@ -2517,6 +2976,43 @@ void tst_UiSmoke::testStudyScreenshots() {
         captureDrag(JobPrep::Ui::Theme::ThemeMode::Light, u"study-board-drag-light"_s);
         captureDrag(JobPrep::Ui::Theme::ThemeMode::Dark, u"study-board-drag-dark"_s);
     }
+
+    // 5. List view
+    studyPage()->setViewMode(u"list"_s);
+    QCoreApplication::processEvents();
+    forBothThemes(u"study-list"_s);
+    studyPage()->setViewMode(u"board"_s);
+    QCoreApplication::processEvents();
+
+    // 6. Tracks dialog
+    for (auto mode : {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
+        m_studyCtx->themeManager().setThemeMode(mode);
+        TrackDialog trackDlg(m_studyCtx->tracks(), m_studyCtx->topics(), m_study.get());
+        trackDlg.resize(520, 440);
+        trackDlg.show();
+        QCoreApplication::processEvents();
+        const QImage img = trackDlg.grab().toImage();
+        QVERIFY(!img.isNull());
+        QVERIFY(img.save(QDir(dir).filePath(u"study-tracks-dialog-"_s + (mode == JobPrep::Ui::Theme::ThemeMode::Light ? u"light.png"_s : u"dark.png"_s))));
+    }
+
+    // 7. Session dialog
+    const int firstTopicId = allTopics.isEmpty() ? 0 : allTopics.first().id;
+    for (auto mode : {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
+        m_studyCtx->themeManager().setThemeMode(mode);
+        SessionDialog sessDlg(m_studyCtx->sessions(), m_studyCtx->topics(), m_study.get());
+        sessDlg.setTopicId(firstTopicId > 0 ? std::optional<int>(firstTopicId) : std::nullopt);
+        sessDlg.resize(460, 400);
+        sessDlg.show();
+        QCoreApplication::processEvents();
+        const QImage img = sessDlg.grab().toImage();
+        QVERIFY(!img.isNull());
+        QVERIFY(img.save(QDir(dir).filePath(u"study-session-dialog-"_s + (mode == JobPrep::Ui::Theme::ThemeMode::Light ? u"light.png"_s : u"dark.png"_s))));
+    }
+
+    // 8. Empty tracks state
+    resetStudyData(today);
+    forBothThemes(u"study-empty-tracks"_s);
 }
 
 void tst_UiSmoke::testZeroWarnings() {

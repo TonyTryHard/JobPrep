@@ -18,6 +18,7 @@ namespace JobPrep::Data {
 class ApplicationRepository;
 class InterviewRepository;
 class TopicRepository;
+class TrackRepository;
 }  // namespace JobPrep::Data
 
 namespace JobPrep::Models {
@@ -50,6 +51,7 @@ public:
     CalendarPage(JobPrep::Data::InterviewRepository& interviews,
                  JobPrep::Data::ApplicationRepository& apps,
                  JobPrep::Data::TopicRepository& topics,
+                 JobPrep::Data::TrackRepository& tracks,
                  JobPrep::Services::AgendaService& agenda,
                  JobPrep::Services::SettingsService& settings,
                  JobPrep::Ui::Theme::ThemeManager& theme,
@@ -65,6 +67,10 @@ public:
 
     void onActivated() override;
     void triggerNew() override;
+
+signals:
+    /// Emitted when clicking or activating a study target agenda row (B9).
+    void studyTopicActivated(int topicId);
 
 public slots:
     /// Opens a new-interview dialog. An invalid `date` falls back to the selected day.
@@ -91,6 +97,7 @@ private:
     JobPrep::Data::InterviewRepository& m_interviews;
     JobPrep::Data::ApplicationRepository& m_apps;
     JobPrep::Data::TopicRepository& m_topics;
+    JobPrep::Data::TrackRepository& m_tracks;
     JobPrep::Services::AgendaService& m_agenda;
     JobPrep::Services::SettingsService& m_settings;
     JobPrep::Ui::Theme::ThemeManager& m_theme;

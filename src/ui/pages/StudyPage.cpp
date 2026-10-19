@@ -1,32 +1,37 @@
 #include "ui/pages/StudyPage.h"
 
 #include <algorithm>
+#include <QButtonGroup>
+#include <QHeaderView>
 #include <QHBoxLayout>
-#include <QHideEvent>
-#include <QItemSelectionModel>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListView>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QSignalBlocker>
+#include <QSortFilterProxyModel>
 #include <QSplitter>
 #include <QStackedWidget>
-#include <QStyle>
+#include <QTableView>
 #include <QTimer>
 #include <QVBoxLayout>
-#include "data/DataLogging.h"
+#include "data/SessionRepository.h"
 #include "data/TopicRepository.h"
 #include "data/TrackRepository.h"
 #include "models/TopicBoardProxy.h"
 #include "models/TopicListModel.h"
 #include "services/SettingsService.h"
+#include "ui/delegates/ProgressBarDelegate.h"
+#include "ui/delegates/StatusBadgeDelegate.h"
+#include "ui/dialogs/SessionDialog.h"
+#include "ui/dialogs/TrackDialog.h"
 #include "ui/theme/IconProvider.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
 #include "ui/widgets/ChipBar.h"
 #include "ui/widgets/EmptyState.h"
+#include "ui/widgets/SelectionRestorer.h"
 #include "ui/widgets/TopicBoardColumn.h"
 #include "ui/widgets/TopicDetailPanel.h"
 #include "ui/widgets/TopicListView.h"
@@ -37,50 +42,99 @@ namespace JobPrep::Ui::Pages {
 
 namespace {
 
-const char* kColumnNames[] = {"Backlog", "InProgress", "Review", "Done"};
+constexpr std::array<const char*, 4> kColumnNames = {"Backlog", "InProgress", "Review", "Done"};
+
+class TopicTableProxy : public QSortFilterProxyModel {
+public:
+    explicit TopicTableProxy(QObject* parent = nullptr) : QSortFilterProxyModel(parent) {}
+
+    void setTrackFilter(std::optional<int> trackId) {
+        if (m_trackId == trackId) return;
+        m_trackId = trackId;
+        invalidate();
+    }
+
+    void setSearchFilter(const QString& text) {
+        if (m_searchText == text) return;
+        m_searchText = text.trimmed();
+        invalidate();
+    }
+
+protected:
+    bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override {
+        if (m_trackId.has_value()) {
+            const int trackId = sourceModel()
+                                    ->index(sourceRow, 0, sourceParent)
+                                    .data(Models::TopicListModel::TrackIdRole)
+                                    .toInt();
+            if (trackId != *m_trackId) return false;
+        }
+        if (!m_searchText.isEmpty()) {
+            const QString title = sourceModel()
+                                      ->index(sourceRow, Models::TopicListModel::TitleColumn, sourceParent)
+                                      .data(Qt::DisplayRole)
+                                      .toString();
+            const QString tags = sourceModel()
+                                     ->index(sourceRow, 0, sourceParent)
+                                     .data(Models::TopicListModel::TagsRole)
+                                     .toString();
+            if (!title.contains(m_searchText, Qt::CaseInsensitive) &&
+                !tags.contains(m_searchText, Qt::CaseInsensitive)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+private:
+    std::optional<int> m_trackId;
+    QString m_searchText;
+};
 
 }  // namespace
 
-StudyPage::StudyPage(Data::TopicRepository& topics, Data::TrackRepository& tracks,
-                     Services::SettingsService& settings, Theme::ThemeManager& theme,
-                     QWidget* parent, std::function<QDate()> todayProvider)
-    : PageBase(tr("Study Tracks"), parent),
+StudyPage::StudyPage(Data::TopicRepository& topics,
+                     Data::TrackRepository& tracks,
+                     Data::SessionRepository& sessions,
+                     Services::SettingsService& settings,
+                     Theme::ThemeManager& theme,
+                     QWidget* parent,
+                     std::function<QDate()> todayProvider)
+    : PageBase(tr("Study"), parent),
       m_topics(topics),
       m_tracks(tracks),
+      m_sessions(sessions),
       m_settings(settings),
       m_theme(theme),
       m_todayProvider(todayProvider ? std::move(todayProvider)
-                                    : std::function<QDate()>([] { return QDate::currentDate(); })) {
+                                    : std::function<QDate()>([] { return QDate::currentDate(); })),
+      m_trackFilter(settings.studyTrackFilter()) {
+    auto* rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(24, 16, 24, 16);
+    rootLayout->setSpacing(16);
+
     m_model = new Models::TopicListModel(topics, tracks, this, m_todayProvider);
-    // Connected before the columns exist, so the flag is set before any per-column
-    // SelectionRestorer reacts to the same reset.
-    connect(m_model, &QAbstractItemModel::modelAboutToBeReset, this,
-            [this] { m_inReset = true; });
-
-    auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(24, 16, 24, 16);
-    layout->setSpacing(12);
-    setupUi(layout);
-
-    // Connected after the columns, so it runs after every SelectionRestorer restored.
     connect(m_model, &QAbstractItemModel::modelReset, this, &StudyPage::onModelReset);
-    connect(&topics, &Data::TopicRepository::changed, this, &StudyPage::onTopicsChanged);
-    connect(&tracks, &Data::TrackRepository::changed, this, &StudyPage::onTracksChanged);
+    connect(&m_topics, &Data::TopicRepository::changed, this, &StudyPage::onTopicsChanged);
+    connect(&m_tracks, &Data::TrackRepository::changed, this, &StudyPage::onTracksChanged);
 
-    // Ensure detail panel tracks are up to date (constructor may have set with empty list).
-    m_detail->setTracks(m_tracks.all());
-    m_trackFilter = m_settings.studyTrackFilter();
+    setupUi(rootLayout);
+
     refreshChips();
     applyFilters();
     refreshViewState();
 
     const QByteArray splitterState = m_settings.studySplitterState();
     if (splitterState.isEmpty()) {
-        m_splitter->setSizes({760, 320});
+        m_splitter->setSizes({780, 320});
     } else {
         m_splitter->restoreState(splitterState);
     }
     setDetailVisible(false);
+
+    // Initial view mode
+    const QString mode = m_settings.studyViewMode();
+    setViewMode(mode == u"list"_s ? u"list"_s : u"board"_s);
 }
 
 void StudyPage::setupUi(QVBoxLayout* layout) {
@@ -95,6 +149,7 @@ void StudyPage::setupUi(QVBoxLayout* layout) {
     m_stack = new QStackedWidget(this);
     m_stack->setObjectName(u"StudyStack"_s);
 
+    // Index 0: No topics (tracks exist, but topics empty)
     auto* noDataState = new Widgets::EmptyState(
         u"study"_s, tr("No Study Topics"),
         tr("Organize your C++ and English interview topics into kanban columns and log study sessions."),
@@ -103,8 +158,11 @@ void StudyPage::setupUi(QVBoxLayout* layout) {
     connect(noDataState, &Widgets::EmptyState::actionClicked, this, &StudyPage::newTopic);
     m_stack->addWidget(noDataState);
 
-    setupBoard();
+    // Index 1: Views splitter (Board / List + Detail Panel)
+    setupSplitterAndViews();
+    m_stack->addWidget(m_splitter);
 
+    // Index 2: No matches
     auto* noMatchesState = new Widgets::EmptyState(
         u"search"_s, tr("No Matches"),
         tr("No topic matches the current search and track filter."),
@@ -115,6 +173,15 @@ void StudyPage::setupUi(QVBoxLayout* layout) {
         onChipSelected(kAllTracks);
     });
     m_stack->addWidget(noMatchesState);
+
+    // Index 3: No tracks
+    auto* noTracksState = new Widgets::EmptyState(
+        u"study"_s, tr("No Study Tracks"),
+        tr("Create a study track (like C++ or English) to start planning topics."),
+        tr("+ Track"), m_stack);
+    noTracksState->setObjectName(u"StudyNoTracksState"_s);
+    connect(noTracksState, &Widgets::EmptyState::actionClicked, this, &StudyPage::openTrackDialog);
+    m_stack->addWidget(noTracksState);
 
     layout->addWidget(m_stack, 1);
 }
@@ -130,11 +197,38 @@ void StudyPage::setupToolbar(QVBoxLayout* layout) {
     m_chips->setObjectName(u"StudyTrackChips"_s);
     barLayout->addWidget(m_chips, 0);
 
-    auto* manageTracksBtn = new QPushButton(tr("Manage tracks..."), bar);
-    manageTracksBtn->setObjectName(u"StudyManageTracksBtn"_s);
-    manageTracksBtn->setEnabled(false);
-    manageTracksBtn->setToolTip(tr("Arrives in M4 step C"));
-    barLayout->addWidget(manageTracksBtn, 0);
+    m_addTrackBtn = new QPushButton(tr("+ Track"), bar);
+    m_addTrackBtn->setObjectName(u"StudyAddTrackBtn"_s);
+    m_addTrackBtn->setToolTip(tr("Manage tracks..."));
+    m_addTrackBtn->setCursor(Qt::PointingHandCursor);
+    barLayout->addWidget(m_addTrackBtn, 0);
+
+    m_manageTracksBtn = new QPushButton(tr("Manage tracks..."), bar);
+    m_manageTracksBtn->setObjectName(u"StudyManageTracksBtn"_s);
+    m_manageTracksBtn->setToolTip(tr("Add, rename, recolor or delete tracks"));
+    m_manageTracksBtn->setCursor(Qt::PointingHandCursor);
+    barLayout->addWidget(m_manageTracksBtn, 0);
+
+    // View mode toggle [Board | List]
+    auto* viewToggle = new QWidget(bar);
+    auto* toggleLayout = new QHBoxLayout(viewToggle);
+    toggleLayout->setContentsMargins(0, 0, 0, 0);
+    toggleLayout->setSpacing(2);
+
+    m_boardBtn = new QPushButton(tr("Board"), viewToggle);
+    m_boardBtn->setObjectName(u"StudyViewBoardBtn"_s);
+    m_boardBtn->setCheckable(true);
+    m_boardBtn->setChecked(true);
+    m_boardBtn->setCursor(Qt::PointingHandCursor);
+
+    m_listBtn = new QPushButton(tr("List"), viewToggle);
+    m_listBtn->setObjectName(u"StudyViewListBtn"_s);
+    m_listBtn->setCheckable(true);
+    m_listBtn->setCursor(Qt::PointingHandCursor);
+
+    toggleLayout->addWidget(m_boardBtn);
+    toggleLayout->addWidget(m_listBtn);
+    barLayout->addWidget(viewToggle, 0);
 
     barLayout->addStretch(1);
 
@@ -157,24 +251,50 @@ void StudyPage::setupToolbar(QVBoxLayout* layout) {
     layout->addWidget(bar);
 
     connect(m_chips, &Widgets::ChipBar::chipSelected, this, &StudyPage::onChipSelected);
+    connect(m_addTrackBtn, &QPushButton::clicked, this, &StudyPage::openTrackDialog);
+    connect(m_manageTracksBtn, &QPushButton::clicked, this, &StudyPage::openTrackDialog);
+    connect(m_boardBtn, &QPushButton::clicked, this, [this] { setViewMode(u"board"_s); });
+    connect(m_listBtn, &QPushButton::clicked, this, [this] { setViewMode(u"list"_s); });
     connect(m_searchEdit, &QLineEdit::textChanged, this, &StudyPage::setSearchText);
     connect(addTopicBtn, &QPushButton::clicked, this, &StudyPage::newTopic);
+
     connect(&m_theme, &Theme::ThemeManager::themeChanged, this, [this]() {
         const auto tokens = m_theme.currentTokens();
         const auto actions = m_searchEdit->actions();
         if (!actions.isEmpty()) {
-            actions.first()->setIcon(
-                Theme::IconProvider::icon(u"search"_s, tokens.textMuted));
+            actions.first()->setIcon(Theme::IconProvider::icon(u"search"_s, tokens.textMuted));
         }
     });
 }
 
-void StudyPage::setupBoard() {
+void StudyPage::setupSplitterAndViews() {
     m_splitter = new QSplitter(Qt::Horizontal, m_stack);
     m_splitter->setObjectName(u"StudySplitter"_s);
     m_splitter->setChildrenCollapsible(false);
 
-    m_boardScroll = new QScrollArea(m_splitter);
+    m_viewStack = new QStackedWidget(m_splitter);
+    m_viewStack->setObjectName(u"StudyViewStack"_s);
+
+    setupBoardView();
+    m_viewStack->addWidget(m_boardScroll);
+
+    setupTableView();
+    m_viewStack->addWidget(m_tableView);
+
+    m_splitter->addWidget(m_viewStack);
+
+    setupDetailPanel();
+    m_splitter->addWidget(m_detail);
+    m_splitter->setStretchFactor(0, 1);
+    m_splitter->setStretchFactor(1, 0);
+
+    connect(m_splitter, &QSplitter::splitterMoved, this, [this] {
+        m_settings.setStudySplitterState(m_splitter->saveState());
+    });
+}
+
+void StudyPage::setupBoardView() {
+    m_boardScroll = new QScrollArea(m_viewStack);
     m_boardScroll->setObjectName(u"StudyBoardScroll"_s);
     m_boardScroll->setWidgetResizable(true);
     m_boardScroll->setFrameShape(QFrame::NoFrame);
@@ -221,28 +341,55 @@ void StudyPage::setupBoard() {
 
     boardLayout->addStretch(1);
     m_boardScroll->setWidget(board);
-    m_splitter->addWidget(m_boardScroll);
+}
 
-    setupDetailPanel();
-    m_splitter->addWidget(m_detail);
-    m_splitter->setStretchFactor(0, 1);
-    m_splitter->setStretchFactor(1, 0);
+void StudyPage::setupTableView() {
+    auto* tableProxy = new TopicTableProxy(this);
+    tableProxy->setSourceModel(m_model);
+    tableProxy->setSortRole(Models::TopicListModel::SortRole);
+    m_tableProxy = tableProxy;
 
-    connect(m_splitter, &QSplitter::splitterMoved, this, [this] {
-        m_settings.setStudySplitterState(m_splitter->saveState());
-    });
+    m_tableView = new QTableView(m_viewStack);
+    m_tableView->setObjectName(u"StudyTableView"_s);
+    m_tableView->setModel(m_tableProxy);
+    m_tableView->setSortingEnabled(true);
+    m_tableView->sortByColumn(Models::TopicListModel::TrackColumn, Qt::AscendingOrder);
+    m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_tableView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_tableView->setDragEnabled(false);
+    m_tableView->setAcceptDrops(false);
+    m_tableView->setFrameShape(QFrame::NoFrame);
+    m_tableView->verticalHeader()->setVisible(false);
+    m_tableView->horizontalHeader()->setStretchLastSection(true);
+    m_tableView->installEventFilter(this);
 
-    m_stack->addWidget(m_splitter);
+    m_tableView->setItemDelegateForColumn(
+        Models::TopicListModel::StatusColumn,
+        new Delegates::StatusBadgeDelegate(Delegates::StatusBadgeDelegate::Mode::Topic, m_tableView));
+    m_tableView->setItemDelegateForColumn(
+        Models::TopicListModel::ProgressColumn,
+        new Delegates::ProgressBarDelegate(m_theme, m_tableView));
+
+    m_tableRestorer = new Widgets::SelectionRestorer(m_tableView, Models::TopicListModel::IdRole, this);
+
+    connect(m_tableView, &QTableView::activated, this, &StudyPage::onTableRowActivated);
+    connect(m_tableView, &QTableView::clicked, this, &StudyPage::onTableRowActivated);
+    connect(m_tableView->selectionModel(), &QItemSelectionModel::currentRowChanged, this,
+            &StudyPage::onTableSelectionChanged);
 }
 
 void StudyPage::setupDetailPanel() {
     m_detail = new Widgets::TopicDetailPanel(m_topics, m_theme, m_splitter);
+    m_detail->setObjectName(u"StudyDetailPanel"_s);
     m_detail->setTracks(m_tracks.all());
     m_detail->setMinimumWidth(280);
+
     connect(m_detail, &Widgets::TopicDetailPanel::writeFailed, this,
             [this](const QString& error) { onWriteError(tr("Could not save the topic."), error); });
     connect(m_detail, &Widgets::TopicDetailPanel::closeRequested, this,
             [this] { setDetailVisible(false); });
+    connect(m_detail, &Widgets::TopicDetailPanel::logTimeRequested, this,
+            [this](int topicId) { openSessionDialog(topicId); });
 }
 
 void StudyPage::focusSearch() {
@@ -263,16 +410,71 @@ void StudyPage::hideEvent(QHideEvent* event) {
     PageBase::hideEvent(event);
 }
 
+bool StudyPage::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == m_tableView && event->type() == QEvent::KeyPress) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_Delete) {
+            if (m_selectedTopicId.has_value()) {
+                onDeleteRequested(*m_selectedTopicId);
+                return true;
+            }
+        } else if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            if (m_selectedTopicId.has_value()) {
+                setDetailVisible(true);
+                m_detail->focusFirstEditor();
+                return true;
+            }
+        }
+    }
+    return PageBase::eventFilter(watched, event);
+}
+
 void StudyPage::newTopic() {
     if (m_tracks.isEmpty()) {
-        showMessage(tr("Add a track with Manage tracks... to create topics."), "hint");
+        openTrackDialog();
         return;
+    }
+    if (m_settings.studyViewMode() == u"list"_s) {
+        setViewMode(u"board"_s);
     }
     if (m_stack->currentIndex() != 1) m_stack->setCurrentIndex(1);
     if (!m_columns.isEmpty()) {
         m_columns.first()->focusQuickAdd();
         m_boardScroll->ensureWidgetVisible(m_columns.first());
     }
+}
+
+void StudyPage::openTrackDialog() {
+    Dialogs::TrackDialog dialog(m_tracks, m_topics, this);
+    dialog.exec();
+}
+
+void StudyPage::openSessionDialog(std::optional<int> topicId) {
+    Dialogs::SessionDialog dialog(m_sessions, m_topics, this, m_todayProvider);
+    if (topicId.has_value() && *topicId > 0) {
+        dialog.setTopicId(*topicId);
+    } else if (m_selectedTopicId.has_value() && *m_selectedTopicId > 0) {
+        dialog.setTopicId(*m_selectedTopicId);
+    }
+    dialog.exec();
+}
+
+void StudyPage::setViewMode(const QString& mode) {
+    const QString target = (mode == u"list"_s) ? u"list"_s : u"board"_s;
+    m_settings.setStudyViewMode(target);
+
+    const bool isList = (target == u"list"_s);
+    m_boardBtn->setChecked(!isList);
+    m_listBtn->setChecked(isList);
+    m_viewStack->setCurrentIndex(isList ? 1 : 0);
+
+    if (m_selectedTopicId.has_value()) {
+        selectTopic(*m_selectedTopicId);
+    }
+}
+
+QString StudyPage::viewMode() const {
+    return m_settings.studyViewMode();
 }
 
 bool StudyPage::selectTopic(int id) {
@@ -286,11 +488,25 @@ bool StudyPage::selectTopic(int id) {
         setSearchText(QString());
     }
 
-    auto* column = columnContaining(id);
-    if (!column) return false;
-    column->selectTopicId(id);
-    m_boardScroll->ensureWidgetVisible(column);
     m_selectedTopicId = id;
+
+    // Restore in board
+    if (auto* column = columnContaining(id)) {
+        column->selectTopicId(id);
+        m_boardScroll->ensureWidgetVisible(column);
+    }
+
+    // Restore in table
+    for (int row = 0; row < m_tableProxy->rowCount(); ++row) {
+        const QModelIndex idx = m_tableProxy->index(row, 0);
+        if (idx.data(Models::TopicListModel::IdRole).toInt() == id) {
+            m_tableView->setCurrentIndex(idx);
+            m_tableView->scrollTo(idx);
+            break;
+        }
+    }
+
+    m_detail->setTracks(m_tracks.all());
     m_detail->loadFrom(id);
     setDetailVisible(true);
     return true;
@@ -310,7 +526,7 @@ void StudyPage::setSearchText(const QString& text) {
     const QString trimmed = text.trimmed();
     if (m_searchText == trimmed) return;
     m_searchText = trimmed;
-    {
+    if (m_searchEdit->text() != trimmed) {
         const QSignalBlocker blocker(m_searchEdit);
         m_searchEdit->setText(trimmed);
     }
@@ -326,6 +542,9 @@ int StudyPage::currentViewIndex() const {
 }
 
 int StudyPage::visibleTopicCount() const {
+    if (m_settings.studyViewMode() == u"list"_s && m_tableProxy) {
+        return m_tableProxy->rowCount();
+    }
     int count = 0;
     for (const auto* column : m_columns) count += column->itemCount();
     return count;
@@ -337,7 +556,6 @@ void StudyPage::onTopicsChanged() {
 }
 
 void StudyPage::onTracksChanged() {
-
     refreshChips();
     m_detail->setTracks(m_tracks.all());
     applyFilters();
@@ -376,6 +594,35 @@ void StudyPage::onColumnActivated(int id) {
     m_detail->loadFrom(id);
     setDetailVisible(true);
     m_detail->focusFirstEditor();
+}
+
+void StudyPage::onTableRowActivated(const QModelIndex& index) {
+    if (!index.isValid()) return;
+    const int id = index.data(Models::TopicListModel::IdRole).toInt();
+    if (id <= 0) return;
+    m_selectedTopicId = id;
+    m_detail->setTracks(m_tracks.all());
+    m_detail->loadFrom(id);
+    setDetailVisible(true);
+    m_detail->focusFirstEditor();
+}
+
+void StudyPage::onTableSelectionChanged() {
+    if (m_inReset) return;
+    const QModelIndex current = m_tableView->currentIndex();
+    if (!current.isValid()) {
+        if (!m_selectedTopicId) return;
+        m_detail->flush();
+        m_detail->clearTopic();
+        m_selectedTopicId.reset();
+        return;
+    }
+    const int id = current.data(Models::TopicListModel::IdRole).toInt();
+    if (m_selectedTopicId == id) return;
+    m_selectedTopicId = id;
+    m_detail->setTracks(m_tracks.all());
+    m_detail->loadFrom(id);
+    if (!m_suppressDetailOpen) setDetailVisible(true);
 }
 
 void StudyPage::onDeleteRequested(int id) {
@@ -439,7 +686,7 @@ void StudyPage::onQuickAddSubmitted(const QString& title, int trackId,
 }
 
 void StudyPage::onWriteError(const QString& what, const QString& error) {
-    qCWarning(lcData) << what << error;
+    qWarning() << what << error;
     m_model->reload();
     showMessage(error.isEmpty() ? what : u"%1 %2"_s.arg(what, error), "error");
 }
@@ -522,6 +769,13 @@ Widgets::TopicBoardColumn* StudyPage::columnContaining(int id) const {
 }
 
 std::optional<int> StudyPage::selectedTopicId() const {
+    if (m_settings.studyViewMode() == u"list"_s) {
+        if (m_tableView) {
+            const QModelIndex current = m_tableView->currentIndex();
+            if (current.isValid()) return current.data(Models::TopicListModel::IdRole).toInt();
+        }
+        return std::nullopt;
+    }
     for (const auto* column : m_columns) {
         const QModelIndex current = column->list()->currentIndex();
         if (current.isValid()) return current.data(Models::TopicListModel::IdRole).toInt();
@@ -550,6 +804,12 @@ void StudyPage::applyFilters() {
         column->proxy()->setSearchFilter(m_searchText);
     }
 
+    if (m_tableProxy) {
+        auto* tableProxy = static_cast<TopicTableProxy*>(m_tableProxy);
+        tableProxy->setTrackFilter(track);
+        tableProxy->setSearchFilter(m_searchText);
+    }
+
     if (m_selectedTopicId) {
         if (columnContaining(*m_selectedTopicId)) {
             auto* column = columnContaining(*m_selectedTopicId);
@@ -568,8 +828,9 @@ void StudyPage::applyFilters() {
 }
 
 void StudyPage::refreshViewState() {
-    const int total = m_model->rowCount();
-    if (total == 0) {
+    if (m_tracks.isEmpty()) {
+        m_stack->setCurrentIndex(3);
+    } else if (m_model->rowCount() == 0) {
         m_stack->setCurrentIndex(0);
     } else if (visibleTopicCount() == 0) {
         m_stack->setCurrentIndex(2);

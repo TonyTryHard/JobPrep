@@ -19,6 +19,7 @@
 #include "data/DbFormat.h"
 #include "data/InterviewRepository.h"
 #include "data/TopicRepository.h"
+#include "data/TrackRepository.h"
 #include "models/AgendaListModel.h"
 #include "services/AgendaService.h"
 #include "services/SettingsService.h"
@@ -75,6 +76,7 @@ QPushButton* makeLayerChip(const QString& text, JobPrep::Domain::AgendaKind kind
 CalendarPage::CalendarPage(JobPrep::Data::InterviewRepository& interviews,
                            JobPrep::Data::ApplicationRepository& apps,
                            JobPrep::Data::TopicRepository& topics,
+                           JobPrep::Data::TrackRepository& tracks,
                            JobPrep::Services::AgendaService& agenda,
                            JobPrep::Services::SettingsService& settings,
                            JobPrep::Ui::Theme::ThemeManager& theme,
@@ -84,6 +86,7 @@ CalendarPage::CalendarPage(JobPrep::Data::InterviewRepository& interviews,
       m_interviews(interviews),
       m_apps(apps),
       m_topics(topics),
+      m_tracks(tracks),
       m_agenda(agenda),
       m_settings(settings),
       m_theme(theme),
@@ -96,6 +99,8 @@ CalendarPage::CalendarPage(JobPrep::Data::InterviewRepository& interviews,
     connect(&m_apps, &JobPrep::Data::ApplicationRepository::changed, this,
             &CalendarPage::refreshMarkersAndAgenda);
     connect(&m_topics, &JobPrep::Data::TopicRepository::changed, this,
+            &CalendarPage::refreshMarkersAndAgenda);
+    connect(&m_tracks, &JobPrep::Data::TrackRepository::changed, this,
             &CalendarPage::refreshMarkersAndAgenda);
 
     connect(&m_settings, &JobPrep::Services::SettingsService::firstDayOfWeekChanged, this,
@@ -421,16 +426,7 @@ void CalendarPage::openItem(const QModelIndex& index) {
             return;
         }
         case AgendaKind::StudyTarget: {
-            // Study planning arrives in M4; explain the row instead of opening nothing.
-            const auto topic = m_topics.byId(refId);
-            const QString title = topic ? topic->title : QString();
-            const QString text = title.isEmpty()
-                                     ? tr("Study targets open in M4")
-                                     : tr("Study target \u201c%1\u201d opens in M4").arg(title);
-            const QRect visual = m_agendaView->visualRect(index);
-            const QPoint at(m_agendaView->viewport()->mapToGlobal(
-                QPoint(visual.right(), visual.center().y())));
-            QToolTip::showText(at, text, m_agendaView);
+            emit studyTopicActivated(refId);
             return;
         }
     }

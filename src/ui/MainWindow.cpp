@@ -12,9 +12,11 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include "app/AppContext.h"
+#include "data/TopicRepository.h"
 #include "services/SettingsService.h"
 #include "ui/PageBase.h"
 #include "ui/Sidebar.h"
+#include "ui/dialogs/SessionDialog.h"
 #include "ui/pages/CalendarPage.h"
 #include "ui/pages/HomePage.h"
 #include "ui/pages/JobsPage.h"
@@ -122,8 +124,8 @@ void MainWindow::setupUi() {
     m_pageStack = new QStackedWidget(rightContainer);
 
     m_pages.append(new Pages::HomePage(m_pageStack));
-    m_studyPage = new Pages::StudyPage(m_ctx.topics(), m_ctx.tracks(), m_ctx.settings(),
-                                       m_ctx.themeManager(), m_pageStack);
+    m_studyPage = new Pages::StudyPage(m_ctx.topics(), m_ctx.tracks(), m_ctx.sessions(),
+                                       m_ctx.settings(), m_ctx.themeManager(), m_pageStack);
     m_pages.append(m_studyPage);
     m_studyIndex = static_cast<int>(m_pages.size()) - 1;
     m_jobsPage = new Pages::JobsPage(m_ctx.applications(), m_ctx.interviews(),
@@ -131,8 +133,8 @@ void MainWindow::setupUi() {
     m_pages.append(m_jobsPage);
     m_jobsIndex = static_cast<int>(m_pages.size()) - 1;
     m_calendarPage = new Pages::CalendarPage(
-        m_ctx.interviews(), m_ctx.applications(), m_ctx.topics(), m_ctx.agendaService(),
-        m_ctx.settings(), m_ctx.themeManager(), m_pageStack);
+        m_ctx.interviews(), m_ctx.applications(), m_ctx.topics(), m_ctx.tracks(),
+        m_ctx.agendaService(), m_ctx.settings(), m_ctx.themeManager(), m_pageStack);
     m_pages.append(m_calendarPage);
     m_calendarIndex = static_cast<int>(m_pages.size()) - 1;
     m_pages.append(new Pages::SettingsPage(m_ctx.settings(), m_ctx.themeManager(), m_pageStack));
@@ -195,10 +197,15 @@ QMenu* MainWindow::setupNewMenu(QWidget* parent) {
     interview->setObjectName(u"HeaderNewInterview"_s);
     connect(interview, &QAction::triggered, this, &MainWindow::newInterviewFromHeader);
 
+    QAction* topic = menu->addAction(tr("Topic"));
+    topic->setObjectName(u"HeaderNewTopic"_s);
+    connect(topic, &QAction::triggered, this, &MainWindow::newTopicFromHeader);
+
     QAction* session = menu->addAction(tr("Study session"));
     session->setObjectName(u"HeaderNewSession"_s);
-    session->setEnabled(false);
-    session->setToolTip(tr("Arrives in M4"));
+    session->setEnabled(true);
+    session->setToolTip(tr("Log a study session"));
+    connect(session, &QAction::triggered, this, &MainWindow::newSessionFromHeader);
     return menu;
 }
 
@@ -231,14 +238,45 @@ void MainWindow::newInterviewFromHeader() {
     m_calendarPage->newInterview(m_calendarPage->selectedDay());
 }
 
+void MainWindow::newTopicFromHeader() {
+    if (m_studyIndex < 0) return;
+    goToPage(m_studyIndex);
+    m_studyPage->newTopic();
+}
+
+void MainWindow::newSessionFromHeader() {
+    Dialogs::SessionDialog dialog(m_ctx.sessions(), m_ctx.topics(), this);
+    if (m_pageStack->currentIndex() == m_studyIndex && m_studyPage) {
+        if (const auto topicId = m_studyPage->selectedTopicId()) {
+            dialog.setTopicId(*topicId);
+        }
+    }
+    dialog.exec();
+}
+
+void MainWindow::openTopic(int topicId) {
+    const auto topic = m_ctx.topics().byId(topicId);
+    if (!topic) {
+        statusBar()->showMessage(tr("Topic not found"), 3000);
+        return;
+    }
+    if (m_studyIndex < 0) return;
+    goToPage(m_studyIndex);
+    m_studyPage->selectTopic(topicId);
+}
+
 void MainWindow::setupConnections() {
     connect(m_sidebar, &Sidebar::pageSelected, this, [this](int index) {
         updateHeader(index);
     });
 
+    connect(m_calendarPage, &Pages::CalendarPage::studyTopicActivated, this,
+            &MainWindow::openTopic);
+
     // The header box owns no filter state: it forwards to the page, which mirrors the
     // text back under a blocker.
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
+        if (m_pageStack->currentIndex() == m_studyIndex) return;
         if (m_jobsIndex < 0) return;
         if (m_pageStack->currentIndex() != m_jobsIndex) goToPage(m_jobsIndex);
         m_jobsPage->setSearchText(text);
@@ -260,6 +298,14 @@ void MainWindow::updateHeader(int pageIndex) {
     auto* activePage = m_pages[pageIndex];
     m_pageTitleLabel->setText(activePage->pageTitle());
     activePage->onActivated();
+
+    if (pageIndex == m_studyIndex) {
+        m_searchEdit->setEnabled(false);
+        m_searchEdit->setToolTip(tr("Use the search box on this page, Ctrl+F"));
+    } else {
+        m_searchEdit->setEnabled(true);
+        m_searchEdit->setToolTip(QString());
+    }
 }
 
 void MainWindow::updateIcons() {

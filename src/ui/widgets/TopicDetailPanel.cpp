@@ -225,8 +225,12 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
 
     m_logTimeBtn = new QPushButton(tr("Log time"), m_form);
     m_logTimeBtn->setObjectName(u"StudyDetailLogTimeBtn"_s);
-    m_logTimeBtn->setToolTip(tr("Arrives in M4 step C"));
-    m_logTimeBtn->setEnabled(false);
+    m_logTimeBtn->setToolTip(tr("Log study session for this topic"));
+    connect(m_logTimeBtn, &QPushButton::clicked, this, [this]() {
+        if (m_topicId.has_value() && *m_topicId > 0) {
+            emit logTimeRequested(*m_topicId);
+        }
+    });
     form->addWidget(m_logTimeBtn, 0, Qt::AlignLeft);
 
     form->addStretch(1);

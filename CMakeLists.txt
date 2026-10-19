@@ -128,6 +128,8 @@ add_library(jobprep_core STATIC
     src/ui/delegates/AgendaItemDelegate.cpp
     src/ui/delegates/TopicCardDelegate.h
     src/ui/delegates/TopicCardDelegate.cpp
+    src/ui/delegates/ProgressBarDelegate.h
+    src/ui/delegates/ProgressBarDelegate.cpp
 
     # Widgets & Base Pages
     src/ui/widgets/EmptyState.h
@@ -154,6 +156,10 @@ add_library(jobprep_core STATIC
     src/ui/dialogs/InterviewDialog.cpp
     src/ui/dialogs/FollowUpDialog.h
     src/ui/dialogs/FollowUpDialog.cpp
+    src/ui/dialogs/SessionDialog.h
+    src/ui/dialogs/SessionDialog.cpp
+    src/ui/dialogs/TrackDialog.h
+    src/ui/dialogs/TrackDialog.cpp
 
     # Page implementations
     src/ui/pages/HomePage.h

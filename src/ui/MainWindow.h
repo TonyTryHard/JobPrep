@@ -34,6 +34,9 @@ public:
     Sidebar* sidebar() const { return m_sidebar; }
     QStackedWidget* pageStack() const { return m_pageStack; }
 
+    /// Switches to the Study page and selects `topicId` (B9).
+    void openTopic(int topicId);
+
 protected:
     void closeEvent(QCloseEvent* event) override;
 
@@ -52,6 +55,10 @@ private:
     void newApplicationFromHeader();
     /// Header "+ New -> Interview": switch to Calendar and open a dated interview dialog.
     void newInterviewFromHeader();
+    /// Header "+ New -> Topic": switch to Study and focus Backlog quick-add (or TrackDialog).
+    void newTopicFromHeader();
+    /// Header "+ New -> Study session": open SessionDialog from any page.
+    void newSessionFromHeader();
     void goToPage(int pageIndex);
 
     App::AppContext& m_ctx;

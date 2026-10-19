@@ -65,6 +65,8 @@ public:
     void focusFirstEditor();
 
 signals:
+    /// User clicked "Log time" (C1): opens SessionDialog with this topic preselected.
+    void logTimeRequested(int topicId);
     /// A repository write failed (SPEC §8, B10): the page shows a message and reloads.
     void writeFailed(const QString& error);
     /// Esc inside the panel (B1): the page saves and collapses it.
