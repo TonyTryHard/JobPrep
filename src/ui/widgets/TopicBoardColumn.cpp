@@ -22,6 +22,7 @@
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
 #include "ui/widgets/SelectionRestorer.h"
+#include "ui/widgets/TopicListView.h"
 
 using namespace Qt::StringLiterals;
 
@@ -77,7 +78,8 @@ TopicBoardColumn::TopicBoardColumn(Domain::TopicStatus status, Models::TopicList
     headerLayout->addWidget(m_countLabel);
     layout->addWidget(header);
 
-    m_list = new QListView(this);
+    m_list = new TopicListView(m_theme, this);
+    connect(m_list, &TopicListView::dragOverChanged, this, [this] { update(); });
     m_list->setObjectName(u"StudyColumnList"_s);
     m_list->setViewMode(QListView::ListMode);
     m_list->setResizeMode(QListView::Adjust);
@@ -323,6 +325,23 @@ void TopicBoardColumn::openCardTooltip(const QPoint& viewportPos) {
     if (!tags.isEmpty()) lines << tags;
 
     QToolTip::showText(m_list->viewport()->mapToGlobal(viewportPos), lines.join(u"\n"_s), m_list);
+}
+
+void TopicBoardColumn::paintEvent(QPaintEvent* event) {
+    QWidget::paintEvent(event);
+    if (m_list && m_list->isDragOver()) {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const auto& tokens = m_theme.currentTokens();
+        QPen pen(tokens.accent);
+        pen.setWidth(2);
+        pen.setStyle(Qt::DashLine);
+        p.setPen(pen);
+        QColor bg = tokens.accent;
+        bg.setAlpha(15);
+        p.setBrush(bg);
+        p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 8, 8);
+    }
 }
 
 }  // namespace JobPrep::Ui::Widgets

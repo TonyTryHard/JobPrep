@@ -11,6 +11,10 @@ class QListView;
 class QMenu;
 class QPoint;
 
+namespace JobPrep::Ui::Widgets {
+class TopicListView;
+}
+
 namespace JobPrep::Data {
 class TopicRepository;
 }
@@ -55,7 +59,7 @@ public:
 
     Domain::TopicStatus status() const { return m_status; }
     Models::TopicBoardProxy* proxy() const { return m_proxy; }
-    QListView* list() const { return m_list; }
+    TopicListView* list() const { return m_list; }
     QLineEdit* quickAdd() const { return m_quickAdd; }
 
     /// Topics currently visible in this column (proxy rows).
@@ -87,6 +91,7 @@ signals:
 protected:
     /// Keyboard, tooltips and quick-add Esc; installed on the list and its viewport.
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
 
 private slots:
     void showContextMenu(const QPoint& position);
@@ -100,7 +105,7 @@ private:
     Data::TopicRepository& m_topics;
     Theme::ThemeManager& m_theme;
     Models::TopicBoardProxy* m_proxy{nullptr};
-    QListView* m_list{nullptr};
+    TopicListView* m_list{nullptr};
     QLineEdit* m_quickAdd{nullptr};
     QLabel* m_titleLabel{nullptr};
     QLabel* m_countLabel{nullptr};

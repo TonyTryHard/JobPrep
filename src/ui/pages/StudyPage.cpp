@@ -29,6 +29,7 @@
 #include "ui/widgets/EmptyState.h"
 #include "ui/widgets/TopicBoardColumn.h"
 #include "ui/widgets/TopicDetailPanel.h"
+#include "ui/widgets/TopicListView.h"
 
 using namespace Qt::StringLiterals;
 

@@ -13,6 +13,7 @@
 #include <QMessageBox>
 #include <QPixmap>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QStackedWidget>
@@ -57,6 +58,7 @@
 #include "ui/widgets/SelectionRestorer.h"
 #include "ui/widgets/TopicBoardColumn.h"
 #include "ui/widgets/TopicDetailPanel.h"
+#include "ui/widgets/TopicListView.h"
 
 using namespace Qt::StringLiterals;
 
@@ -207,6 +209,10 @@ private slots:
     void testStudyOverdueChipWithFixedClock();
     void testStudyPageApi();
     void testChipBarJobsAndCalendarRegression();
+    void testStudyContextMenuMoveToStatus();
+    void testStudyPageSelectionRestoreAcrossOperations();
+    void testStudyChecklistEditAndReorder();
+    void testStudySplitterStatePersisted();
     void testStudyScreenshots();
     void testZeroWarnings();
     void cleanupTestCase();
@@ -1727,6 +1733,15 @@ void tst_UiSmoke::testStudyChecklistTickSurvivesReset() {
     s2.position = 1;
     QVERIFY(m_studyCtx->topics().addSubtask(s2));
 
+    for (int i = 3; i <= 8; ++i) {
+        Subtask s;
+        s.topicId = t1Id;
+        s.text = u"Subtask %1"_s.arg(i);
+        s.done = false;
+        s.position = i - 1;
+        QVERIFY(m_studyCtx->topics().addSubtask(s));
+    }
+
     QCoreApplication::processEvents();
 
     auto* progCol = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
@@ -1737,25 +1752,28 @@ void tst_UiSmoke::testStudyChecklistTickSurvivesReset() {
     QVERIFY(detail);
     auto* checkList = childNamed<QListWidget>(detail, u"StudyDetailCheckList"_s);
     QVERIFY(checkList);
-    QCOMPARE(checkList->count(), 2);
+    QCOMPARE(checkList->count(), 8);
 
     QModelIndex cardIndex = progCol->proxy()->index(progCol->indexOfTopic(t1Id), 0);
     QCOMPARE(cardIndex.data(JobPrep::Models::TopicListModel::ProgressRole).toInt(), 0);
 
     checkList->setFocus();
-    checkList->setCurrentRow(0);
+    checkList->setCurrentRow(3);
+    const int checkScrollBefore = checkList->verticalScrollBar()->value();
 
     QTest::keyClick(checkList, Qt::Key_Space);
     QCoreApplication::processEvents();
 
     const auto subs = m_studyCtx->topics().subtasks(t1Id);
-    QVERIFY(subs.first().done);
+    QVERIFY(subs[3].done);
 
     cardIndex = progCol->proxy()->index(progCol->indexOfTopic(t1Id), 0);
-    QCOMPARE(cardIndex.data(JobPrep::Models::TopicListModel::ProgressRole).toInt(), 50);
+    QCOMPARE(cardIndex.data(JobPrep::Models::TopicListModel::ProgressRole).toInt(), 12);
     QCOMPARE(cardIndex.data(JobPrep::Models::TopicListModel::DoneSubtasksRole).toInt(), 1);
 
+    // Assert selection, focus, and checklist scroll position survive
     QCOMPARE(progCol->currentTopicId(), std::optional<int>(t1Id));
+    QCOMPARE(checkList->verticalScrollBar()->value(), checkScrollBefore);
     QVERIFY(detail->hasFocusInEditor() || QApplication::focusWidget() == static_cast<QWidget*>(checkList));
 }
 
@@ -1775,11 +1793,47 @@ void tst_UiSmoke::testStudyBoardRealDnDDropEvent() {
     QVERIFY(m_studyCtx->topics().insert(t1));
     const int t1Id = m_studyCtx->topics().all().last().id;
 
+    m_studyCtx->tracks().changed();
+    m_studyCtx->topics().changed();
     QCoreApplication::processEvents();
+    QCOMPARE(studyPage()->currentViewIndex(), 1);
 
     auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
     auto* inProgress = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+    auto* review = studyColumn(JobPrep::Domain::TopicStatus::Review);
 
+    // 1. Synthesized drag-move drop indicator & whole-column highlight (non-empty column)
+    auto* moveMime = new QMimeData;
+    moveMime->setData(u"application/x-jobprep-topic-id"_s, QByteArray::number(t1Id));
+    QDragEnterEvent enterEvent(QPoint(30, 20), Qt::MoveAction, moveMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(backlog->list(), &enterEvent);
+    QDragMoveEvent moveEvent(QPoint(30, 20), Qt::MoveAction, moveMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(backlog->list(), &moveEvent);
+    QVERIFY(backlog->list()->isDragOver());
+    QVERIFY(!backlog->list()->dropIndicatorRect().isNull());
+
+    QDragLeaveEvent leaveEvent;
+    QCoreApplication::sendEvent(backlog->list(), &leaveEvent);
+    QVERIFY(!backlog->list()->isDragOver());
+    QVERIFY(backlog->list()->dropIndicatorRect().isNull());
+    delete moveMime;
+
+    // 2. Empty column drag feedback (whole-column highlight, no item drop indicator line)
+    auto* emptyMime = new QMimeData;
+    emptyMime->setData(u"application/x-jobprep-topic-id"_s, QByteArray::number(t1Id));
+    QDragEnterEvent emptyEnter(QPoint(30, 20), Qt::MoveAction, emptyMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(review->list(), &emptyEnter);
+    QDragMoveEvent emptyMove(QPoint(30, 20), Qt::MoveAction, emptyMime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(review->list(), &emptyMove);
+    QVERIFY(review->list()->isDragOver());
+    QVERIFY(review->list()->dropIndicatorRect().isNull());
+
+    QDragLeaveEvent emptyLeave;
+    QCoreApplication::sendEvent(review->list(), &emptyLeave);
+    QVERIFY(!review->list()->isDragOver());
+    delete emptyMime;
+
+    // 3. Drop processing
     auto* mimeData = new QMimeData;
     mimeData->setData(u"application/x-jobprep-topic-id"_s, QByteArray::number(t1Id));
     QVERIFY(inProgress->proxy()->canDropMimeData(mimeData, Qt::MoveAction, -1, -1, QModelIndex()));
@@ -2059,6 +2113,10 @@ void tst_UiSmoke::testStudyPageApi() {
     auto* quickAdd = childNamed<QLineEdit>(backlog, u"StudyColumnQuickAdd"_s);
     QCOMPARE(QApplication::focusWidget(), quickAdd);
 
+    // Also call newTopic() directly
+    studyPage()->newTopic();
+    QCOMPARE(QApplication::focusWidget(), quickAdd);
+
     auto* chips = childNamed<JobPrep::Ui::Widgets::ChipBar>(m_study.get(), u"StudyTrackChips"_s);
     auto* btn = chips->button(tr1Id);
     QVERIFY(btn);
@@ -2077,6 +2135,14 @@ void tst_UiSmoke::testStudyPageApi() {
     QCOMPARE(detail->currentTopicId(), std::optional<int>(tId));
 
     QVERIFY(!studyPage()->selectTopic(99999));
+
+    // Zero tracks: newTopic shows hint and does not focus quick-add
+    resetStudyData();
+    studyPage()->newTopic();
+    auto* emptyBacklog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    auto* emptyQuickAdd = childNamed<QLineEdit>(emptyBacklog, u"StudyColumnQuickAdd"_s);
+    QVERIFY(!emptyQuickAdd->isEnabled());
+    QVERIFY(QApplication::focusWidget() != emptyQuickAdd);
 }
 
 void tst_UiSmoke::testChipBarJobsAndCalendarRegression() {
@@ -2121,6 +2187,178 @@ void tst_UiSmoke::testChipBarJobsAndCalendarRegression() {
     QCOMPARE(agendaList()->model()->rowCount(), 1);
 }
 
+void tst_UiSmoke::testStudyContextMenuMoveToStatus() {
+    resetStudyData();
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t;
+    t.trackId = trId;
+    t.title = u"Menu Move Topic"_s;
+    t.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(m_studyCtx->topics().insert(t));
+    const int tId = m_studyCtx->topics().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    auto* inProgress = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+    backlog->selectTopicId(tId);
+
+    auto* menu = childNamed<QMenu>(backlog, u"StudyContextMenu"_s);
+    QVERIFY(menu);
+    auto* moveToMenu = childNamed<QMenu>(menu, u"StudyMoveToMenu"_s);
+    QVERIFY(moveToMenu);
+    auto* moveToProgAction = childNamed<QAction>(moveToMenu, u"StudyMoveTo1"_s);
+    QVERIFY(moveToProgAction);
+
+    moveToProgAction->trigger();
+    QCoreApplication::processEvents();
+
+    const auto tDb = m_studyCtx->topics().byId(tId);
+    QVERIFY(tDb.has_value());
+    QCOMPARE(tDb->status, JobPrep::Domain::TopicStatus::InProgress);
+    QCOMPARE(inProgress->indexOfTopic(tId), 0);
+    QCOMPARE(backlog->indexOfTopic(tId), -1);
+}
+
+void tst_UiSmoke::testStudyPageSelectionRestoreAcrossOperations() {
+    resetStudyData();
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t1;
+    t1.trackId = trId;
+    t1.title = u"T1"_s;
+    t1.status = JobPrep::Domain::TopicStatus::InProgress;
+    t1.position = 0;
+    QVERIFY(m_studyCtx->topics().insert(t1));
+    const int t1Id = m_studyCtx->topics().all().last().id;
+
+    Topic t2;
+    t2.trackId = trId;
+    t2.title = u"T2"_s;
+    t2.status = JobPrep::Domain::TopicStatus::InProgress;
+    t2.position = 1;
+    QVERIFY(m_studyCtx->topics().insert(t2));
+    const int t2Id = m_studyCtx->topics().all().last().id;
+
+    Topic t3;
+    t3.trackId = trId;
+    t3.title = u"T3"_s;
+    t3.status = JobPrep::Domain::TopicStatus::InProgress;
+    t3.position = 2;
+    QVERIFY(m_studyCtx->topics().insert(t3));
+
+    QCoreApplication::processEvents();
+
+    auto* col = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+    col->selectTopicId(t2Id);
+    QCOMPARE(col->currentTopicId(), std::optional<int>(t2Id));
+
+    // 1. Selection survives insert of another topic
+    Topic t0;
+    t0.trackId = trId;
+    t0.title = u"T0"_s;
+    t0.status = JobPrep::Domain::TopicStatus::InProgress;
+    t0.position = 0;
+    QVERIFY(m_studyCtx->topics().insert(t0));
+    QCoreApplication::processEvents();
+    QCOMPARE(col->currentTopicId(), std::optional<int>(t2Id));
+
+    // 2. Selection survives deletion of another topic
+    QVERIFY(m_studyCtx->topics().remove(t1Id));
+    QCoreApplication::processEvents();
+    QCOMPARE(col->currentTopicId(), std::optional<int>(t2Id));
+
+    // 3. Selection survives reordering
+    col->selectTopicId(t2Id);
+    QTest::keyClick(col->list(), Qt::Key_Down, Qt::AltModifier);
+    QCoreApplication::processEvents();
+    QCOMPARE(col->currentTopicId(), std::optional<int>(t2Id));
+}
+
+void tst_UiSmoke::testStudyChecklistEditAndReorder() {
+    resetStudyData();
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t;
+    t.trackId = trId;
+    t.title = u"Checklist Topic"_s;
+    t.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(m_studyCtx->topics().insert(t));
+    const int tId = m_studyCtx->topics().all().last().id;
+
+    Subtask s1;
+    s1.topicId = tId;
+    s1.text = u"Alpha"_s;
+    s1.position = 0;
+    QVERIFY(m_studyCtx->topics().addSubtask(s1));
+
+    Subtask s2;
+    s2.topicId = tId;
+    s2.text = u"Beta"_s;
+    s2.position = 1;
+    QVERIFY(m_studyCtx->topics().addSubtask(s2));
+
+    QCoreApplication::processEvents();
+
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    backlog->selectTopicId(tId);
+    QCoreApplication::processEvents();
+
+    auto* detail = studyPage()->detailPanel();
+    auto* checkList = childNamed<QListWidget>(detail, u"StudyDetailCheckList"_s);
+    QVERIFY(checkList);
+    QCOMPARE(checkList->count(), 2);
+
+    // 1. Inline edit of item text
+    checkList->item(0)->setText(u"Alpha Renamed"_s);
+    QCoreApplication::processEvents();
+    auto subs = m_studyCtx->topics().subtasks(tId);
+    QCOMPARE(subs[0].text, u"Alpha Renamed"_s);
+
+    // 2. Alt+Down reorders items
+    checkList->setCurrentRow(0);
+    QTest::keyClick(checkList, Qt::Key_Down, Qt::AltModifier);
+    QCoreApplication::processEvents();
+
+    subs = m_studyCtx->topics().subtasks(tId);
+    QCOMPARE(subs[0].text, u"Beta"_s);
+    QCOMPARE(subs[1].text, u"Alpha Renamed"_s);
+    QCOMPARE(checkList->currentRow(), 1);
+}
+
+void tst_UiSmoke::testStudySplitterStatePersisted() {
+    resetStudyData();
+    auto* splitter = childNamed<QSplitter>(m_study.get(), u"StudySplitter"_s);
+    QVERIFY(splitter);
+
+    splitter->setSizes({600, 300});
+    emit splitter->splitterMoved(600, 1);
+    QCoreApplication::processEvents();
+
+    const QByteArray saved = m_studyCtx->settings().studySplitterState();
+    QVERIFY(!saved.isEmpty());
+
+    auto newPage = std::make_unique<JobPrep::Ui::Pages::StudyPage>(
+        m_studyCtx->topics(), m_studyCtx->tracks(), m_studyCtx->settings(),
+        m_studyCtx->themeManager());
+    auto* newSplitter = childNamed<QSplitter>(newPage.get(), u"StudySplitter"_s);
+    QVERIFY(newSplitter);
+    QCOMPARE(newSplitter->saveState(), saved);
+}
+
 void tst_UiSmoke::testStudyScreenshots() {
     const QString dir = qEnvironmentVariable("JOBPREP_REPORT_IMG_DIR");
     if (dir.isEmpty()) QSKIP("JOBPREP_REPORT_IMG_DIR is not set");
@@ -2159,6 +2397,29 @@ void tst_UiSmoke::testStudyScreenshots() {
         QCoreApplication::processEvents();
     }
     forBothThemes(u"study-board-detail"_s);
+
+    // 4. Drag feedback (accent insertion line & whole-column highlight)
+    auto* inProgressCol = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+    if (!allTopics.isEmpty()) {
+        const auto captureDrag = [&](JobPrep::Ui::Theme::ThemeMode mode, const QString& name) {
+            m_studyCtx->themeManager().setThemeMode(mode);
+            auto* moveMime = new QMimeData;
+            moveMime->setData(u"application/x-jobprep-topic-id"_s, QByteArray::number(allTopics.first().id));
+            QDragEnterEvent enterEvent(QPoint(30, 20), Qt::MoveAction, moveMime, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(inProgressCol->list(), &enterEvent);
+            QDragMoveEvent moveEvent(QPoint(30, 20), Qt::MoveAction, moveMime, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(inProgressCol->list(), &moveEvent);
+            QCoreApplication::processEvents();
+            const QImage image = m_study->grab().toImage();
+            QVERIFY(!image.isNull());
+            QVERIFY(image.save(QDir(dir).filePath(name + u".png"_s)));
+            QDragLeaveEvent leaveEvent;
+            QCoreApplication::sendEvent(inProgressCol->list(), &leaveEvent);
+            delete moveMime;
+        };
+        captureDrag(JobPrep::Ui::Theme::ThemeMode::Light, u"study-board-drag-light"_s);
+        captureDrag(JobPrep::Ui::Theme::ThemeMode::Dark, u"study-board-drag-dark"_s);
+    }
 }
 
 void tst_UiSmoke::testZeroWarnings() {

@@ -23,19 +23,6 @@ constexpr qreal kStripeWidth = 6.0;
 constexpr qreal kChipRadius = 8.0;
 constexpr int kGap = 4;
 
-/// Marker text for a priority, readable without colour (B3).
-QString priorityMark(Domain::Priority priority) {
-    switch (priority) {
-        case Domain::Priority::High:
-            return QCoreApplication::translate("TopicCardDelegate", "↑ High");
-        case Domain::Priority::Normal:
-            return QCoreApplication::translate("TopicCardDelegate", "· Normal");
-        case Domain::Priority::Low:
-            return QCoreApplication::translate("TopicCardDelegate", "↓ Low");
-    }
-    return {};
-}
-
 }  // namespace
 
 TopicCardDelegate::TopicCardDelegate(Theme::ThemeManager& theme, QObject* parent)
@@ -135,7 +122,7 @@ void TopicCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
 
     const auto priority = static_cast<Domain::Priority>(
         index.data(Models::TopicListModel::PriorityRole).toInt());
-    const QString priorityText = priorityMark(priority);
+    const QString priorityText = Theme::StatusStyle::label(priority);
     const int priorityWidth = metrics.horizontalAdvance(priorityText);
     priorityRect.setLeft(priorityRect.right() - priorityWidth);
     painter->setPen(priority == Domain::Priority::High ? tokens.warning : tokens.textMuted);

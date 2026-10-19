@@ -140,6 +140,8 @@ add_library(jobprep_core STATIC
     src/ui/widgets/SelectionRestorer.cpp
     src/ui/widgets/TopicBoardColumn.h
     src/ui/widgets/TopicBoardColumn.cpp
+    src/ui/widgets/TopicListView.h
+    src/ui/widgets/TopicListView.cpp
     src/ui/widgets/TopicDetailPanel.h
     src/ui/widgets/TopicDetailPanel.cpp
     src/ui/PageBase.h
