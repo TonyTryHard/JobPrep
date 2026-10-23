@@ -173,4 +173,18 @@ QString Tokens::themeModeToString(ThemeMode mode) {
     return u"system"_s;
 }
 
+const QList<TrackSwatch>& Tokens::trackPalette() {
+    static const QList<TrackSwatch> swatches = {
+        {u"#5B6CFF"_s, u"Indigo"_s},
+        {u"#F59E0B"_s, u"Amber"_s},
+        {u"#0D9488"_s, u"Teal"_s},
+        {u"#10B981"_s, u"Emerald"_s},
+        {u"#F43F5E"_s, u"Rose"_s},
+        {u"#0284C7"_s, u"Sky"_s},
+        {u"#8B5CF6"_s, u"Purple"_s},
+        {u"#F97316"_s, u"Orange"_s},
+    };
+    return swatches;
+}
+
 }  // namespace JobPrep::Ui::Theme

@@ -37,6 +37,11 @@ public:
     /// Switches to the Study page and selects `topicId` (B9).
     void openTopic(int topicId);
 
+    /// Focuses the search box of the page that is actually showing (Ctrl+F).
+    void focusCurrentPageSearch();
+    /// Runs the primary action of the page that is actually showing (Ctrl+N).
+    void triggerCurrentPageNew();
+
 protected:
     void closeEvent(QCloseEvent* event) override;
 
@@ -47,10 +52,6 @@ private:
     void setupConnections();
     void updateHeader(int pageIndex);
     void updateIcons();
-    /// Focuses the search box of the page that is actually showing.
-    void focusCurrentPageSearch();
-    /// Runs the primary action of the page that is actually showing.
-    void triggerCurrentPageNew();
     /// Header "+ New -> Application": switch to Jobs and open the add-application dialog.
     void newApplicationFromHeader();
     /// Header "+ New -> Interview": switch to Calendar and open a dated interview dialog.

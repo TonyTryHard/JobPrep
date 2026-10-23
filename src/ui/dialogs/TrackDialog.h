@@ -5,6 +5,7 @@
 #include <QList>
 #include <QString>
 #include "domain/Structs.h"
+#include "ui/theme/Tokens.h"
 
 class QButtonGroup;
 class QLabel;
@@ -25,11 +26,7 @@ class TrackDialog : public QDialog {
     Q_OBJECT
 
 public:
-    struct Swatch {
-        QString hex;
-        QString name;
-    };
-
+    using Swatch = Theme::TrackSwatch;
     static const QList<Swatch>& presetSwatches();
 
     TrackDialog(Data::TrackRepository& tracks,
@@ -39,6 +36,8 @@ public:
 
     /// Selects a track by id in the list.
     void selectTrack(int trackId);
+
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onTrackSelectionChanged();
@@ -62,6 +61,7 @@ private:
     QLineEdit* m_nameEdit{nullptr};
     QButtonGroup* m_swatchGroup{nullptr};
     QList<QPushButton*> m_swatchButtons;
+    QPushButton* m_customSwatchBtn{nullptr};
     QLabel* m_messageLabel{nullptr};
     QPushButton* m_saveBtn{nullptr};
     QPushButton* m_deleteBtn{nullptr};

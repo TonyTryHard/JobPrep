@@ -4,11 +4,13 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -34,14 +36,18 @@ QIcon makeSwatchIcon(const QColor& color, bool checked) {
     painter.drawEllipse(QRectF(2, 2, kSize - 4, kSize - 4));
 
     if (checked) {
-        // High-contrast visible inner ring and dot
-        painter.setPen(QPen(Qt::white, 2.0));
+        // High-contrast checkmark mark that is not color alone
+        const bool light = color.lightnessF() > 0.6;
+        painter.setPen(QPen(light ? Qt::black : Qt::white, 1.5));
         painter.setBrush(Qt::NoBrush);
-        painter.drawEllipse(QRectF(4, 4, kSize - 8, kSize - 8));
+        painter.drawEllipse(QRectF(3, 3, kSize - 6, kSize - 6));
 
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(Qt::white);
-        painter.drawEllipse(QRectF(kSize / 2.0 - 2.5, kSize / 2.0 - 2.5, 5.0, 5.0));
+        QPainterPath check;
+        check.moveTo(7, 12);
+        check.lineTo(10, 15);
+        check.lineTo(17, 8);
+        QPen checkPen(light ? Qt::black : Qt::white, 2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.strokePath(check, checkPen);
     }
 
     return QIcon(pixmap);
@@ -62,17 +68,7 @@ QIcon makeTrackDotIcon(const QColor& color) {
 }  // namespace
 
 const QList<TrackDialog::Swatch>& TrackDialog::presetSwatches() {
-    static const QList<Swatch> swatches = {
-        {u"#5B6CFF"_s, tr("Indigo")},
-        {u"#0D9488"_s, tr("Teal")},
-        {u"#F59E0B"_s, tr("Amber")},
-        {u"#10B981"_s, tr("Emerald")},
-        {u"#F43F5E"_s, tr("Rose")},
-        {u"#0284C7"_s, tr("Sky")},
-        {u"#8B5CF6"_s, tr("Purple")},
-        {u"#F97316"_s, tr("Orange")},
-    };
-    return swatches;
+    return Theme::Tokens::trackPalette();
 }
 
 TrackDialog::TrackDialog(Data::TrackRepository& tracks,
@@ -138,11 +134,24 @@ void TrackDialog::setupUi() {
         btn->setProperty("colorHex", sw.hex);
         btn->setIcon(makeSwatchIcon(QColor(sw.hex), false));
         btn->setIconSize(QSize(24, 24));
+        btn->installEventFilter(this);
 
         m_swatchGroup->addButton(btn, i);
         swatchLayout->addWidget(btn);
         m_swatchButtons.append(btn);
     }
+
+    m_customSwatchBtn = new QPushButton(swatchContainer);
+    m_customSwatchBtn->setObjectName(u"TrackSwatch_Custom"_s);
+    m_customSwatchBtn->setCheckable(true);
+    m_customSwatchBtn->setFocusPolicy(Qt::StrongFocus);
+    m_customSwatchBtn->setFixedSize(32, 32);
+    m_customSwatchBtn->setIconSize(QSize(24, 24));
+    m_customSwatchBtn->installEventFilter(this);
+    m_customSwatchBtn->hide();
+    m_swatchGroup->addButton(m_customSwatchBtn, swatches.size());
+    swatchLayout->addWidget(m_customSwatchBtn);
+
     swatchLayout->addStretch(1);
     formLayout->addRow(tr("Color:"), swatchContainer);
 
@@ -150,7 +159,6 @@ void TrackDialog::setupUi() {
 
     m_messageLabel = new QLabel(this);
     m_messageLabel->setObjectName(u"TrackMessageLabel"_s);
-    m_messageLabel->setStyleSheet(u"color: #ef4444;"_s);
     m_messageLabel->hide();
     mainLayout->addWidget(m_messageLabel);
 
@@ -174,6 +182,15 @@ void TrackDialog::setupUi() {
     bottomLayout->addWidget(m_closeBtn);
 
     mainLayout->addLayout(bottomLayout);
+
+    if (!m_swatchButtons.isEmpty()) {
+        QWidget::setTabOrder(m_nameEdit, m_swatchButtons.first());
+        for (int i = 0; i < m_swatchButtons.size() - 1; ++i) {
+            QWidget::setTabOrder(m_swatchButtons[i], m_swatchButtons[i + 1]);
+        }
+        QWidget::setTabOrder(m_swatchButtons.last(), m_customSwatchBtn);
+        QWidget::setTabOrder(m_customSwatchBtn, m_deleteBtn);
+    }
 
     connect(m_trackList, &QListWidget::currentRowChanged, this, &TrackDialog::onTrackSelectionChanged);
     connect(m_newBtn, &QPushButton::clicked, this, &TrackDialog::onNewTrackClicked);
@@ -212,14 +229,46 @@ void TrackDialog::selectTrack(int trackId) {
     }
 }
 
+bool TrackDialog::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::KeyPress) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        QList<QPushButton*> visibleButtons = m_swatchButtons;
+        if (m_customSwatchBtn && m_customSwatchBtn->isVisible()) {
+            visibleButtons.append(m_customSwatchBtn);
+        }
+        const int idx = visibleButtons.indexOf(qobject_cast<QPushButton*>(watched));
+        if (idx >= 0) {
+            if (keyEvent->key() == Qt::Key_Left || keyEvent->key() == Qt::Key_Up) {
+                const int next = (idx - 1 + visibleButtons.size()) % visibleButtons.size();
+                visibleButtons[next]->setFocus();
+                visibleButtons[next]->setChecked(true);
+                return true;
+            } else if (keyEvent->key() == Qt::Key_Right || keyEvent->key() == Qt::Key_Down) {
+                const int next = (idx + 1) % visibleButtons.size();
+                visibleButtons[next]->setFocus();
+                visibleButtons[next]->setChecked(true);
+                return true;
+            }
+        }
+    }
+    return QDialog::eventFilter(watched, event);
+}
+
 void TrackDialog::setSelectedSwatchColor(const QString& hex) {
     for (auto* btn : m_swatchButtons) {
         if (btn->property("colorHex").toString().compare(hex, Qt::CaseInsensitive) == 0) {
             btn->setChecked(true);
+            if (m_customSwatchBtn) m_customSwatchBtn->hide();
             return;
         }
     }
-    if (!m_swatchButtons.isEmpty()) {
+    if (m_customSwatchBtn) {
+        m_customSwatchBtn->setProperty("colorHex", hex);
+        m_customSwatchBtn->setToolTip(tr("Custom (%1)").arg(hex));
+        m_customSwatchBtn->setIcon(makeSwatchIcon(QColor(hex), true));
+        m_customSwatchBtn->show();
+        m_customSwatchBtn->setChecked(true);
+    } else if (!m_swatchButtons.isEmpty()) {
         m_swatchButtons.first()->setChecked(true);
     }
 }
@@ -236,6 +285,9 @@ void TrackDialog::onSwatchToggled(int id, bool checked) {
         auto* btn = m_swatchButtons[id];
         const QString hex = btn->property("colorHex").toString();
         btn->setIcon(makeSwatchIcon(QColor(hex), checked));
+    } else if (id == m_swatchButtons.size() && m_customSwatchBtn) {
+        const QString hex = m_customSwatchBtn->property("colorHex").toString();
+        m_customSwatchBtn->setIcon(makeSwatchIcon(QColor(hex), checked));
     }
 }
 
@@ -266,6 +318,7 @@ void TrackDialog::onNewTrackClicked() {
     m_selectedTrackId.reset();
     m_nameEdit->clear();
     m_nameEdit->setFocus();
+    if (m_customSwatchBtn) m_customSwatchBtn->hide();
     setSelectedSwatchColor(presetSwatches().first().hex);
     m_deleteBtn->setEnabled(false);
     m_saveBtn->setText(tr("Add Track"));
@@ -285,12 +338,15 @@ bool TrackDialog::validateForm() {
         return false;
     }
 
-    const auto existingId = m_tracks.idByName(name);
-    if (existingId.has_value() && (!m_selectedTrackId.has_value() || *existingId != *m_selectedTrackId)) {
-        m_messageLabel->setText(tr("A track with this name already exists."));
-        m_messageLabel->show();
-        m_saveBtn->setEnabled(false);
-        return false;
+    const auto allTracks = m_tracks.all();
+    for (const auto& t : allTracks) {
+        if ((!m_selectedTrackId.has_value() || t.id != *m_selectedTrackId) &&
+            t.name.compare(name, Qt::CaseInsensitive) == 0) {
+            m_messageLabel->setText(tr("A track with this name already exists."));
+            m_messageLabel->show();
+            m_saveBtn->setEnabled(false);
+            return false;
+        }
     }
 
     m_messageLabel->hide();

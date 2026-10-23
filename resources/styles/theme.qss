@@ -488,7 +488,9 @@ QHeaderView::section {
 }
 
 #StudyMessageLabel[kind="error"],
-#StudyDetailMessageLabel[kind="error"] {
+#StudyDetailMessageLabel[kind="error"],
+#TrackMessageLabel,
+#SessionMessageLabel {
     background-color: @surfaceAlt;
     color: @danger;
     border: 1px solid @danger;

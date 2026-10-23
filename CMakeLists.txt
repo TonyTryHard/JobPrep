@@ -108,6 +108,8 @@ add_library(jobprep_core STATIC
     src/models/TopicListModel.cpp
     src/models/TopicBoardProxy.h
     src/models/TopicBoardProxy.cpp
+    src/models/TopicTableProxy.h
+    src/models/TopicTableProxy.cpp
 
     # Theme & Tokens
     src/ui/theme/Tokens.h

@@ -21,6 +21,7 @@
 #include "data/TrackRepository.h"
 #include "models/TopicBoardProxy.h"
 #include "models/TopicListModel.h"
+#include "models/TopicTableProxy.h"
 #include "services/SettingsService.h"
 #include "ui/delegates/ProgressBarDelegate.h"
 #include "ui/delegates/StatusBadgeDelegate.h"
@@ -37,59 +38,13 @@
 #include "ui/widgets/TopicListView.h"
 
 using namespace Qt::StringLiterals;
+using JobPrep::Models::TopicTableProxy;
 
 namespace JobPrep::Ui::Pages {
 
 namespace {
 
 constexpr std::array<const char*, 4> kColumnNames = {"Backlog", "InProgress", "Review", "Done"};
-
-class TopicTableProxy : public QSortFilterProxyModel {
-public:
-    explicit TopicTableProxy(QObject* parent = nullptr) : QSortFilterProxyModel(parent) {}
-
-    void setTrackFilter(std::optional<int> trackId) {
-        if (m_trackId == trackId) return;
-        m_trackId = trackId;
-        invalidate();
-    }
-
-    void setSearchFilter(const QString& text) {
-        if (m_searchText == text) return;
-        m_searchText = text.trimmed();
-        invalidate();
-    }
-
-protected:
-    bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override {
-        if (m_trackId.has_value()) {
-            const int trackId = sourceModel()
-                                    ->index(sourceRow, 0, sourceParent)
-                                    .data(Models::TopicListModel::TrackIdRole)
-                                    .toInt();
-            if (trackId != *m_trackId) return false;
-        }
-        if (!m_searchText.isEmpty()) {
-            const QString title = sourceModel()
-                                      ->index(sourceRow, Models::TopicListModel::TitleColumn, sourceParent)
-                                      .data(Qt::DisplayRole)
-                                      .toString();
-            const QString tags = sourceModel()
-                                     ->index(sourceRow, 0, sourceParent)
-                                     .data(Models::TopicListModel::TagsRole)
-                                     .toString();
-            if (!title.contains(m_searchText, Qt::CaseInsensitive) &&
-                !tags.contains(m_searchText, Qt::CaseInsensitive)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-private:
-    std::optional<int> m_trackId;
-    QString m_searchText;
-};
 
 }  // namespace
 

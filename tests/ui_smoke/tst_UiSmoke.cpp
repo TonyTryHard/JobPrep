@@ -90,6 +90,10 @@ QStringList s_capturedWarnings;
 /// The offscreen platform plugin cannot forward window size hints, so Qt logs this once
 /// per shown dialog. It is a limitation of the test platform plugin, not of our code,
 /// so it must not fail the zero-warning gate.
+/// The offscreen platform plugin cannot forward window size hints or raise windows,
+/// so Qt logs this once per shown dialog and on QToolTip::showText (which calls QTipLabel::raise()).
+/// It is a limitation of the test platform plugin, not of our code,
+/// so it must not fail the zero-warning gate.
 bool isPlatformPluginNoise(const QString& msg) {
     return msg.contains(u"does not support propagateSizeHints"_s) ||
            msg.contains(u"does not support raise"_s);
@@ -248,6 +252,8 @@ private slots:
     void testHeaderSearchDisabledOnStudyPage();
     void testCalendarJumpToStudyTopic();
     void testCalendarTopicDateAndTrackRename();
+    void testCalendarTrackDeleteClearsMarkers();
+    void testCtrlNTriggersCurrentPageNew();
     void testStudyListViewToggleSortAndDelegates();
     void testStudyScreenshots();
     void testZeroWarnings();
@@ -2496,6 +2502,58 @@ void tst_UiSmoke::testStudySessionDialogLogTime() {
     const QDate today(2026, 10, 19);
     resetStudyData(today);
 
+    // 1. Injectable clock verification and inline validation (minutes < 1)
+    {
+        SessionDialog dlg(m_studyCtx->sessions(), m_studyCtx->topics(), nullptr, [today]() { return today; });
+        auto* dateEdit = dlg.findChild<QDateEdit*>(u"SessionDateEdit"_s);
+        QVERIFY(dateEdit != nullptr);
+        QCOMPARE(dateEdit->date(), today);
+
+        auto* spin = dlg.findChild<QSpinBox*>(u"SessionMinutesSpin"_s);
+        auto* saveBtn = dlg.findChild<QPushButton*>(u"SessionSaveBtn"_s);
+        auto* msgLabel = dlg.findChild<QLabel*>(u"SessionMessageLabel"_s);
+        QVERIFY(spin != nullptr && saveBtn != nullptr && msgLabel != nullptr);
+
+        // Setting minutes to 0 triggers inline validation error and disables save
+        spin->setValue(0);
+        QVERIFY(!saveBtn->isEnabled());
+        QVERIFY(!msgLabel->isHidden());
+        QCOMPARE(dlg.validationMessage(), QStringLiteral("Duration must be at least 1 minute."));
+
+        // Setting valid minutes clears error and enables save
+        spin->setValue(25);
+        QVERIFY(saveBtn->isEnabled());
+        QVERIFY(msgLabel->isHidden());
+    }
+
+    // 2. Logging a session without a topic ("(No topic)" selection)
+    {
+        withNextModal([today](QWidget* modal) {
+            auto* dlg = qobject_cast<SessionDialog*>(modal);
+            QVERIFY(dlg != nullptr);
+            auto* topicCombo = childNamed<QComboBox>(dlg, u"SessionTopicCombo"_s);
+            QVERIFY(topicCombo != nullptr);
+            // Index 0 is "(No topic)" with nullopt/invalid data
+            topicCombo->setCurrentIndex(0);
+            QCOMPARE(topicCombo->currentText(), QStringLiteral("(No topic)"));
+
+            auto* durationSpin = childNamed<QSpinBox>(dlg, u"SessionMinutesSpin"_s);
+            durationSpin->setValue(20);
+
+            buttonNamed(dlg, u"SessionSaveBtn"_s)->click();
+        });
+
+        studyPage()->openSessionDialog(std::nullopt);
+        QCoreApplication::processEvents();
+
+        const auto sessions = m_studyCtx->sessions().all();
+        QCOMPARE(sessions.size(), 1);
+        QCOMPARE(sessions.first().minutes, 20);
+        QVERIFY(!sessions.first().topicId.has_value());
+        QCOMPARE(m_studyCtx->sessions().totalMinutesInRange(today, today), 20);
+    }
+
+    // 3. Log a session for a specific topic
     Track track;
     track.name = u"Algorithms"_s;
     track.color = u"#3b82f6"_s;
@@ -2509,7 +2567,6 @@ void tst_UiSmoke::testStudySessionDialogLogTime() {
     QVERIFY(m_studyCtx->topics().insert(topic));
     const int topicId = m_studyCtx->topics().all().last().id;
 
-    // Log a session directly via SessionDialog
     withNextModal([topicId, today](QWidget* modal) {
         auto* dlg = qobject_cast<SessionDialog*>(modal);
         QVERIFY(dlg != nullptr);
@@ -2535,11 +2592,10 @@ void tst_UiSmoke::testStudySessionDialogLogTime() {
     studyPage()->openSessionDialog(topicId);
     QCoreApplication::processEvents();
 
-    // Verify session repository recorded the session and minutes
-    const auto sessions = m_studyCtx->sessions().byTopic(topicId);
-    QCOMPARE(sessions.size(), 1);
-    QCOMPARE(sessions.first().minutes, 45);
-    QCOMPARE(m_studyCtx->sessions().totalMinutesInRange(today, today), 45);
+    const auto topicSessions = m_studyCtx->sessions().byTopic(topicId);
+    QCOMPARE(topicSessions.size(), 1);
+    QCOMPARE(topicSessions.first().minutes, 45);
+    QCOMPARE(m_studyCtx->sessions().totalMinutesInRange(today, today), 65);
 
     // Detail panel "Log time" button opens SessionDialog with this topic preselected
     QVERIFY(studyPage()->selectTopic(topicId));
@@ -2566,35 +2622,108 @@ void tst_UiSmoke::testStudyTrackDialogCrudAndCascade() {
     const QDate today(2026, 10, 19);
     resetStudyData(today);
 
-    // Open TrackDialog to add a track
-    withNextModal([](QWidget* modal) {
+    // 1. Open TrackDialog: test swatches, keyboard arrows, duplicate error
+    bool swatchesValid = true;
+    bool arrowChecked = false;
+    bool dupErrorShown = false;
+    QString dupMsg;
+
+    withNextModal([&swatchesValid, &arrowChecked, &dupErrorShown, &dupMsg](QWidget* modal) {
         auto* dlg = qobject_cast<TrackDialog*>(modal);
-        QVERIFY(dlg != nullptr);
+        if (!dlg) return;
+
+        // Check swatches: reachability, tooltip with color name, strong focus
+        const auto& swatches = JobPrep::Ui::Theme::Tokens::trackPalette();
+        for (int i = 0; i < swatches.size(); ++i) {
+            auto* swBtn = dlg->findChild<QPushButton*>(u"TrackSwatch_%1"_s.arg(i));
+            if (!swBtn || swBtn->focusPolicy() != Qt::StrongFocus || swBtn->toolTip() != swatches[i].name) {
+                swatchesValid = false;
+            }
+        }
+
+        // Test arrow key navigation between swatches
+        auto* swatch0 = dlg->findChild<QPushButton*>(u"TrackSwatch_0"_s);
+        auto* swatch1 = dlg->findChild<QPushButton*>(u"TrackSwatch_1"_s);
+        if (swatch0 && swatch1) {
+            swatch0->setFocus();
+            swatch0->setChecked(true);
+
+            QKeyEvent rightKey(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier);
+            QCoreApplication::sendEvent(swatch0, &rightKey);
+            arrowChecked = swatch1->isChecked();
+        }
+
+        // Add track "Rust"
         auto* addBtn = buttonNamed(dlg, u"TrackNewBtn"_s);
-        QVERIFY(addBtn != nullptr);
-        addBtn->click();
+        if (addBtn) addBtn->click();
 
         auto* nameEdit = childNamed<QLineEdit>(dlg, u"TrackNameEdit"_s);
-        QVERIFY(nameEdit != nullptr);
-        nameEdit->setText(u"Rust"_s);
+        if (nameEdit) nameEdit->setText(u"Rust"_s);
+        if (swatch0) swatch0->click();
 
-        // Click swatch 0
-        auto* swatch = dlg->findChild<QPushButton*>(u"TrackSwatch_0"_s);
-        if (swatch) swatch->click();
+        if (auto* save = buttonNamed(dlg, u"TrackSaveBtn"_s)) save->click();
 
-        buttonNamed(dlg, u"TrackSaveBtn"_s)->click();
+        // 2. Test duplicate name error (including different case: "rust")
+        if (addBtn) addBtn->click();
+        if (nameEdit) nameEdit->setText(u"rust"_s);
+        auto* saveBtn = buttonNamed(dlg, u"TrackSaveBtn"_s);
+        auto* msgLabel = childNamed<QLabel>(dlg, u"TrackMessageLabel"_s);
+        if (saveBtn && msgLabel && !saveBtn->isEnabled() && !msgLabel->isHidden()) {
+            dupErrorShown = true;
+            dupMsg = msgLabel->text();
+        }
+
         buttonNamed(dlg, u"TrackCloseBtn"_s)->click();
     });
 
     studyPage()->openTrackDialog();
     QCoreApplication::processEvents();
 
+    QVERIFY(swatchesValid);
+    QVERIFY(arrowChecked);
+    QVERIFY(dupErrorShown);
+    QCOMPARE(dupMsg, QStringLiteral("A track with this name already exists."));
+
     const auto tracks = m_studyCtx->tracks().all();
     QCOMPARE(tracks.size(), 1);
     QCOMPARE(tracks.first().name, u"Rust"_s);
     const int rustTrackId = tracks.first().id;
 
-    // Add topic and session under Rust
+    // 3. Test non-preset track color shows custom swatch
+    Track customTrack;
+    customTrack.name = u"Custom Track"_s;
+    customTrack.color = u"#123456"_s;
+    QVERIFY(m_studyCtx->tracks().insert(customTrack));
+    const int customTrackId = m_studyCtx->tracks().all().last().id;
+
+    bool customExists = false;
+    bool customNotHidden = false;
+    bool customChecked = false;
+    QString customTip;
+
+    withNextModal([customTrackId, &customExists, &customNotHidden, &customChecked, &customTip](QWidget* modal) {
+        auto* dlg = qobject_cast<TrackDialog*>(modal);
+        if (dlg) {
+            dlg->selectTrack(customTrackId);
+            auto* customSwatch = dlg->findChild<QPushButton*>(u"TrackSwatch_Custom"_s);
+            if (customSwatch) {
+                customExists = true;
+                customNotHidden = !customSwatch->isHidden();
+                customChecked = customSwatch->isChecked();
+                customTip = customSwatch->toolTip();
+            }
+            buttonNamed(dlg, u"TrackCloseBtn"_s)->click();
+        }
+    });
+    studyPage()->openTrackDialog();
+    QCoreApplication::processEvents();
+
+    QVERIFY(customExists);
+    QVERIFY(customNotHidden);
+    QVERIFY(customChecked);
+    QVERIFY(customTip.contains(u"#123456"_s));
+
+    // 4. Add topic and session under Rust, verify delete confirmation message & cascade
     Topic topic;
     topic.trackId = rustTrackId;
     topic.title = u"Lifetimes and Borrowing"_s;
@@ -2616,15 +2745,16 @@ void tst_UiSmoke::testStudyTrackDialogCrudAndCascade() {
     QCOMPARE(chips->currentId(), rustTrackId);
 
     // Delete track with confirmation in TrackDialog
-    withNextModal([](QWidget* modal) {
+    withNextModal([rustTrackId](QWidget* modal) {
         auto* dlg = qobject_cast<TrackDialog*>(modal);
         QVERIFY(dlg != nullptr);
-        auto* list = childNamed<QListWidget>(dlg, u"TrackListWidget"_s);
-        QVERIFY(list != nullptr);
-        QCOMPARE(list->count(), 1);
-        list->setCurrentRow(0);
+        dlg->selectTrack(rustTrackId);
 
         answerNextMessageBox([](QMessageBox* box) {
+            // Verify delete confirmation mentions number of topics and preserved study time
+            const QString text = box->text();
+            QVERIFY(text.contains(u"1 topic(s)"_s));
+            QVERIFY(text.contains(u"Logged study time will be kept"_s));
             box->button(QMessageBox::Yes)->click();
         });
 
@@ -2636,8 +2766,8 @@ void tst_UiSmoke::testStudyTrackDialogCrudAndCascade() {
     QCoreApplication::processEvents();
 
     // Verify track is deleted, topic is deleted (cascade), sessions are retained, filter reset to -1
-    QVERIFY(m_studyCtx->tracks().all().isEmpty());
-    QVERIFY(m_studyCtx->topics().all().isEmpty());
+    QVERIFY(!m_studyCtx->tracks().byId(rustTrackId).has_value());
+    QVERIFY(m_studyCtx->topics().byTrack(rustTrackId).isEmpty());
     QCOMPARE(m_studyCtx->sessions().totalMinutesInRange(today, today), 60);
     QCOMPARE(chips->currentId(), -1);
 }
@@ -2728,25 +2858,46 @@ void tst_UiSmoke::testHeaderSearchDisabledOnStudyPage() {
     auto* searchEdit = m_window->findChild<QLineEdit*>(u"HeaderSearchEdit"_s);
     QVERIFY(searchEdit != nullptr);
 
-    // Switch to Study page
+    // 1. Study page (page index 1): disabled with local search tooltip
     m_window->sidebar()->setCurrentPage(1);
     emit m_window->sidebar()->pageSelected(1);
     QCOMPARE(m_window->pageStack()->currentIndex(), 1);
-
     QVERIFY(!searchEdit->isEnabled());
     QCOMPARE(searchEdit->toolTip(), u"Use the search box on this page, Ctrl+F"_s);
 
-    // Switch to Jobs page
+    // 2. Calendar page (page index 3): enabled, tooltip empty
+    m_window->sidebar()->setCurrentPage(3);
+    emit m_window->sidebar()->pageSelected(3);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 3);
+    QVERIFY(searchEdit->isEnabled());
+    QVERIFY(searchEdit->toolTip().isEmpty());
+
+    // 3. Home page (page index 0): enabled, tooltip empty
+    m_window->sidebar()->setCurrentPage(0);
+    emit m_window->sidebar()->pageSelected(0);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 0);
+    QVERIFY(searchEdit->isEnabled());
+    QVERIFY(searchEdit->toolTip().isEmpty());
+
+    // 4. Settings page (page index 4): enabled, tooltip empty
+    m_window->sidebar()->setCurrentPage(4);
+    emit m_window->sidebar()->pageSelected(4);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 4);
+    QVERIFY(searchEdit->isEnabled());
+    QVERIFY(searchEdit->toolTip().isEmpty());
+
+    // 5. Jobs page (page index 2): enabled, tooltip empty
     m_window->sidebar()->setCurrentPage(2);
     emit m_window->sidebar()->pageSelected(2);
     QCOMPARE(m_window->pageStack()->currentIndex(), 2);
-
     QVERIFY(searchEdit->isEnabled());
+    QVERIFY(searchEdit->toolTip().isEmpty());
 
-    // Switch back to Study page
+    // Switch back to Study page: disabled again
     m_window->sidebar()->setCurrentPage(1);
     emit m_window->sidebar()->pageSelected(1);
     QVERIFY(!searchEdit->isEnabled());
+    QCOMPARE(searchEdit->toolTip(), u"Use the search box on this page, Ctrl+F"_s);
 }
 
 void tst_UiSmoke::testCalendarJumpToStudyTopic() {
@@ -2769,7 +2920,23 @@ void tst_UiSmoke::testCalendarJumpToStudyTopic() {
     emit m_window->sidebar()->pageSelected(3);
     QCOMPARE(m_window->pageStack()->currentIndex(), 3);
 
-    // Call openTopic(topicId)
+    // Verify SPEC C5: Double-clicking a day with study target still opens InterviewDialog
+    int interviewDialogs = 0;
+    answerModalWhenReady([&interviewDialogs](QWidget* modal) {
+        if (auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::InterviewDialog*>(modal)) {
+            interviewDialogs++;
+            dlg->done(QDialog::Rejected);
+        }
+    });
+    auto* calPage = qobject_cast<JobPrep::Ui::Pages::CalendarPage*>(m_window->pageStack()->currentWidget());
+    QVERIFY(calPage != nullptr);
+    auto* mv = calPage->findChild<JobPrep::Ui::Widgets::MonthView*>();
+    QVERIFY(mv != nullptr);
+    mv->setVisibleMonth(day);
+    QTest::mouseDClick(mv, Qt::LeftButton, Qt::KeyboardModifiers(), mv->dayRect(day).center());
+    QCOMPARE(interviewDialogs, 1);
+
+    // Call openTopic(topicId) in Board view
     m_window->openTopic(topicId);
     QCoreApplication::processEvents();
 
@@ -2779,6 +2946,18 @@ void tst_UiSmoke::testCalendarJumpToStudyTopic() {
     QVERIFY(study != nullptr);
     QCOMPARE(study->selectedTopicId(), std::optional<int>(topicId));
     QVERIFY(study->isDetailVisible());
+
+    // Test jumping while Study is in List view (works in both views)
+    study->setViewMode(u"list"_s);
+    m_window->sidebar()->setCurrentPage(3);
+    emit m_window->sidebar()->pageSelected(3);
+    m_window->openTopic(topicId);
+    QCoreApplication::processEvents();
+    QCOMPARE(m_window->pageStack()->currentIndex(), 1);
+    QCOMPARE(study->viewMode(), u"list"_s);
+    QCOMPARE(study->selectedTopicId(), std::optional<int>(topicId));
+    QVERIFY(study->isDetailVisible());
+    study->setViewMode(u"board"_s);
 
     // Now test jump when topic is hidden by track filter and search text
     Track track2;
@@ -2860,6 +3039,75 @@ void tst_UiSmoke::testCalendarTopicDateAndTrackRename() {
     QVERIFY(!monthView()->markersFor(today).kinds.contains(JobPrep::Domain::AgendaKind::StudyTarget));
 }
 
+void tst_UiSmoke::testCalendarTrackDeleteClearsMarkers() {
+    const QDate today(2026, 10, 11);
+    resetCalendarData(today);
+
+    Track track;
+    track.name = u"Track Cascade Markers"_s;
+    track.color = u"#3b82f6"_s;
+    QVERIFY(m_calCtx->tracks().insert(track));
+    const int trackId = m_calCtx->tracks().all().last().id;
+
+    Topic topic;
+    topic.trackId = trackId;
+    topic.title = u"Target Marker Topic"_s;
+    topic.targetDate = today;
+    QVERIFY(m_calCtx->topics().insert(topic));
+
+    m_calCtx->topics().changed();
+    QCoreApplication::processEvents();
+
+    QVERIFY(monthView()->markersFor(today).kinds.contains(JobPrep::Domain::AgendaKind::StudyTarget));
+
+    // Deleting track ONLY (triggers tracks().changed() which cascades in DB and signals CalendarPage)
+    QVERIFY(m_calCtx->tracks().remove(trackId));
+    m_calCtx->tracks().changed();
+    QCoreApplication::processEvents();
+
+    QVERIFY(!monthView()->markersFor(today).kinds.contains(JobPrep::Domain::AgendaKind::StudyTarget));
+}
+
+void tst_UiSmoke::testCtrlNTriggersCurrentPageNew() {
+    // 1. Jobs page: triggerNew() opens ApplicationDialog
+    m_window->sidebar()->setCurrentPage(2);
+    emit m_window->sidebar()->pageSelected(2);
+    int appDialogs = 0;
+    answerModalWhenReady([&appDialogs](QWidget* modal) {
+        if (auto* dlg = qobject_cast<ApplicationDialog*>(modal)) {
+            appDialogs++;
+            dlg->done(QDialog::Rejected);
+        }
+    });
+    m_window->triggerCurrentPageNew();
+    QCOMPARE(appDialogs, 1);
+
+    // 2. Calendar page: triggerNew() opens InterviewDialog
+    m_window->sidebar()->setCurrentPage(3);
+    emit m_window->sidebar()->pageSelected(3);
+    int intDialogs = 0;
+    answerModalWhenReady([&intDialogs](QWidget* modal) {
+        if (auto* dlg = qobject_cast<InterviewDialog*>(modal)) {
+            intDialogs++;
+            dlg->done(QDialog::Rejected);
+        }
+    });
+    m_window->triggerCurrentPageNew();
+    QCOMPARE(intDialogs, 1);
+
+    // 3. Study page: triggerNew() focuses Backlog quick-add
+    m_window->sidebar()->setCurrentPage(1);
+    emit m_window->sidebar()->pageSelected(1);
+    m_window->triggerCurrentPageNew();
+    auto* study = qobject_cast<JobPrep::Ui::Pages::StudyPage*>(m_window->pageStack()->currentWidget());
+    QVERIFY(study != nullptr);
+    auto* backlog = childNamed<JobPrep::Ui::Widgets::TopicBoardColumn>(study, u"StudyColumn_Backlog"_s);
+    if (backlog) {
+        auto* quickAdd = childNamed<QLineEdit>(backlog, u"StudyColumnQuickAdd"_s);
+        QCOMPARE(QApplication::focusWidget(), quickAdd);
+    }
+}
+
 void tst_UiSmoke::testStudyListViewToggleSortAndDelegates() {
     const QDate today(2026, 10, 19);
     resetStudyData(today);
@@ -2908,6 +3156,28 @@ void tst_UiSmoke::testStudyListViewToggleSortAndDelegates() {
     QCoreApplication::processEvents();
     QVERIFY(studyPage()->isDetailVisible());
 
+    // Test Enter key on table opens and focuses detail panel
+    studyPage()->setDetailVisible(false);
+    QKeyEvent returnKey(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    QCoreApplication::sendEvent(tableView, &returnKey);
+    QCoreApplication::processEvents();
+    QVERIFY(studyPage()->isDetailVisible());
+
+    // Test Ctrl+F / focusSearch focuses page search box
+    studyPage()->focusSearch();
+    auto* searchEdit = childNamed<QLineEdit>(studyPage(), u"StudySearchEdit"_s);
+    QCOMPARE(QApplication::focusWidget(), searchEdit);
+
+    // Test Delete key deletes selected topic with confirmation
+    const int countBefore = proxy->rowCount();
+    answerNextMessageBox([](QMessageBox* box) {
+        box->button(QMessageBox::Yes)->click();
+    });
+    QKeyEvent deleteKey(QEvent::KeyPress, Qt::Key_Delete, Qt::NoModifier);
+    QCoreApplication::sendEvent(tableView, &deleteKey);
+    QCoreApplication::processEvents();
+    QCOMPARE(proxy->rowCount(), countBefore - 1);
+
     // Switch back to board view
     boardBtn->click();
     QCoreApplication::processEvents();
@@ -2935,7 +3205,17 @@ void tst_UiSmoke::testStudyScreenshots() {
         save(JobPrep::Ui::Theme::ThemeMode::Dark, name + u"-dark"_s);
     };
 
-    // 1. Empty board
+    // 1. Empty board: tracks exist, but 0 topics
+    Track trCpp;
+    trCpp.name = u"C++"_s;
+    trCpp.color = u"#5B6CFF"_s;
+    QVERIFY(m_studyCtx->tracks().insert(trCpp));
+    Track trEng;
+    trEng.name = u"English"_s;
+    trEng.color = u"#F59E0B"_s;
+    QVERIFY(m_studyCtx->tracks().insert(trEng));
+    m_studyCtx->tracks().changed();
+    QCoreApplication::processEvents();
     forBothThemes(u"study-board-empty"_s);
 
     // 2. Board with cards
@@ -3010,7 +3290,7 @@ void tst_UiSmoke::testStudyScreenshots() {
         QVERIFY(img.save(QDir(dir).filePath(u"study-session-dialog-"_s + (mode == JobPrep::Ui::Theme::ThemeMode::Light ? u"light.png"_s : u"dark.png"_s))));
     }
 
-    // 8. Empty tracks state
+    // 8. Empty tracks state: 0 tracks, 0 topics
     resetStudyData(today);
     forBothThemes(u"study-empty-tracks"_s);
 }

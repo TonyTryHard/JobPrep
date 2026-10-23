@@ -23,6 +23,12 @@ enum class AccentPreset {
     Sky,
 };
 
+/// Preset color swatch for study tracks (SPEC §7.6 / M4 amendment C2).
+struct TrackSwatch {
+    QString hex;
+    QString name;
+};
+
 /// Concrete color tokens resolved for a theme mode and accent color.
 struct ColorTokens {
     QColor bg;
@@ -51,6 +57,7 @@ public:
     static QString accentToString(AccentPreset accent);
     static ThemeMode themeModeFromString(const QString& name);
     static QString themeModeToString(ThemeMode mode);
+    static const QList<TrackSwatch>& trackPalette();
 };
 
 }  // namespace JobPrep::Ui::Theme

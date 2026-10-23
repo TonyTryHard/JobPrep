@@ -7,6 +7,7 @@ set(MODELS_TESTS
     tst_ApplicationFilterProxy
     tst_TopicListModel
     tst_TopicBoardProxy
+    tst_TopicTableProxy
 )
 
 foreach(test_name IN LISTS MODELS_TESTS)

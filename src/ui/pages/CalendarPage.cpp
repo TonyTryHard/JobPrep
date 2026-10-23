@@ -262,7 +262,7 @@ void CalendarPage::setupAgendaPanel(QWidget* panel) {
     auto* addTargetBtn = new QPushButton(tr("+ Study target"), panel);
     addTargetBtn->setObjectName(u"CalendarAddTargetBtn"_s);
     addTargetBtn->setEnabled(false);
-    addTargetBtn->setToolTip(tr("Study targets open in M4"));
+    addTargetBtn->setToolTip(tr("Plan and manage study target dates on the Study page"));
 
     panelHeader->addWidget(addInterviewBtn);
     panelHeader->addWidget(addFollowUpBtn);

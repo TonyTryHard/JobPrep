@@ -71,7 +71,6 @@ void SessionDialog::setupUi() {
 
     m_messageLabel = new QLabel(this);
     m_messageLabel->setObjectName(u"SessionMessageLabel"_s);
-    m_messageLabel->setStyleSheet(u"color: #ef4444;"_s);
     m_messageLabel->hide();
     mainLayout->addWidget(m_messageLabel);
 

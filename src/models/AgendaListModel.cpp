@@ -36,9 +36,7 @@ QVariant AgendaListModel::data(const QModelIndex& index, int role) const {
         case DateRole:
             return item.date;
         case Qt::ToolTipRole:
-            return item.kind == Domain::AgendaKind::StudyTarget
-                       ? QVariant(u"Study targets open in a later milestone"_s)
-                       : QVariant();
+            return QVariant();
         case PastRole:
             return item.past;
         default:
