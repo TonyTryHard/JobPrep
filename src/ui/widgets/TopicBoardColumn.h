@@ -69,6 +69,7 @@ public:
     std::optional<int> topicIdAt(int row) const;
     std::optional<int> currentTopicId() const;
     bool selectTopicId(int id);
+    void clearSelection();
 
     void focusQuickAdd();
     /// Empty `trackName` disables the quick-add with a hint (no tracks yet).

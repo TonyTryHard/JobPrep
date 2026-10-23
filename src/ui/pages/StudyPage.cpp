@@ -289,8 +289,8 @@ void StudyPage::setupBoardView() {
                     onWriteError(tr("Could not move the topic."), reason);
                 });
         connect(column->list()->selectionModel(), &QItemSelectionModel::currentChanged, this,
-                [this](const QModelIndex& current, const QModelIndex&) {
-                    onCurrentChanged(current);
+                [this, column](const QModelIndex& current, const QModelIndex&) {
+                    onColumnCurrentChanged(column, current);
                 });
     }
 
@@ -445,10 +445,15 @@ bool StudyPage::selectTopic(int id) {
 
     m_selectedTopicId = id;
 
-    // Restore in board
-    if (auto* column = columnContaining(id)) {
-        column->selectTopicId(id);
-        m_boardScroll->ensureWidgetVisible(column);
+    // Restore in board: select in target column and clear all other columns
+    auto* targetCol = columnContaining(id);
+    for (auto* col : m_columns) {
+        if (col == targetCol) {
+            col->selectTopicId(id);
+            m_boardScroll->ensureWidgetVisible(col);
+        } else {
+            col->clearSelection();
+        }
     }
 
     // Restore in table
@@ -518,21 +523,43 @@ void StudyPage::onTracksChanged() {
 }
 
 void StudyPage::onModelReset() {
-    m_inReset = false;
-    const auto selection = selectedTopicId();
-    if (!selection) {
-        if (m_selectedTopicId) {
-            m_selectedTopicId.reset();
-            m_detail->clearTopic();
-        }
+    if (!m_selectedTopicId.has_value()) {
+        for (auto* col : m_columns) col->clearSelection();
+        m_detail->clearTopic();
+        m_inReset = false;
         return;
     }
-    if (m_selectedTopicId == *selection) {
-        m_detail->refreshFromRepository();
-    } else {
-        m_selectedTopicId = *selection;
-        m_detail->loadFrom(*selection);
+    const int topicId = *m_selectedTopicId;
+    const auto topic = m_topics.byId(topicId);
+    if (!topic) {
+        m_selectedTopicId.reset();
+        for (auto* col : m_columns) col->clearSelection();
+        m_detail->clearTopic();
+        m_inReset = false;
+        return;
     }
+
+    auto* targetCol = columnContaining(topicId);
+    for (auto* col : m_columns) {
+        if (col == targetCol) {
+            col->selectTopicId(topicId);
+        } else {
+            col->clearSelection();
+        }
+    }
+    if (m_settings.studyViewMode() == u"list"_s && m_tableView && m_tableProxy) {
+        for (int row = 0; row < m_tableProxy->rowCount(); ++row) {
+            const auto idx = m_tableProxy->index(row, 0);
+            if (idx.data(Models::TopicListModel::IdRole).toInt() == topicId) {
+                m_tableView->setCurrentIndex(idx);
+                m_tableView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                break;
+            }
+        }
+    }
+    m_selectedTopicId = topicId;
+    m_detail->refreshFromRepository();
+    m_inReset = false;
 }
 
 void StudyPage::onChipSelected(int id) {
@@ -646,16 +673,33 @@ void StudyPage::onWriteError(const QString& what, const QString& error) {
     showMessage(error.isEmpty() ? what : u"%1 %2"_s.arg(what, error), "error");
 }
 
-void StudyPage::onCurrentChanged(const QModelIndex& current) {
+void StudyPage::onColumnCurrentChanged(Widgets::TopicBoardColumn* activeColumn, const QModelIndex& current) {
     if (m_inReset) return;
-    if (!current.isValid()) {
-        if (!m_selectedTopicId) return;
-        m_detail->flush();
-        m_detail->clearTopic();
-        m_selectedTopicId.reset();
+    if (!current.isValid() || (activeColumn->list()->selectionModel() && !activeColumn->list()->selectionModel()->isSelected(current))) {
+        bool anySelected = false;
+        for (const auto* col : m_columns) {
+            if (col->list()->currentIndex().isValid() &&
+                col->list()->selectionModel() &&
+                col->list()->selectionModel()->isSelected(col->list()->currentIndex())) {
+                anySelected = true;
+                break;
+            }
+        }
+        if (!anySelected) {
+            if (m_selectedTopicId) {
+                m_detail->flush();
+                m_detail->clearTopic();
+                m_selectedTopicId.reset();
+            }
+        }
         return;
     }
     const int id = current.data(Models::TopicListModel::IdRole).toInt();
+    for (auto* col : m_columns) {
+        if (col != activeColumn) {
+            col->clearSelection();
+        }
+    }
     if (m_selectedTopicId == id) return;
     m_selectedTopicId = id;
     m_detail->setTracks(m_tracks.all());
@@ -675,9 +719,27 @@ void StudyPage::focusColumn(int fromColumn, int delta) {
     }();
     auto* column = m_columns.at(target);
     column->list()->setFocus(Qt::OtherFocusReason);
-    if (column->itemCount() == 0) return;
+    if (column->itemCount() == 0) {
+        for (auto* col : m_columns) col->clearSelection();
+        m_selectedTopicId.reset();
+        m_detail->clearTopic();
+        return;
+    }
     const int clamped = std::clamp(row, 0, column->itemCount() - 1);
-    column->list()->setCurrentIndex(column->proxy()->index(clamped, 0));
+    const QModelIndex targetIndex = column->proxy()->index(clamped, 0);
+    const int id = targetIndex.data(Models::TopicListModel::IdRole).toInt();
+
+    m_selectedTopicId = id;
+    for (auto* col : m_columns) {
+        if (col == column) {
+            col->selectTopicId(id);
+        } else {
+            col->clearSelection();
+        }
+    }
+    m_detail->setTracks(m_tracks.all());
+    m_detail->loadFrom(id);
+    if (!m_suppressDetailOpen) setDetailVisible(true);
 }
 
 void StudyPage::moveTopicTo(int id, Domain::TopicStatus status) {
@@ -689,6 +751,7 @@ void StudyPage::moveTopicTo(int id, Domain::TopicStatus status) {
         orderedIds.append(*target->topicIdAt(row));
     }
     if (!orderedIds.contains(id)) orderedIds.append(id);
+    m_selectedTopicId = id;
     if (!m_topics.moveTopic(id, status, orderedIds)) {
         onWriteError(tr("Could not move the topic."), m_topics.lastError());
     }
@@ -731,11 +794,7 @@ std::optional<int> StudyPage::selectedTopicId() const {
         }
         return std::nullopt;
     }
-    for (const auto* column : m_columns) {
-        const QModelIndex current = column->list()->currentIndex();
-        if (current.isValid()) return current.data(Models::TopicListModel::IdRole).toInt();
-    }
-    return std::nullopt;
+    return m_selectedTopicId;
 }
 
 void StudyPage::refreshChips() {

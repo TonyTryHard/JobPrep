@@ -168,9 +168,25 @@ std::optional<int> TopicBoardColumn::currentTopicId() const {
 bool TopicBoardColumn::selectTopicId(int id) {
     const int row = indexOfTopic(id);
     if (row < 0) return false;
-    m_list->setCurrentIndex(m_proxy->index(row, 0));
-    m_list->scrollTo(m_list->currentIndex());
+    const QModelIndex idx = m_proxy->index(row, 0);
+    m_list->setCurrentIndex(idx);
+    m_list->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect);
+    m_list->scrollTo(idx);
+    if (m_restorer) {
+        m_restorer->setSavedId(id);
+    }
     return true;
+}
+
+void TopicBoardColumn::clearSelection() {
+    if (m_list && m_list->selectionModel()) {
+        const QSignalBlocker blocker(m_list->selectionModel());
+        m_list->selectionModel()->clearSelection();
+        m_list->selectionModel()->clearCurrentIndex();
+    }
+    if (m_restorer) {
+        m_restorer->setSavedId(std::nullopt);
+    }
 }
 
 void TopicBoardColumn::focusQuickAdd() {

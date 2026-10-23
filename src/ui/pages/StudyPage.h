@@ -127,7 +127,7 @@ private:
     void applyFilters();
     void refreshViewState();
     void updateQuickAddTracks();
-    void onCurrentChanged(const QModelIndex& current);
+    void onColumnCurrentChanged(Widgets::TopicBoardColumn* activeColumn, const QModelIndex& current);
     void onTableSelectionChanged();
     void focusColumn(int fromColumn, int delta);
     void moveTopicTo(int id, Domain::TopicStatus status);

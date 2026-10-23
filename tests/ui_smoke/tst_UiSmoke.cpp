@@ -253,7 +253,9 @@ private slots:
     void testCalendarJumpToStudyTopic();
     void testCalendarTopicDateAndTrackRename();
     void testCalendarTrackDeleteClearsMarkers();
+    void testMonthViewDoubleClicksDayWithoutOpeningStudyTarget();
     void testCtrlNTriggersCurrentPageNew();
+    void testStudyBoardSingleSelectionAcrossColumns();
     void testStudyListViewToggleSortAndDelegates();
     void testStudyScreenshots();
     void testZeroWarnings();
@@ -2425,6 +2427,8 @@ void tst_UiSmoke::testStudyPriorityTooltip() {
     QHelpEvent help(QEvent::ToolTip, option.rect.center(), backlogCol->list()->mapToGlobal(option.rect.center()));
     const bool handled = delegate->helpEvent(&help, backlogCol->list(), option, idx);
     QVERIFY(handled);
+    QToolTip::hideText();
+    QCoreApplication::processEvents();
     const auto prio = static_cast<JobPrep::Domain::Priority>(
         idx.data(JobPrep::Models::TopicListModel::PriorityRole).toInt());
     const QString expected = QStringLiteral("Priority: %1").arg(JobPrep::Ui::Theme::StatusStyle::label(prio));
@@ -3068,6 +3072,46 @@ void tst_UiSmoke::testCalendarTrackDeleteClearsMarkers() {
     QVERIFY(!monthView()->markersFor(today).kinds.contains(JobPrep::Domain::AgendaKind::StudyTarget));
 }
 
+void tst_UiSmoke::testMonthViewDoubleClicksDayWithoutOpeningStudyTarget() {
+    const QDate day(2026, 10, 22);
+    Track track;
+    track.name = u"Interview Target Track"_s;
+    track.color = u"#3b82f6"_s;
+    QVERIFY(m_ctx->tracks().insert(track));
+    const int trackId = m_ctx->tracks().all().last().id;
+
+    Topic topic;
+    topic.trackId = trackId;
+    topic.title = u"System Architecture"_s;
+    topic.targetDate = day;
+    QVERIFY(m_ctx->topics().insert(topic));
+
+    // Switch to Calendar
+    m_window->sidebar()->setCurrentPage(3);
+    emit m_window->sidebar()->pageSelected(3);
+    QCOMPARE(m_window->pageStack()->currentIndex(), 3);
+
+    auto* calPage = qobject_cast<JobPrep::Ui::Pages::CalendarPage*>(m_window->pageStack()->currentWidget());
+    QVERIFY(calPage != nullptr);
+    auto* mv = calPage->findChild<JobPrep::Ui::Widgets::MonthView*>();
+    QVERIFY(mv != nullptr);
+    mv->setVisibleMonth(day);
+
+    // Double-click on day having a study target opens InterviewDialog per SPEC C5, never jumps to Study
+    int interviewDialogs = 0;
+    answerModalWhenReady([&interviewDialogs](QWidget* modal) {
+        if (auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::InterviewDialog*>(modal)) {
+            interviewDialogs++;
+            dlg->done(QDialog::Rejected);
+        }
+    });
+
+    QTest::mouseDClick(mv, Qt::LeftButton, Qt::KeyboardModifiers(), mv->dayRect(day).center());
+    QCOMPARE(interviewDialogs, 1);
+    // MainWindow remains on Calendar page (did not jump to Study)
+    QCOMPARE(m_window->pageStack()->currentIndex(), 3);
+}
+
 void tst_UiSmoke::testCtrlNTriggersCurrentPageNew() {
     // 1. Jobs page: triggerNew() opens ApplicationDialog
     m_window->sidebar()->setCurrentPage(2);
@@ -3106,6 +3150,107 @@ void tst_UiSmoke::testCtrlNTriggersCurrentPageNew() {
         auto* quickAdd = childNamed<QLineEdit>(backlog, u"StudyColumnQuickAdd"_s);
         QCOMPARE(QApplication::focusWidget(), quickAdd);
     }
+
+    // 4. Home page: triggerNew() is a safe no-op (no modal opened)
+    m_window->sidebar()->setCurrentPage(0);
+    emit m_window->sidebar()->pageSelected(0);
+    m_window->triggerCurrentPageNew();
+    QVERIFY(QApplication::activeModalWidget() == nullptr);
+
+    // 5. Settings page: triggerNew() is a safe no-op (no modal opened)
+    m_window->sidebar()->setCurrentPage(4);
+    emit m_window->sidebar()->pageSelected(4);
+    m_window->triggerCurrentPageNew();
+    QVERIFY(QApplication::activeModalWidget() == nullptr);
+}
+
+void tst_UiSmoke::testStudyBoardSingleSelectionAcrossColumns() {
+    const QDate today(2026, 10, 19);
+    resetStudyData(today);
+
+    Track track;
+    track.name = u"Concurrency Track"_s;
+    track.color = u"#5b6cff"_s;
+    QVERIFY(m_studyCtx->tracks().insert(track));
+    const int trackId = m_studyCtx->tracks().all().last().id;
+
+    // Insert card A in Backlog, card B in In Progress, card C in Review
+    Topic topicA;
+    topicA.trackId = trackId;
+    topicA.title = u"Topic A"_s;
+    topicA.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(m_studyCtx->topics().insert(topicA));
+    const int idA = m_studyCtx->topics().all().last().id;
+
+    Topic topicB;
+    topicB.trackId = trackId;
+    topicB.title = u"Topic B"_s;
+    topicB.status = JobPrep::Domain::TopicStatus::InProgress;
+    QVERIFY(m_studyCtx->topics().insert(topicB));
+    const int idB = m_studyCtx->topics().all().last().id;
+
+    Topic topicC;
+    topicC.trackId = trackId;
+    topicC.title = u"Topic C"_s;
+    topicC.status = JobPrep::Domain::TopicStatus::Review;
+    QVERIFY(m_studyCtx->topics().insert(topicC));
+
+    m_studyCtx->topics().changed();
+    QCoreApplication::processEvents();
+
+    auto* colBacklog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    auto* colInProgress = studyColumn(JobPrep::Domain::TopicStatus::InProgress);
+    auto* colReview = studyColumn(JobPrep::Domain::TopicStatus::Review);
+    QVERIFY(colBacklog && colInProgress && colReview);
+
+    // 1. Click card A in Backlog, then card B in In Progress -> Backlog has no selection, detail panel shows B
+    colBacklog->selectTopicId(idA);
+    QCoreApplication::processEvents();
+    QCOMPARE(colBacklog->list()->currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt(), idA);
+    QVERIFY(colBacklog->list()->selectionModel()->isSelected(colBacklog->list()->currentIndex()));
+
+    colInProgress->selectTopicId(idB);
+    QCoreApplication::processEvents();
+    // Backlog selection cleared
+    QVERIFY(!colBacklog->list()->selectionModel()->hasSelection());
+    QVERIFY(!colBacklog->list()->currentIndex().isValid());
+    // In Progress has card B selected
+    QCOMPARE(colInProgress->list()->currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt(), idB);
+    QVERIFY(colInProgress->list()->selectionModel()->isSelected(colInProgress->list()->currentIndex()));
+    // Detail panel shows topic B
+    QCOMPARE(studyPage()->selectedTopicId(), std::optional<int>(idB));
+    auto* titleEdit = studyPage()->detailPanel()->findChild<QLineEdit*>(u"StudyDetailTitleEdit"_s);
+    QVERIFY(titleEdit != nullptr && titleEdit->text().contains(u"Topic B"_s));
+
+    // 2. Alt+Right on B -> moves B to Review; only Review has a selection
+    QKeyEvent altRight(QEvent::KeyPress, Qt::Key_Right, Qt::AltModifier);
+    QCoreApplication::sendEvent(colInProgress->list(), &altRight);
+    QCoreApplication::processEvents();
+    // In Progress and Backlog have no selection
+    QVERIFY(!colBacklog->list()->selectionModel()->hasSelection());
+    QVERIFY(!colInProgress->list()->selectionModel()->hasSelection());
+    // Only Review has selection
+    QVERIFY(colReview->list()->selectionModel()->hasSelection());
+    QCOMPARE(colReview->list()->currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt(), idB);
+    QCOMPARE(studyPage()->selectedTopicId(), std::optional<int>(idB));
+
+    // 3. Model reset (e.g. topic update or checklist tick) keeps exactly one selected card
+    m_studyCtx->topics().changed();
+    QCoreApplication::processEvents();
+    QVERIFY(!colBacklog->list()->selectionModel()->hasSelection());
+    QVERIFY(!colInProgress->list()->selectionModel()->hasSelection());
+    QVERIFY(colReview->list()->selectionModel()->hasSelection());
+    QCOMPARE(colReview->list()->currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt(), idB);
+    QCOMPARE(studyPage()->selectedTopicId(), std::optional<int>(idB));
+
+    // 4. selectTopic(id) for a card in another column (e.g. topic A in Backlog) clears old selection
+    studyPage()->selectTopic(idA);
+    QCoreApplication::processEvents();
+    QVERIFY(colBacklog->list()->selectionModel()->hasSelection());
+    QCOMPARE(colBacklog->list()->currentIndex().data(JobPrep::Models::TopicListModel::IdRole).toInt(), idA);
+    QVERIFY(!colInProgress->list()->selectionModel()->hasSelection());
+    QVERIFY(!colReview->list()->selectionModel()->hasSelection());
+    QCOMPARE(studyPage()->selectedTopicId(), std::optional<int>(idA));
 }
 
 void tst_UiSmoke::testStudyListViewToggleSortAndDelegates() {
@@ -3226,10 +3371,14 @@ void tst_UiSmoke::testStudyScreenshots() {
     QCoreApplication::processEvents();
     forBothThemes(u"study-board"_s);
 
-    // 3. Detail panel open
+    // 3. Single card selected on board (detail panel closed)
     const auto allTopics = m_studyCtx->topics().all();
     if (!allTopics.isEmpty()) {
         studyPage()->selectTopic(allTopics.first().id);
+        studyPage()->setDetailVisible(false);
+        QCoreApplication::processEvents();
+        forBothThemes(u"study-board-selected"_s);
+        studyPage()->setDetailVisible(true);
         QCoreApplication::processEvents();
     }
     forBothThemes(u"study-board-detail"_s);
