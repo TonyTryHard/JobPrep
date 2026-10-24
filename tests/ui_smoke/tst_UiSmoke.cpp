@@ -3503,8 +3503,6 @@ void tst_UiSmoke::testFormatHelper() {
     QCOMPARE(FormatHelper::formatStreak(0), u"0-day streak"_s);
     QCOMPARE(FormatHelper::formatStreak(1), u"1-day streak"_s);
     QCOMPARE(FormatHelper::formatStreak(4), u"4-day streak"_s);
-    QCOMPARE(FormatHelper::formatStreakDays(1), u"1 day"_s);
-    QCOMPARE(FormatHelper::formatStreakDays(2), u"2 days"_s);
 
     // Active processes
     QCOMPARE(FormatHelper::formatActiveProcesses(0), u"0 active processes"_s);
@@ -3512,11 +3510,13 @@ void tst_UiSmoke::testFormatHelper() {
     QCOMPARE(FormatHelper::formatActiveProcesses(8), u"8 active processes"_s);
 
     // Next interview status bar text
-    QCOMPARE(FormatHelper::formatNextInterview(std::nullopt, QString()),
+    QCOMPARE(FormatHelper::formatNextInterview(std::nullopt),
              u"Next: No upcoming interviews"_s);
-    Interview iv;
-    iv.startAt = QDateTime(QDate(2026, 10, 30), QTime(14, 0));
-    QCOMPARE(FormatHelper::formatNextInterview(iv, u"Globex"_s, QLocale(QLocale::English)),
+    JobPrep::Domain::AgendaItem agendaItem;
+    agendaItem.title = u"Globex"_s;
+    agendaItem.date = QDate(2026, 10, 30);
+    agendaItem.time = QTime(14, 0);
+    QCOMPARE(FormatHelper::formatNextInterview(agendaItem, QLocale(QLocale::English)),
              u"Next: Fri 14:00 Globex"_s);
 
     // Funnel stage labels
@@ -3632,6 +3632,7 @@ void tst_UiSmoke::testDashboardNumbersMatchHandCalculatedDataset() {
     QCOMPARE(FormatHelper::funnelStageLabel(funnelWidget->stages()[4].status), u"Offer"_s);
     QCOMPARE(funnelWidget->stages()[4].reachedCount, 1);
     QCOMPARE(FormatHelper::formatInterviewRate(funnelWidget->interviewRate()), u"66.7%"_s);
+    QVERIFY(funnelWidget->accessibleDescription().contains(u"Interview rate: 66.7%"_s));
 }
 
 void tst_UiSmoke::testDashboardEmptyStateActionButtons() {

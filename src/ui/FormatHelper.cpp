@@ -36,29 +36,11 @@ QString FormatHelper::formatStreak(int days) {
     return tr("%1-day streak").arg(days);
 }
 
-QString FormatHelper::formatStreakDays(int days) {
-    if (days == 1) {
-        return tr("1 day");
-    }
-    return tr("%1 days").arg(days);
-}
-
 QString FormatHelper::formatActiveProcesses(int count) {
     if (count == 1) {
         return tr("1 active process");
     }
     return tr("%1 active processes").arg(count);
-}
-
-QString FormatHelper::formatNextInterview(const std::optional<Domain::Interview>& interview,
-                                         const QString& companyName,
-                                         const QLocale& locale) {
-    if (!interview.has_value()) {
-        return tr("Next: No upcoming interviews");
-    }
-    const QString day = locale.toString(interview->startAt.date(), u"ddd"_s);
-    const QString time = interview->startAt.time().toString(u"hh:mm"_s);
-    return tr("Next: %1 %2 %3").arg(day, time, companyName);
 }
 
 QString FormatHelper::formatNextInterview(const std::optional<Domain::AgendaItem>& item,
