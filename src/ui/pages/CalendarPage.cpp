@@ -312,6 +312,19 @@ bool CalendarPage::hasItemsOn(QDate date) const {
     return !agendaItems(date, date).isEmpty();
 }
 
+bool CalendarPage::openInterview(int id) {
+    const auto stored = m_interviews.byId(id);
+    if (!stored) return false;
+    if (m_monthView) {
+        m_monthView->setSelectedDay(stored->startAt.date());
+    }
+    JobPrep::Ui::Dialogs::InterviewDialog dialog(
+        m_apps, m_interviews, JobPrep::Ui::Dialogs::InterviewDialog::Edit, this);
+    dialog.setInterview(*stored);
+    dialog.exec();
+    return true;
+}
+
 QList<JobPrep::Domain::AgendaItem> CalendarPage::agendaItems(QDate from, QDate to) const {
     auto items = m_agenda.items(from, to);
     const auto keepKind = [](const QList<JobPrep::Domain::AgendaItem>& list, AgendaKind kind,

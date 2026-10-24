@@ -14,6 +14,6 @@ cmake --build --preset dev-linux --target ui_smoke
 
 echo "==> Running screenshot generation with JOBPREP_REPORT_IMG_DIR=${REPORT_IMG_DIR}..."
 JOBPREP_REPORT_IMG_DIR="${REPORT_IMG_DIR}" QT_QPA_PLATFORM=offscreen \
-    ./build/dev-linux/tests/ui_smoke/ui_smoke testCalendarScreenshots testStudyScreenshots
+    ./build/dev-linux/tests/ui_smoke/ui_smoke testCalendarScreenshots testStudyScreenshots testDashboardScreenshots
 
 echo "==> Screenshots successfully regenerated in ${REPORT_IMG_DIR}!"

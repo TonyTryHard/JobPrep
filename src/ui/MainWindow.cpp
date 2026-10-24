@@ -12,8 +12,12 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include "app/AppContext.h"
+#include "data/ApplicationRepository.h"
+#include "data/InterviewRepository.h"
 #include "data/TopicRepository.h"
 #include "services/SettingsService.h"
+#include "ui/DashboardController.h"
+#include "ui/FormatHelper.h"
 #include "ui/PageBase.h"
 #include "ui/Sidebar.h"
 #include "ui/dialogs/SessionDialog.h"
@@ -35,6 +39,11 @@ MainWindow::MainWindow(App::AppContext& ctx, QWidget* parent)
     setObjectName(u"MainWindow"_s);
     setWindowTitle(u"JobPrep"_s);
     setMinimumSize(1100, 700);
+
+    m_dashboardController = std::make_unique<DashboardController>(
+        m_ctx.statsService(), m_ctx.agendaService(), m_ctx.settings(), m_ctx.dayWatcher(),
+        m_ctx.applications(), m_ctx.interviews(), m_ctx.sessions(), m_ctx.topics(),
+        m_ctx.tracks(), this);
 
     setupUi();
     setupShortcuts();
@@ -123,7 +132,9 @@ void MainWindow::setupUi() {
     // Pages stack
     m_pageStack = new QStackedWidget(rightContainer);
 
-    m_pages.append(new Pages::HomePage(m_pageStack));
+    m_homePage = new Pages::HomePage(*m_dashboardController, m_ctx.themeManager(), m_pageStack);
+    m_pages.append(m_homePage);
+    m_homeIndex = static_cast<int>(m_pages.size()) - 1;
     m_studyPage = new Pages::StudyPage(m_ctx.topics(), m_ctx.tracks(), m_ctx.sessions(),
                                        m_ctx.settings(), m_ctx.themeManager(), m_pageStack);
     m_pages.append(m_studyPage);
@@ -159,6 +170,20 @@ void MainWindow::setupUi() {
     status->addWidget(m_statusProcessesLabel);
     status->addWidget(new QLabel(u" | "_s, this));
     status->addWidget(m_statusNextInterviewLabel);
+
+    connect(m_dashboardController.get(), &DashboardController::snapshotChanged, this,
+            [this](const DashboardSnapshot& snap) {
+                m_statusStreakLabel->setText(FormatHelper::formatStreak(snap.stats.studyStreakDays));
+                m_statusProcessesLabel->setText(FormatHelper::formatActiveProcesses(snap.stats.activeProcesses));
+                m_statusNextInterviewLabel->setText(
+                    FormatHelper::formatNextInterview(snap.nextInterview));
+            });
+
+    const auto& initialSnap = m_dashboardController->snapshot();
+    m_statusStreakLabel->setText(FormatHelper::formatStreak(initialSnap.stats.studyStreakDays));
+    m_statusProcessesLabel->setText(FormatHelper::formatActiveProcesses(initialSnap.stats.activeProcesses));
+    m_statusNextInterviewLabel->setText(
+        FormatHelper::formatNextInterview(initialSnap.nextInterview));
 }
 
 void MainWindow::setupShortcuts() {
@@ -265,10 +290,45 @@ void MainWindow::openTopic(int topicId) {
     m_studyPage->selectTopic(topicId);
 }
 
+void MainWindow::openInterview(int interviewId) {
+    const auto iv = m_ctx.interviews().byId(interviewId);
+    if (!iv) {
+        statusBar()->showMessage(tr("Interview not found"), 3000);
+        return;
+    }
+    if (m_calendarIndex < 0) return;
+    goToPage(m_calendarIndex);
+    m_calendarPage->openInterview(interviewId);
+}
+
+void MainWindow::openApplication(int applicationId) {
+    const auto app = m_ctx.applications().byId(applicationId);
+    if (!app) {
+        statusBar()->showMessage(tr("Application not found"), 3000);
+        return;
+    }
+    if (m_jobsIndex < 0) return;
+    goToPage(m_jobsIndex);
+    m_jobsPage->openApplication(applicationId);
+}
+
 void MainWindow::setupConnections() {
     connect(m_sidebar, &Sidebar::pageSelected, this, [this](int index) {
         updateHeader(index);
     });
+
+    if (m_homePage) {
+        connect(m_homePage, &Pages::HomePage::addApplicationRequested, this,
+                &MainWindow::newApplicationFromHeader);
+        connect(m_homePage, &Pages::HomePage::addTopicRequested, this,
+                &MainWindow::newTopicFromHeader);
+        connect(m_homePage, &Pages::HomePage::interviewActivated, this,
+                &MainWindow::openInterview);
+        connect(m_homePage, &Pages::HomePage::applicationActivated, this,
+                &MainWindow::openApplication);
+        connect(m_homePage, &Pages::HomePage::topicActivated, this,
+                &MainWindow::openTopic);
+    }
 
     connect(m_calendarPage, &Pages::CalendarPage::studyTopicActivated, this,
             &MainWindow::openTopic);

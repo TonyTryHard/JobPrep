@@ -65,6 +65,9 @@ public:
     /// True when `date` has at least one agenda item under the active layer settings.
     bool hasItemsOn(QDate date) const;
 
+    /// Selects the interview's date in MonthView and opens the interview editor. Returns true if found.
+    bool openInterview(int id);
+
     void onActivated() override;
     void triggerNew() override;
 

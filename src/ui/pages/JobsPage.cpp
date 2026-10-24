@@ -319,6 +319,17 @@ int JobsPage::visibleRowCount() const {
     return m_proxy->rowCount();
 }
 
+bool JobsPage::openApplication(int id) {
+    const auto stored = m_apps.byId(id);
+    if (!stored) return false;
+    setSearchText(QString());
+    m_proxy->setFilterChip(Models::ApplicationFilterProxy::All);
+    refreshViewState();
+    selectId(id);
+    editApplication(id);
+    return true;
+}
+
 void JobsPage::refreshViewState() {
     if (m_apps.isEmpty()) {
         m_stack->setCurrentIndex(kViewNoData);

@@ -38,15 +38,17 @@ void AgendaItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
     painter->setRenderHint(QPainter::Antialiasing, true);
 
     const bool selected = option.state & QStyle::State_Selected;
-    const bool dimmed = index.data(JobPrep::Models::AgendaListModel::PastRole).toBool();
+    const bool isPast = index.data(JobPrep::Models::AgendaListModel::PastRole).toBool();
+    const auto kind = static_cast<Domain::AgendaKind>(
+        index.data(JobPrep::Models::AgendaListModel::KindRole).toInt());
+    const bool dimmed = (kind == Domain::AgendaKind::Interview && isPast);
+    const bool isOverdue = (kind != Domain::AgendaKind::Interview && isPast);
     const auto tokens = m_theme.currentTokens();
 
     if (selected) {
         painter->fillRect(option.rect, option.palette.highlight());
     }
 
-    const auto kind = static_cast<Domain::AgendaKind>(
-        index.data(JobPrep::Models::AgendaListModel::KindRole).toInt());
     const QColor kindColor = Theme::AgendaKindStyle::color(kind);
     const QColor iconColor = dimmed ? tokens.textMuted : kindColor;
     const QIcon icon = Theme::AgendaKindStyle::icon(kind, iconColor);
@@ -72,18 +74,29 @@ void AgendaItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
     const QRect textRect = content.adjusted(kIconSize + 8, 3, 0, -3);
     const QString title = index.data(Qt::DisplayRole).toString();
     const QString subtitle = index.data(JobPrep::Models::AgendaListModel::SubtitleRole).toString();
-    const QString time = index.data(JobPrep::Models::AgendaListModel::TimeRole).toString();
+    const QTime timeVal = index.data(JobPrep::Models::AgendaListModel::TimeRole).toTime();
+    const QDate dateVal = index.data(JobPrep::Models::AgendaListModel::DateRole).toDate();
+    QString time;
+    if (timeVal.isValid()) {
+        if (dateVal.isValid() && dateVal != QDate::currentDate()) {
+            time = dateVal.toString(u"ddd "_s) + timeVal.toString(u"HH:mm"_s);
+        } else {
+            time = timeVal.toString(u"HH:mm"_s);
+        }
+    }
+    const QString rightText = isOverdue ? tr("Overdue") : time;
 
     painter->setFont(titleFont);
     painter->setPen(titleColor);
     const QFontMetrics titleMetrics(titleFont);
-    const int titleWidth = time.isEmpty() ? textRect.width() : textRect.width() - titleMetrics.horizontalAdvance(time) - 12;
+    const int rightWidth = rightText.isEmpty() ? 0 : titleMetrics.horizontalAdvance(rightText) + 12;
+    const int titleWidth = textRect.width() - rightWidth;
     painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter | Qt::AlignAbsolute,
                       titleMetrics.elidedText(title, Qt::ElideRight, titleWidth));
 
-    if (!time.isEmpty()) {
-        painter->setPen(mutedColor);
-        painter->drawText(textRect, Qt::AlignRight | Qt::AlignVCenter | Qt::AlignAbsolute, time);
+    if (!rightText.isEmpty()) {
+        painter->setPen(isOverdue ? tokens.danger : mutedColor);
+        painter->drawText(textRect, Qt::AlignRight | Qt::AlignVCenter | Qt::AlignAbsolute, rightText);
     }
 
     if (!subtitle.isEmpty()) {

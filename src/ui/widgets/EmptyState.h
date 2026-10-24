@@ -23,9 +23,11 @@ public:
     void setTitle(const QString& title);
     void setDescription(const QString& description);
     void setActionText(const QString& actionText);
+    void setSecondaryActionText(const QString& actionText);
 
 signals:
     void actionClicked();
+    void secondaryActionClicked();
 
 protected:
     void changeEvent(QEvent* event) override;
@@ -40,6 +42,7 @@ private:
     QLabel* m_titleLabel{nullptr};
     QLabel* m_descLabel{nullptr};
     QPushButton* m_actionBtn{nullptr};
+    QPushButton* m_secondaryActionBtn{nullptr};
     QVBoxLayout* m_layout{nullptr};
 };
 

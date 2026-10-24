@@ -44,11 +44,22 @@ void EmptyState::setupUi() {
     m_descLabel->setWordWrap(true);
     m_layout->addWidget(m_descLabel);
 
+    auto* btnLayout = new QHBoxLayout();
+    btnLayout->setSpacing(8);
+    btnLayout->setAlignment(Qt::AlignCenter);
+
     m_actionBtn = new QPushButton(this);
     m_actionBtn->setProperty("primary", true);
     m_actionBtn->setVisible(false);
     connect(m_actionBtn, &QPushButton::clicked, this, &EmptyState::actionClicked);
-    m_layout->addWidget(m_actionBtn, 0, Qt::AlignCenter);
+    btnLayout->addWidget(m_actionBtn);
+
+    m_secondaryActionBtn = new QPushButton(this);
+    m_secondaryActionBtn->setVisible(false);
+    connect(m_secondaryActionBtn, &QPushButton::clicked, this, &EmptyState::secondaryActionClicked);
+    btnLayout->addWidget(m_secondaryActionBtn);
+
+    m_layout->addLayout(btnLayout);
 }
 
 void EmptyState::setIcon(const QString& iconName) {
@@ -68,6 +79,11 @@ void EmptyState::setDescription(const QString& description) {
 void EmptyState::setActionText(const QString& actionText) {
     m_actionBtn->setText(actionText);
     m_actionBtn->setVisible(!actionText.isEmpty());
+}
+
+void EmptyState::setSecondaryActionText(const QString& actionText) {
+    m_secondaryActionBtn->setText(actionText);
+    m_secondaryActionBtn->setVisible(!actionText.isEmpty());
 }
 
 void EmptyState::changeEvent(QEvent* event) {

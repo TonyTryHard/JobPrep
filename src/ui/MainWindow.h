@@ -19,9 +19,12 @@ class PageBase;
 
 namespace Pages {
 class CalendarPage;
+class HomePage;
 class JobsPage;
 class StudyPage;
 }  // namespace Pages
+
+class DashboardController;
 
 /// Main application window shell for JobPrep.
 class MainWindow : public QMainWindow {
@@ -36,6 +39,15 @@ public:
 
     /// Switches to the Study page and selects `topicId` (B9).
     void openTopic(int topicId);
+
+    /// Switches to the Calendar page and opens the interview editor (B2).
+    void openInterview(int interviewId);
+
+    /// Switches to the Jobs page and opens the application editor (B2).
+    void openApplication(int applicationId);
+
+    Pages::HomePage* homePage() const { return m_homePage; }
+    DashboardController* dashboardController() const { return m_dashboardController.get(); }
 
     /// Focuses the search box of the page that is actually showing (Ctrl+F).
     void focusCurrentPageSearch();
@@ -70,6 +82,9 @@ private:
     QToolButton* m_newBtn{nullptr};
     QStackedWidget* m_pageStack{nullptr};
     QList<PageBase*> m_pages;
+    std::unique_ptr<DashboardController> m_dashboardController;
+    Pages::HomePage* m_homePage{nullptr};
+    int m_homeIndex{-1};
     /// The header search and the "+ New" menu are bound to this page, hence the index.
     Pages::JobsPage* m_jobsPage{nullptr};
     int m_jobsIndex{-1};

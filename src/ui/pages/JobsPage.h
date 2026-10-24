@@ -58,6 +58,9 @@ public:
     /// Rows currently passing the search and chip filters.
     int visibleRowCount() const;
 
+    /// Selects and opens the editor for application `id`. Returns true if found.
+    bool openApplication(int id);
+
     /// Writes the visible rows to `path`. Extracted from the toolbar handler so tests
     /// never need a file dialog.
     bool exportTo(const QString& path, int* exportedRows, QString* error);

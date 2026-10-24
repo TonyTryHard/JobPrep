@@ -92,6 +92,8 @@ add_library(jobprep_core STATIC
     # Services
     src/services/AgendaService.h
     src/services/AgendaService.cpp
+    src/services/DayWatcher.h
+    src/services/DayWatcher.cpp
     src/services/StatsService.h
     src/services/StatsService.cpp
     src/services/SettingsService.h
@@ -138,6 +140,10 @@ add_library(jobprep_core STATIC
     src/ui/delegates/ProgressBarDelegate.cpp
 
     # Widgets & Base Pages
+    src/ui/FormatHelper.h
+    src/ui/FormatHelper.cpp
+    src/ui/DashboardController.h
+    src/ui/DashboardController.cpp
     src/ui/widgets/EmptyState.h
     src/ui/widgets/EmptyState.cpp
     src/ui/widgets/ChipBar.h
@@ -146,6 +152,14 @@ add_library(jobprep_core STATIC
     src/ui/widgets/MonthView.cpp
     src/ui/widgets/SelectionRestorer.h
     src/ui/widgets/SelectionRestorer.cpp
+    src/ui/widgets/StatCard.h
+    src/ui/widgets/StatCard.cpp
+    src/ui/widgets/ProgressRing.h
+    src/ui/widgets/ProgressRing.cpp
+    src/ui/widgets/FunnelWidget.h
+    src/ui/widgets/FunnelWidget.cpp
+    src/ui/widgets/GoalProgressBar.h
+    src/ui/widgets/GoalProgressBar.cpp
     src/ui/widgets/TopicBoardColumn.h
     src/ui/widgets/TopicBoardColumn.cpp
     src/ui/widgets/TopicListView.h
