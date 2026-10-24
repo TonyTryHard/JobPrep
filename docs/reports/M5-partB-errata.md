@@ -26,3 +26,12 @@ This errata document records inaccuracies and bugs present in the round 1 report
 - `cbefc94`: Fix interview rate calculation (* 100.0), add GoalProgressBar helpers and ui_smoke slots
 - `810ab25`: Document Part B components and navigation in `docs/SPEC.md` §14 (v1.7)
 - `0183128`: Update M5 Part B report with fix-ups and accurate evidence
+
+---
+
+## 3. Font Bundling Errata Clarification
+
+The M5 Part C report incorrectly summarized this errata document as "Inter font bundling is handled at application startup".
+As verified by inspecting the repository (`ls resources/fonts` contains only `README.md`, and `grep -rn "addApplicationFont" src` returns no matches):
+- The Inter font is **not** bundled in Milestone M5; bundling is deferred to Milestone M6 per AGENTS.md §12.
+- The desktop application and all captured screenshots use the host operating system's default UI font (`Ubuntu` font / system sans-serif on Ubuntu 26.04).

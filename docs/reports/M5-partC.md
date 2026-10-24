@@ -1,6 +1,6 @@
 # Milestone 5 Part C Report: Reminder Core Service
 
-**Operating System:** Linux (Ubuntu 24.04 x86_64, GCC 13.3.0, Qt 6.8.3, offscreen QPA for tests)  
+**Operating System:** Linux (Ubuntu 26.04.1 LTS x86_64, GCC 15.2.0, Qt 6.10.2, offscreen QPA for tests)  
 **Date:** 2026-10-24  
 **Commits:**
 - `8b1ca12`: `refactor(ui): remove unused FormatHelper overloads and add Part B errata report` (C0 carry-overs)
@@ -35,7 +35,7 @@ Created `docs/reports/M5-partB-errata.md` in commit `8b1ca12` documenting:
 - Funnel stages: corrected to `Applied, HR Screen, Technical, Final, Offer` (not `Offer, Accepted`).
 - `TopicDialog`: acknowledged absence; topic quick-add navigates to `StudyPage`.
 - `DashboardController`: confirmed explicit constructor references (`ApplicationRepository&`, `InterviewRepository&`, etc.), not `AppContext&`.
-- Inter typography: typography uses standard Qt font metric calculations with design tokens; Inter font bundling is handled at application startup.
+- Inter typography: typography uses standard Qt font metric calculations with design tokens; Inter font is not bundled until M6 (application falls back to system UI font).
 - Test counts: 14 test slots exist across dashboard tests; `cbefc94` fixed the `* 100.0` interview rate percentage calculation.
 
 ### 2.2 `tst_DayWatcher` Slots
