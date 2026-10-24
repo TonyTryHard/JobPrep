@@ -20,6 +20,9 @@ public:
 
     bool wasSent(QStringView key) const;
 
+    /// Returns the delivery timestamp for `key`, or nullopt if never recorded.
+    std::optional<QDateTime> sentAt(QStringView key) const;
+
     /// Remembers `key`; a key already present keeps its original `sentAt`.
     bool markSent(const QString& key, const QDateTime& sentAt = QDateTime());
     bool remove(const QString& key);

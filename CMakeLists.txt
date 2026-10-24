@@ -94,6 +94,9 @@ add_library(jobprep_core STATIC
     src/services/AgendaService.cpp
     src/services/DayWatcher.h
     src/services/DayWatcher.cpp
+    src/services/INotifier.h
+    src/services/ReminderService.h
+    src/services/ReminderService.cpp
     src/services/StatsService.h
     src/services/StatsService.cpp
     src/services/SettingsService.h

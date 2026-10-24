@@ -5,8 +5,29 @@ using namespace Qt::StringLiterals;
 
 namespace JobPrep::Services {
 
+namespace {
+
+QList<int> sanitizeLeadMinutes(const QList<int>& raw) {
+    QList<int> valid;
+    for (int v : raw) {
+        if (v > 0 && !valid.contains(v)) {
+            valid.append(v);
+        }
+    }
+    std::sort(valid.begin(), valid.end(), std::greater<int>());
+    if (valid.isEmpty()) {
+        return {1440, 60};
+    }
+    return valid;
+}
+
+}  // namespace
+
 SettingsService::SettingsService(QObject* parent)
-    : QObject(parent), m_settings(std::make_unique<QSettings>()) {}
+    : SettingsService(std::make_unique<QSettings>(), parent) {}
+
+SettingsService::SettingsService(std::unique_ptr<QSettings> settings, QObject* parent)
+    : QObject(parent), m_settings(std::move(settings)) {}
 
 SettingsService::~SettingsService() = default;
 
@@ -76,6 +97,34 @@ void SettingsService::setFirstDayOfWeek(int day) {
     if (firstDayOfWeek() == day) return;
     m_settings->setValue(u"calendar/firstDayOfWeek"_s, day);
     emit firstDayOfWeekChanged(day);
+}
+
+QList<int> SettingsService::interviewLeadMinutes() const {
+    const auto val = m_settings->value(u"reminders/interviewLeadMinutes"_s);
+    if (!val.isValid()) {
+        return {1440, 60};
+    }
+    QList<int> list;
+    if (val.canConvert<QVariantList>()) {
+        const auto varList = val.toList();
+        for (const auto& item : varList) {
+            bool ok = false;
+            int v = item.toInt(&ok);
+            if (ok) list.append(v);
+        }
+    }
+    return sanitizeLeadMinutes(list);
+}
+
+void SettingsService::setInterviewLeadMinutes(const QList<int>& minutes) {
+    const auto sanitized = sanitizeLeadMinutes(minutes);
+    if (interviewLeadMinutes() == sanitized) return;
+    QVariantList varList;
+    for (int m : sanitized) {
+        varList.append(m);
+    }
+    m_settings->setValue(u"reminders/interviewLeadMinutes"_s, varList);
+    emit interviewLeadMinutesChanged(sanitized);
 }
 
 bool SettingsService::closeToTray() const {

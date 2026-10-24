@@ -22,6 +22,14 @@ bool ReminderLogRepository::wasSent(QStringView key) const {
     return statement.query().next();
 }
 
+std::optional<QDateTime> ReminderLogRepository::sentAt(QStringView key) const {
+    SqlStatement statement(m_database, u"SELECT sent_at FROM reminders_sent WHERE key = ?"_s);
+    statement.bind(1, key.toString());
+    if (!statement.exec()) return std::nullopt;
+    if (!statement.query().next()) return std::nullopt;
+    return DbFormat::dateTimeFromValue(statement.query().value(0));
+}
+
 bool ReminderLogRepository::markSent(const QString& key, const QDateTime& sentAt) {
     if (key.isEmpty()) {
         m_database.setExpectedError(u"A reminder key must not be empty."_s);

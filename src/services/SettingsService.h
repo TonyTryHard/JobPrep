@@ -15,6 +15,7 @@ class SettingsService : public QObject {
 
 public:
     explicit SettingsService(QObject* parent = nullptr);
+    explicit SettingsService(std::unique_ptr<QSettings> settings, QObject* parent = nullptr);
     ~SettingsService() override;
 
     QByteArray windowGeometry() const;
@@ -37,6 +38,9 @@ public:
 
     int firstDayOfWeek() const;
     void setFirstDayOfWeek(int day);
+
+    QList<int> interviewLeadMinutes() const;
+    void setInterviewLeadMinutes(const QList<int>& minutes);
 
     bool closeToTray() const;
     void setCloseToTray(bool enabled);
@@ -71,6 +75,7 @@ signals:
     void sidebarCollapsedChanged(bool collapsed);
     void weeklyGoalMinutesChanged(int minutes);
     void firstDayOfWeekChanged(int day);
+    void interviewLeadMinutesChanged(const QList<int>& minutes);
     void closeToTrayChanged(bool enabled);
     void calendarLayerInterviewsChanged(bool enabled);
     void calendarLayerFollowUpsChanged(bool enabled);

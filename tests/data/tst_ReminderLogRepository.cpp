@@ -21,6 +21,8 @@ private slots:
     void removeForgetsKey();
     void sentKeysListsEveryKey();
     void emptyKeyIsRejected();
+    void sentAtReturnsTimestampWhenPresent();
+    void sentAtReturnsNulloptWhenAbsent();
 
 private:
     std::unique_ptr<TestDatabase> m_db;
@@ -103,6 +105,27 @@ void tst_ReminderLogRepository::emptyKeyIsRejected() {
     QVERIFY(!m_log->wasSent(QString()));
     QCOMPARE(spy.count(), 0);
     QCOMPARE(m_db->countRows(u"reminders_sent"_s), 0);
+}
+
+void tst_ReminderLogRepository::sentAtReturnsTimestampWhenPresent() {
+    const QDateTime timestamp(QDate(2026, 10, 24), QTime(15, 30));
+    QVERIFY(m_log->markSent(u"interview:42:60"_s, timestamp));
+
+    const auto result = m_log->sentAt(u"interview:42:60"_s);
+    QVERIFY(result.has_value());
+    QCOMPARE(*result, timestamp);
+
+    // markSent again does not alter original timestamp
+    const QDateTime later(QDate(2026, 10, 25), QTime(10, 0));
+    QVERIFY(m_log->markSent(u"interview:42:60"_s, later));
+    const auto unchanged = m_log->sentAt(u"interview:42:60"_s);
+    QVERIFY(unchanged.has_value());
+    QCOMPARE(*unchanged, timestamp);
+}
+
+void tst_ReminderLogRepository::sentAtReturnsNulloptWhenAbsent() {
+    const auto result = m_log->sentAt(u"nonexistent:key"_s);
+    QVERIFY(!result.has_value());
 }
 
 QTEST_GUILESS_MAIN(tst_ReminderLogRepository)

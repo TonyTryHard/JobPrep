@@ -2,6 +2,8 @@ set(SERVICES_TESTS
     tst_AgendaService
     tst_DayWatcher
     tst_ExportService
+    tst_ReminderService
+    tst_SettingsService
     tst_StatsService
 )
 
