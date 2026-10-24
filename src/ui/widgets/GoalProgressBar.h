@@ -21,6 +21,10 @@ public:
 
     int weekMinutes() const { return m_weekMinutes; }
     int goalMinutes() const { return m_goalMinutes; }
+    int realPercent() const {
+        return m_goalMinutes > 0 ? qRound(m_weekMinutes * 100.0 / m_goalMinutes) : 0;
+    }
+    int cappedPercent() const { return qMin(100, realPercent()); }
 
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;

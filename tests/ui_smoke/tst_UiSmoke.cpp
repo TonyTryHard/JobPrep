@@ -284,6 +284,7 @@ private slots:
     void testFirstDayOfWeekChangeRefreshesWeekNumbers();
     void testStatusBarTextScenarios();
     void testWidgetMetricsAndRingWrapping();
+    void testDashboardIgnoresThemeSidebarAndSplitterChanges();
     void testDashboardScreenshots();
     void testZeroWarnings();
     void cleanupTestCase();
@@ -3485,7 +3486,18 @@ void tst_UiSmoke::testFormatHelper() {
 
     // Interview rate
     QCOMPARE(FormatHelper::formatInterviewRate(std::nullopt), QString::fromUtf8("\u2013"));
-    QCOMPARE(FormatHelper::formatInterviewRate(66.6666), u"66.7%"_s);
+    QCOMPARE(FormatHelper::formatInterviewRate(6.0 / 9.0), u"66.7%"_s);
+
+    // Goal progress bar real and capped percentages
+    AppContext ctx(u":memory:"_s);
+    JobPrep::Ui::Theme::ThemeManager theme(ctx.settings());
+    JobPrep::Ui::Widgets::GoalProgressBar bar(theme);
+    bar.setGoal(260, 360);
+    QCOMPARE(bar.realPercent(), 72);
+    QCOMPARE(bar.cappedPercent(), 72);
+    bar.setGoal(430, 360);
+    QCOMPARE(bar.realPercent(), 119);
+    QCOMPARE(bar.cappedPercent(), 100);
 
     // Streak wording
     QCOMPARE(FormatHelper::formatStreak(0), u"0-day streak"_s);
@@ -3603,6 +3615,23 @@ void tst_UiSmoke::testDashboardNumbersMatchHandCalculatedDataset() {
     QCOMPARE(snap.stats.funnel[4].reachedCount, 1);
     QVERIFY(snap.stats.interviewRate.has_value());
     QVERIFY(qAbs(*snap.stats.interviewRate - (6.0 / 9.0)) < 0.0001);
+
+    // Verify FunnelWidget displays all 5 stages in order and interview rate
+    using JobPrep::Ui::FormatHelper;
+    auto* funnelWidget = win.homePage()->findChild<JobPrep::Ui::Widgets::FunnelWidget*>();
+    QVERIFY(funnelWidget != nullptr);
+    QCOMPARE(funnelWidget->stages().size(), 5);
+    QCOMPARE(FormatHelper::funnelStageLabel(funnelWidget->stages()[0].status), u"Applied"_s);
+    QCOMPARE(funnelWidget->stages()[0].reachedCount, 9);
+    QCOMPARE(FormatHelper::funnelStageLabel(funnelWidget->stages()[1].status), u"HR Screen"_s);
+    QCOMPARE(funnelWidget->stages()[1].reachedCount, 6);
+    QCOMPARE(FormatHelper::funnelStageLabel(funnelWidget->stages()[2].status), u"Technical"_s);
+    QCOMPARE(funnelWidget->stages()[2].reachedCount, 4);
+    QCOMPARE(FormatHelper::funnelStageLabel(funnelWidget->stages()[3].status), u"Final"_s);
+    QCOMPARE(funnelWidget->stages()[3].reachedCount, 2);
+    QCOMPARE(FormatHelper::funnelStageLabel(funnelWidget->stages()[4].status), u"Offer"_s);
+    QCOMPARE(funnelWidget->stages()[4].reachedCount, 1);
+    QCOMPARE(FormatHelper::formatInterviewRate(funnelWidget->interviewRate()), u"66.7%"_s);
 }
 
 void tst_UiSmoke::testDashboardEmptyStateActionButtons() {
@@ -3627,12 +3656,34 @@ void tst_UiSmoke::testDashboardEmptyStateActionButtons() {
     QCoreApplication::processEvents();
     QCOMPARE(countApplicationDialogs(), 0);
 
-    // Button 2: "+ Add topic" -> emits addTopicRequested which calls newTopicFromHeader
+    // Button 2: "+ Add topic" with no tracks -> emits addTopicRequested -> TrackDialog
     withNextModal([](QWidget* modal) {
         if (auto* dlg = qobject_cast<TrackDialog*>(modal)) dlg->reject();
     });
     emit emptyState->secondaryActionClicked();
     QCoreApplication::processEvents();
+
+    // Button 2: "+ Add topic" with tracks -> switches to Study page, Backlog quick-add focused, NO dialog
+    Track track;
+    track.name = u"C++"_s;
+    track.color = u"#3b82f6"_s;
+    QVERIFY(ctx.tracks().insert(track));
+
+    // Switch back to HomePage
+    win.sidebar()->setCurrentPage(0);
+    emit win.sidebar()->pageSelected(0);
+    QCoreApplication::processEvents();
+    QCOMPARE(win.pageStack()->currentIndex(), 0);
+
+    bool unexpectedDialogShown = false;
+    withNextModal([&unexpectedDialogShown](QWidget*) {
+        unexpectedDialogShown = true;
+    });
+    emit emptyState->secondaryActionClicked();
+    QCoreApplication::processEvents();
+
+    QCOMPARE(win.pageStack()->currentIndex(), 1); // StudyPage
+    QVERIFY(!unexpectedDialogShown);
 }
 
 void tst_UiSmoke::testDashboardTodayItemClicksOpenRespectiveDialogs() {
@@ -3929,6 +3980,28 @@ void tst_UiSmoke::testWidgetMetricsAndRingWrapping() {
             QVERIFY2(!ri.intersects(rj), qPrintable(u"Ring %1 overlaps with ring %2"_s.arg(i).arg(j)));
         }
     }
+}
+
+void tst_UiSmoke::testDashboardIgnoresThemeSidebarAndSplitterChanges() {
+    AppContext ctx(u":memory:"_s);
+    MainWindow win(ctx);
+    win.resize(1100, 700);
+    win.show();
+    QCoreApplication::processEvents();
+
+    const int initialCount = win.dashboardController()->refreshCount();
+    ctx.settings().setThemeMode(u"dark"_s);
+    ctx.settings().setSidebarCollapsed(true);
+    ctx.settings().setStudySplitterState(QByteArray("fake_splitter_state"));
+    QCoreApplication::processEvents();
+
+    // Must NOT have triggered a dashboard refresh
+    QCOMPARE(win.dashboardController()->refreshCount(), initialCount);
+
+    // Activating HomePage MUST trigger requestRefresh()
+    win.homePage()->onActivated();
+    QCoreApplication::processEvents();
+    QCOMPARE(win.dashboardController()->refreshCount(), initialCount + 1);
 }
 
 void tst_UiSmoke::testDashboardScreenshots() {

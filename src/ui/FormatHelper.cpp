@@ -29,7 +29,7 @@ QString FormatHelper::formatInterviewRate(const std::optional<double>& rate) {
     if (!rate.has_value()) {
         return QString::fromUtf8("\u2013");  // en-dash
     }
-    return tr("%1%").arg(QString::number(*rate, 'f', 1));
+    return tr("%1%").arg(QString::number(*rate * 100.0, 'f', 1));
 }
 
 QString FormatHelper::formatStreak(int days) {
