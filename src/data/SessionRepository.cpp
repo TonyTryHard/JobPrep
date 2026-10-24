@@ -148,6 +148,21 @@ int SessionRepository::totalMinutesInRange(QDate from, QDate to) const {
     return statement.query().value(0).toInt();
 }
 
+QList<QDate> SessionRepository::distinctSessionDates(QDate upTo) const {
+    QList<QDate> dates;
+    SqlStatement statement(
+        m_database,
+        u"SELECT DISTINCT session_date FROM study_sessions "
+        u"WHERE session_date <= ? ORDER BY session_date DESC"_s);
+    statement.bind(1, DbFormat::toText(upTo));
+    if (!statement.exec()) return dates;
+    while (statement.query().next()) {
+        const auto d = DbFormat::dateFromText(statement.query().value(0).toString());
+        if (d.has_value() && d->isValid()) dates.append(*d);
+    }
+    return dates;
+}
+
 QString SessionRepository::lastError() const {
     return m_database.lastError();
 }

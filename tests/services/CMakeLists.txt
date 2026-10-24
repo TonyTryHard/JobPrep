@@ -1,6 +1,7 @@
 set(SERVICES_TESTS
     tst_AgendaService
     tst_ExportService
+    tst_StatsService
 )
 
 foreach(test_name IN LISTS SERVICES_TESTS)

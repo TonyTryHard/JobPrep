@@ -34,6 +34,17 @@ public:
     /// (date, kind, time, title). kind order: Interview < FollowUp < StudyTarget.
     QList<Domain::AgendaItem> items(QDate from, QDate to) const;
 
+    /// Returns items for the dashboard Today list:
+    /// - Interviews on `today` (including earlier today, past set when startAt < now), excluding cancelled.
+    /// - Follow-ups with next_action_date <= today for non-closed applications.
+    /// - Topics with target_date <= today and status not Done.
+    /// Order: overdue follow-ups and overdue topics first (oldest date first, FollowUp < StudyTarget, then title),
+    /// then today's items by time (timed items first sorted by time, non-timed sorted by Interview < FollowUp < StudyTarget, then title).
+    QList<Domain::AgendaItem> todayItems(QDate today) const;
+
+    /// Returns up to `limit` upcoming non-cancelled interviews starting on or after `from`.
+    QList<Domain::AgendaItem> upcomingInterviews(const QDateTime& from, int limit = 5) const;
+
 private:
     Data::InterviewRepository& m_interviews;
     Data::ApplicationRepository& m_apps;

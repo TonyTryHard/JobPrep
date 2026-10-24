@@ -61,6 +61,8 @@ add_library(jobprep_core STATIC
     src/domain/EnumStrings.cpp
     src/domain/TopicProgress.h
     src/domain/TopicProgress.cpp
+    src/domain/StageRank.h
+    src/domain/StageRank.cpp
 
     # Data layer
     src/data/DataLogging.h
@@ -90,6 +92,8 @@ add_library(jobprep_core STATIC
     # Services
     src/services/AgendaService.h
     src/services/AgendaService.cpp
+    src/services/StatsService.h
+    src/services/StatsService.cpp
     src/services/SettingsService.h
     src/services/SettingsService.cpp
     src/services/SeedService.h

@@ -6,6 +6,7 @@
 #include "data/DbFormat.h"
 #include "data/SqlStatement.h"
 #include "domain/EnumStrings.h"
+#include "domain/StageRank.h"
 #include "domain/Structs.h"
 
 using namespace Qt::StringLiterals;
@@ -179,6 +180,68 @@ QList<Domain::JobApplication> ApplicationRepository::byNextActionDateRange(QDate
         }
     }
     return applications;
+}
+
+QList<Domain::JobApplication> ApplicationRepository::byNextActionDateUpTo(QDate upTo) const {
+    QList<Domain::JobApplication> applications;
+    SqlStatement statement(
+        m_database,
+        selectApplications() +
+            u" WHERE next_action_date <= ? "
+            u"AND status NOT IN ('rejected', 'withdrawn', 'ghosted', 'accepted') "
+            u"ORDER BY next_action_date, id"_s);
+    statement.bind(1, DbFormat::toText(upTo));
+    if (!statement.exec()) return applications;
+    while (statement.query().next()) {
+        if (auto application = readApplication(m_database, statement.query())) {
+            applications.append(*application);
+        }
+    }
+    return applications;
+}
+
+int ApplicationRepository::appliedCountInRange(QDate from, QDate to) const {
+    SqlStatement statement(
+        m_database,
+        u"SELECT COUNT(*) FROM applications WHERE applied_date >= ? AND applied_date <= ?"_s);
+    statement.bind(1, DbFormat::toText(from));
+    statement.bind(2, DbFormat::toText(to));
+    if (!statement.exec() || !statement.query().next()) return 0;
+    return statement.query().value(0).toInt();
+}
+
+QHash<int, int> ApplicationRepository::funnelStageCounts() const {
+    QHash<int, int> counts;
+    for (int r = 1; r <= 5; ++r) {
+        counts.insert(r, 0);
+    }
+
+    auto makeInClause = [](int rank) {
+        const auto statuses = Domain::statusesWithRankAtLeast(rank);
+        QStringList names;
+        for (const auto s : statuses) {
+            names.append(u"'%1'"_s.arg(Domain::EnumStrings::toString(s)));
+        }
+        return names.join(u", "_s);
+    };
+
+    const QString sql = u"SELECT "
+        u"COUNT(DISTINCT CASE WHEN a.status IN (%1) OR sh.to_status IN (%1) THEN a.id END), "
+        u"COUNT(DISTINCT CASE WHEN a.status IN (%2) OR sh.to_status IN (%2) THEN a.id END), "
+        u"COUNT(DISTINCT CASE WHEN a.status IN (%3) OR sh.to_status IN (%3) THEN a.id END), "
+        u"COUNT(DISTINCT CASE WHEN a.status IN (%4) OR sh.to_status IN (%4) THEN a.id END), "
+        u"COUNT(DISTINCT CASE WHEN a.status IN (%5) OR sh.to_status IN (%5) THEN a.id END) "
+        u"FROM applications a "
+        u"LEFT JOIN status_history sh ON sh.application_id = a.id"_s
+        .arg(makeInClause(1), makeInClause(2), makeInClause(3), makeInClause(4), makeInClause(5));
+
+    SqlStatement statement(m_database, sql);
+    if (!statement.exec() || !statement.query().next()) return counts;
+
+    for (int r = 1; r <= 5; ++r) {
+        counts.insert(r, statement.query().value(r - 1).toInt());
+    }
+    return counts;
 }
 
 bool ApplicationRepository::insert(Domain::JobApplication& application) {

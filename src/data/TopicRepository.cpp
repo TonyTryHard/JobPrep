@@ -132,6 +132,21 @@ QList<Domain::Topic> TopicRepository::byTargetDateRange(QDate from, QDate to) co
     return topics;
 }
 
+QList<Domain::Topic> TopicRepository::byTargetDateUpTo(QDate upTo) const {
+    QList<Domain::Topic> topics;
+    SqlStatement statement(m_database,
+                           selectTopics() +
+                               u" WHERE target_date <= ? "
+                               u"AND status != 'done' "
+                               u"ORDER BY target_date, position, id"_s);
+    statement.bind(1, DbFormat::toText(upTo));
+    if (!statement.exec()) return topics;
+    while (statement.query().next()) {
+        if (auto topic = readTopic(m_database, statement.query())) topics.append(*topic);
+    }
+    return topics;
+}
+
 std::optional<Domain::Topic> TopicRepository::byId(int id) const {
     SqlStatement statement(m_database, selectTopics() + u" WHERE id = ?"_s);
     statement.bind(1, id);

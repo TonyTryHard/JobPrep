@@ -28,6 +28,16 @@ public:
     /// Applications with next_action_date in [from, to] inclusive and non-closed status.
     QList<Domain::JobApplication> byNextActionDateRange(QDate from, QDate to) const;
 
+    /// Applications with next_action_date <= upTo and non-closed status.
+    QList<Domain::JobApplication> byNextActionDateUpTo(QDate upTo) const;
+
+    /// Number of applications with applied_date in [from, to] inclusive.
+    int appliedCountInRange(QDate from, QDate to) const;
+
+    /// Number of applications that reached ranks 1 through 5 (keys 1..5)
+    /// in their current status or any status_history to_status (SPEC §6).
+    QHash<int, int> funnelStageCounts() const;
+
     /// Inserts `application`, fills its id, timestamps and the initial history row.
     bool insert(Domain::JobApplication& application);
     bool update(const Domain::JobApplication& application);

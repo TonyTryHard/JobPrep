@@ -52,6 +52,17 @@ private slots:
     void deterministicOrdering();
     void singleDayRange();
 
+    // Today items & upcoming tests (amendment A4)
+    void todayItemsIncludesOverdueFollowUp();
+    void todayItemsIncludesOverdueTopic();
+    void todayItemsExcludesDoneTopic();
+    void todayItemsExcludesClosedApplication();
+    void todayItemsExcludesCancelledInterview();
+    void todayItemsEarlierTodayInterviewHasPast();
+    void todayItemsOrderingOverdueFirstThenTodayTimed();
+    void upcomingInterviewsExcludesCancelledOrdersAndLimits();
+    void upcomingInterviewsAcrossMonthAndYearBorder();
+
 private:
     int addApplication(const QString& company, ApplicationStatus status = ApplicationStatus::Applied);
     int addTrack(const QString& name);
@@ -512,6 +523,292 @@ void tst_AgendaService::singleDayRange() {
     const auto items = m_service->items(QDate(2026, 10, 15), QDate(2026, 10, 15));
     QCOMPARE(items.size(), 1);
     QCOMPARE(items.first().refId, ivTarget.id);
+}
+
+void tst_AgendaService::todayItemsIncludesOverdueFollowUp() {
+    const QDate today(2026, 10, 20);
+    m_service->setClock([today] { return QDateTime(today, QTime(10, 0)); });
+
+    JobApplication appOverdue;
+    appOverdue.company = u"OverdueCo"_s;
+    appOverdue.position = u"Dev"_s;
+    appOverdue.status = ApplicationStatus::Applied;
+    appOverdue.nextAction = u"Send reminder"_s;
+    appOverdue.nextActionDate = QDate(2026, 10, 15); // 5 days overdue
+    QVERIFY(m_apps->insert(appOverdue));
+
+    JobApplication appToday;
+    appToday.company = u"TodayCo"_s;
+    appToday.position = u"Dev"_s;
+    appToday.status = ApplicationStatus::Applied;
+    appToday.nextAction = u"Call recruiter"_s;
+    appToday.nextActionDate = today;
+    QVERIFY(m_apps->insert(appToday));
+
+    const auto items = m_service->todayItems(today);
+    QCOMPARE(items.size(), 2);
+    // Overdue item comes first, has past = true
+    QCOMPARE(items[0].refId, appOverdue.id);
+    QCOMPARE(items[0].kind, AgendaKind::FollowUp);
+    QCOMPARE(items[0].date, QDate(2026, 10, 15));
+    QVERIFY(items[0].past);
+
+    // Today's item has past = false
+    QCOMPARE(items[1].refId, appToday.id);
+    QCOMPARE(items[1].kind, AgendaKind::FollowUp);
+    QCOMPARE(items[1].date, today);
+    QVERIFY(!items[1].past);
+}
+
+void tst_AgendaService::todayItemsIncludesOverdueTopic() {
+    const QDate today(2026, 10, 20);
+    m_service->setClock([today] { return QDateTime(today, QTime(10, 0)); });
+
+    const int trackId = addTrack(u"C++"_s);
+
+    Topic topicOverdue;
+    topicOverdue.trackId = trackId;
+    topicOverdue.title = u"Pointers"_s;
+    topicOverdue.status = TopicStatus::InProgress;
+    topicOverdue.targetDate = QDate(2026, 10, 12);
+    QVERIFY(m_topics->insert(topicOverdue));
+
+    Topic topicToday;
+    topicToday.trackId = trackId;
+    topicToday.title = u"Templates"_s;
+    topicToday.status = TopicStatus::Review;
+    topicToday.targetDate = today;
+    QVERIFY(m_topics->insert(topicToday));
+
+    const auto items = m_service->todayItems(today);
+    QCOMPARE(items.size(), 2);
+    QCOMPARE(items[0].refId, topicOverdue.id);
+    QCOMPARE(items[0].kind, AgendaKind::StudyTarget);
+    QVERIFY(items[0].past);
+
+    QCOMPARE(items[1].refId, topicToday.id);
+    QCOMPARE(items[1].kind, AgendaKind::StudyTarget);
+    QVERIFY(!items[1].past);
+}
+
+void tst_AgendaService::todayItemsExcludesDoneTopic() {
+    const QDate today(2026, 10, 20);
+    const int trackId = addTrack(u"C++"_s);
+
+    Topic topicDone;
+    topicDone.trackId = trackId;
+    topicDone.title = u"Done Topic"_s;
+    topicDone.status = TopicStatus::Done;
+    topicDone.targetDate = QDate(2026, 10, 15); // overdue, but Done!
+    QVERIFY(m_topics->insert(topicDone));
+
+    const auto items = m_service->todayItems(today);
+    QCOMPARE(items.size(), 0);
+}
+
+void tst_AgendaService::todayItemsExcludesClosedApplication() {
+    const QDate today(2026, 10, 20);
+
+    // Rejected application
+    JobApplication appRej;
+    appRej.company = u"RejCo"_s;
+    appRej.position = u"Dev"_s;
+    appRej.status = ApplicationStatus::Rejected;
+    appRej.nextAction = u"Follow up"_s;
+    appRej.nextActionDate = QDate(2026, 10, 15);
+    QVERIFY(m_apps->insert(appRej));
+
+    // Accepted application
+    JobApplication appAcc;
+    appAcc.company = u"AccCo"_s;
+    appAcc.position = u"Dev"_s;
+    appAcc.status = ApplicationStatus::Accepted;
+    appAcc.nextAction = u"Paperwork"_s;
+    appAcc.nextActionDate = today;
+    QVERIFY(m_apps->insert(appAcc));
+
+    const auto items = m_service->todayItems(today);
+    QCOMPARE(items.size(), 0);
+}
+
+void tst_AgendaService::todayItemsExcludesCancelledInterview() {
+    const QDate today(2026, 10, 20);
+    const int appId = addApplication(u"CancCo"_s);
+
+    Interview iv;
+    iv.applicationId = appId;
+    iv.startAt = QDateTime(today, QTime(14, 0));
+    iv.outcome = InterviewOutcome::Cancelled;
+    QVERIFY(m_interviews->insert(iv));
+
+    const auto items = m_service->todayItems(today);
+    QCOMPARE(items.size(), 0);
+}
+
+void tst_AgendaService::todayItemsEarlierTodayInterviewHasPast() {
+    const QDate today(2026, 10, 20);
+    // Clock at 14:00 today
+    m_service->setClock([today] { return QDateTime(today, QTime(14, 0)); });
+
+    const int appId = addApplication(u"TimeCo"_s);
+
+    // Interview at 10:00 earlier today -> past = true
+    Interview ivMorning;
+    ivMorning.applicationId = appId;
+    ivMorning.startAt = QDateTime(today, QTime(10, 0));
+    QVERIFY(m_interviews->insert(ivMorning));
+
+    // Interview at 16:00 later today -> past = false
+    Interview ivAfternoon;
+    ivAfternoon.applicationId = appId;
+    ivAfternoon.startAt = QDateTime(today, QTime(16, 0));
+    QVERIFY(m_interviews->insert(ivAfternoon));
+
+    const auto items = m_service->todayItems(today);
+    QCOMPARE(items.size(), 2);
+    QCOMPARE(items[0].refId, ivMorning.id);
+    QVERIFY(items[0].past);
+
+    QCOMPARE(items[1].refId, ivAfternoon.id);
+    QVERIFY(!items[1].past);
+}
+
+void tst_AgendaService::todayItemsOrderingOverdueFirstThenTodayTimed() {
+    const QDate today(2026, 10, 20);
+    m_service->setClock([today] { return QDateTime(today, QTime(12, 0)); });
+
+    const int appId = addApplication(u"OrderCo"_s);
+    const int trackId = addTrack(u"English"_s);
+
+    // 1. Overdue follow-up (older: Oct 10)
+    JobApplication appOld;
+    appOld.company = u"OldFollowUp"_s;
+    appOld.position = u"Dev"_s;
+    appOld.nextAction = u"Act"_s;
+    appOld.nextActionDate = QDate(2026, 10, 10);
+    QVERIFY(m_apps->insert(appOld));
+
+    // 2. Overdue topic (newer overdue: Oct 15)
+    Topic topicOverdue;
+    topicOverdue.trackId = trackId;
+    topicOverdue.title = u"OverdueTopic"_s;
+    topicOverdue.targetDate = QDate(2026, 10, 15);
+    QVERIFY(m_topics->insert(topicOverdue));
+
+    // 3. Today interview late (15:00)
+    Interview ivLate;
+    ivLate.applicationId = appId;
+    ivLate.startAt = QDateTime(today, QTime(15, 0));
+    QVERIFY(m_interviews->insert(ivLate));
+
+    // 4. Today interview early (09:00)
+    Interview ivEarly;
+    ivEarly.applicationId = appId;
+    ivEarly.startAt = QDateTime(today, QTime(9, 0));
+    QVERIFY(m_interviews->insert(ivEarly));
+
+    // 5. Today follow-up (no time)
+    JobApplication appToday;
+    appToday.company = u"TodayFollowUp"_s;
+    appToday.position = u"Dev"_s;
+    appToday.nextAction = u"Act Today"_s;
+    appToday.nextActionDate = today;
+    QVERIFY(m_apps->insert(appToday));
+
+    const auto items = m_service->todayItems(today);
+    QCOMPARE(items.size(), 5);
+
+    // Overdue first (by date):
+    // 0: OldFollowUp (2026-10-10)
+    QCOMPARE(items[0].refId, appOld.id);
+    QCOMPARE(items[0].date, QDate(2026, 10, 10));
+
+    // 1: OverdueTopic (2026-10-15)
+    QCOMPARE(items[1].refId, topicOverdue.id);
+    QCOMPARE(items[1].date, QDate(2026, 10, 15));
+
+    // Today's timed items next (by time):
+    // 2: 09:00 interview
+    QCOMPARE(items[2].refId, ivEarly.id);
+    QCOMPARE(*items[2].time, QTime(9, 0));
+
+    // 3: 15:00 interview
+    QCOMPARE(items[3].refId, ivLate.id);
+    QCOMPARE(*items[3].time, QTime(15, 0));
+
+    // Today's untimed items last:
+    // 4: TodayFollowUp
+    QCOMPARE(items[4].refId, appToday.id);
+    QVERIFY(!items[4].time.has_value());
+}
+
+void tst_AgendaService::upcomingInterviewsExcludesCancelledOrdersAndLimits() {
+    const int appId = addApplication(u"UpcomingCo"_s);
+    const QDateTime now(QDate(2026, 10, 20), QTime(10, 0));
+    m_service->setClock([now] { return now; });
+
+    // Past interview (should not be returned if query starts from `now`)
+    Interview ivPast;
+    ivPast.applicationId = appId;
+    ivPast.startAt = QDateTime(QDate(2026, 10, 20), QTime(9, 0));
+    QVERIFY(m_interviews->insert(ivPast));
+
+    // Upcoming 1
+    Interview iv1;
+    iv1.applicationId = appId;
+    iv1.startAt = QDateTime(QDate(2026, 10, 21), QTime(14, 0));
+    QVERIFY(m_interviews->insert(iv1));
+
+    // Cancelled interview
+    Interview ivCanc;
+    ivCanc.applicationId = appId;
+    ivCanc.startAt = QDateTime(QDate(2026, 10, 22), QTime(11, 0));
+    ivCanc.outcome = InterviewOutcome::Cancelled;
+    QVERIFY(m_interviews->insert(ivCanc));
+
+    // Upcoming 2
+    Interview iv2;
+    iv2.applicationId = appId;
+    iv2.startAt = QDateTime(QDate(2026, 10, 23), QTime(15, 0));
+    QVERIFY(m_interviews->insert(iv2));
+
+    // Upcoming 3
+    Interview iv3;
+    iv3.applicationId = appId;
+    iv3.startAt = QDateTime(QDate(2026, 10, 24), QTime(16, 0));
+    QVERIFY(m_interviews->insert(iv3));
+
+    // Query from `now`, limit = 2
+    const auto res = m_service->upcomingInterviews(now, 2);
+    QCOMPARE(res.size(), 2);
+    QCOMPARE(res[0].refId, iv1.id);
+    QCOMPARE(res[1].refId, iv2.id);
+
+    // Query from `now`, limit = 5
+    const auto resAll = m_service->upcomingInterviews(now, 5);
+    QCOMPARE(resAll.size(), 3);
+    QCOMPARE(resAll[0].refId, iv1.id);
+    QCOMPARE(resAll[1].refId, iv2.id);
+    QCOMPARE(resAll[2].refId, iv3.id);
+}
+
+void tst_AgendaService::upcomingInterviewsAcrossMonthAndYearBorder() {
+    const int appId = addApplication(u"BorderCo"_s);
+
+    Interview ivDec;
+    ivDec.applicationId = appId;
+    ivDec.startAt = QDateTime(QDate(2026, 12, 31), QTime(20, 0));
+    QVERIFY(m_interviews->insert(ivDec));
+
+    Interview ivJan;
+    ivJan.applicationId = appId;
+    ivJan.startAt = QDateTime(QDate(2027, 1, 1), QTime(9, 0));
+    QVERIFY(m_interviews->insert(ivJan));
+
+    const auto res = m_service->upcomingInterviews(QDateTime(QDate(2026, 12, 31), QTime(0, 0)), 5);
+    QCOMPARE(res.size(), 2);
+    QCOMPARE(res[0].date, QDate(2026, 12, 31));
+    QCOMPARE(res[1].date, QDate(2027, 1, 1));
 }
 
 QTEST_GUILESS_MAIN(tst_AgendaService)

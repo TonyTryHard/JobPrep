@@ -33,6 +33,7 @@ private slots:
     void totalMinutesSumsRange();
     void nonPositiveMinutesRejected();
     void unknownIdReturnsNullopt();
+    void distinctSessionDatesReturnsDescendingUpToOnly();
 
 private:
     int addTopic();
@@ -229,6 +230,53 @@ void tst_SessionRepository::nonPositiveMinutesRejected() {
 void tst_SessionRepository::unknownIdReturnsNullopt() {
     QVERIFY(!m_sessions->byId(999).has_value());
     QCOMPARE(m_sessions->lastError(), QString());
+}
+
+void tst_SessionRepository::distinctSessionDatesReturnsDescendingUpToOnly() {
+    // 1. Empty DB case
+    QCOMPARE(m_sessions->distinctSessionDates(QDate(2026, 10, 10)), QList<QDate>());
+
+    // 2. Populate sessions
+    const int topicId = addTopic();
+
+    // 2026-10-01
+    StudySession s1;
+    s1.topicId = topicId;
+    s1.sessionDate = QDate(2026, 10, 1);
+    s1.minutes = 30;
+    QVERIFY(m_sessions->insert(s1));
+
+    // 2026-10-03 (session A)
+    StudySession s2;
+    s2.topicId = topicId;
+    s2.sessionDate = QDate(2026, 10, 3);
+    s2.minutes = 45;
+    QVERIFY(m_sessions->insert(s2));
+
+    // 2026-10-03 (session B, same date)
+    StudySession s3;
+    s3.sessionDate = QDate(2026, 10, 3);
+    s3.minutes = 15;
+    QVERIFY(m_sessions->insert(s3));
+
+    // 2026-10-05 (on upTo)
+    StudySession s4;
+    s4.sessionDate = QDate(2026, 10, 5);
+    s4.minutes = 60;
+    QVERIFY(m_sessions->insert(s4));
+
+    // 2026-10-06 (after upTo)
+    StudySession s5;
+    s5.sessionDate = QDate(2026, 10, 6);
+    s5.minutes = 20;
+    QVERIFY(m_sessions->insert(s5));
+
+    const auto dates = m_sessions->distinctSessionDates(QDate(2026, 10, 5));
+    QCOMPARE(dates.size(), 3);
+    // Descending order: 10-05, 10-03, 10-01
+    QCOMPARE(dates[0], QDate(2026, 10, 5));
+    QCOMPARE(dates[1], QDate(2026, 10, 3));
+    QCOMPARE(dates[2], QDate(2026, 10, 1));
 }
 
 QTEST_GUILESS_MAIN(tst_SessionRepository)

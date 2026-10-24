@@ -25,6 +25,12 @@ public:
     std::optional<Domain::Interview> byId(int id) const;
     std::optional<Domain::Interview> nextUpcoming(const QDateTime& now) const;
 
+    /// Number of non-cancelled interviews starting within [from, to], inclusive.
+    int countUpcoming(const QDateTime& from, const QDateTime& to) const;
+
+    /// Non-cancelled interviews starting on or after `from`, ordered by start_at, id, up to `limit`.
+    QList<Domain::Interview> upcoming(const QDateTime& from, int limit) const;
+
     /// Inserts `interview` and fills its id.
     bool insert(Domain::Interview& interview);
     bool update(const Domain::Interview& interview);

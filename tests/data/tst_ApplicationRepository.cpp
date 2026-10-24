@@ -40,6 +40,9 @@ private slots:
     void statusHistoryIsOrderedAndComplete();
     void unknownIdFailsWithoutChangedSignal();
     void byNextActionDateRangeQueries();
+    void appliedCountInRangeInclusiveAndEmpty();
+    void funnelStageCountsMatchesRanksAndHistory();
+    void byNextActionDateUpToQueries();
 
 private:
     int addApplication(const QString& company, ApplicationStatus status = ApplicationStatus::Applied);
@@ -441,6 +444,149 @@ void tst_ApplicationRepository::byNextActionDateRangeQueries() {
     // Ordered by next_action_date, id
     QCOMPARE(res[0].company, u"App2"_s);
     QCOMPARE(res[1].company, u"App1"_s);
+}
+
+void tst_ApplicationRepository::appliedCountInRangeInclusiveAndEmpty() {
+    // Empty database case
+    QCOMPARE(m_apps->appliedCountInRange(QDate(2026, 10, 1), QDate(2026, 10, 10)), 0);
+
+    JobApplication app1;
+    app1.company = u"A1"_s;
+    app1.position = u"Dev"_s;
+    app1.appliedDate = QDate(2026, 10, 1); // exactly at start
+    QVERIFY(m_apps->insert(app1));
+
+    JobApplication app2;
+    app2.company = u"A2"_s;
+    app2.position = u"Dev"_s;
+    app2.appliedDate = QDate(2026, 10, 5); // inside range
+    QVERIFY(m_apps->insert(app2));
+
+    JobApplication app3;
+    app3.company = u"A3"_s;
+    app3.position = u"Dev"_s;
+    app3.appliedDate = QDate(2026, 10, 10); // exactly at end
+    QVERIFY(m_apps->insert(app3));
+
+    JobApplication appBefore;
+    appBefore.company = u"Before"_s;
+    appBefore.position = u"Dev"_s;
+    appBefore.appliedDate = QDate(2026, 9, 30);
+    QVERIFY(m_apps->insert(appBefore));
+
+    JobApplication appAfter;
+    appAfter.company = u"After"_s;
+    appAfter.position = u"Dev"_s;
+    appAfter.appliedDate = QDate(2026, 10, 11);
+    QVERIFY(m_apps->insert(appAfter));
+
+    JobApplication appNullDate;
+    appNullDate.company = u"NullDate"_s;
+    appNullDate.position = u"Dev"_s;
+    appNullDate.appliedDate = std::nullopt;
+    QVERIFY(m_apps->insert(appNullDate));
+
+    QCOMPARE(m_apps->appliedCountInRange(QDate(2026, 10, 1), QDate(2026, 10, 10)), 3);
+}
+
+void tst_ApplicationRepository::funnelStageCountsMatchesRanksAndHistory() {
+    // Empty DB: all ranks 1..5 return 0
+    auto countsEmpty = m_apps->funnelStageCounts();
+    for (int r = 1; r <= 5; ++r) {
+        QCOMPARE(countsEmpty.value(r, -1), 0);
+    }
+
+    // Insert applications:
+    // 1. Wishlist (rank 0) - should not reach any rank 1..5
+    JobApplication appWishlist;
+    appWishlist.company = u"WishlistCorp"_s;
+    appWishlist.position = u"Dev"_s;
+    appWishlist.status = ApplicationStatus::Wishlist;
+    QVERIFY(m_apps->insert(appWishlist));
+
+    // 2. Applied (rank 1)
+    JobApplication appApplied;
+    appApplied.company = u"AppliedCorp"_s;
+    appApplied.position = u"Dev"_s;
+    appApplied.status = ApplicationStatus::Applied;
+    QVERIFY(m_apps->insert(appApplied));
+
+    // 3. Technical (rank 3) - reached ranks 1, 2, 3
+    JobApplication appTech;
+    appTech.company = u"TechCorp"_s;
+    appTech.position = u"Dev"_s;
+    appTech.status = ApplicationStatus::Technical;
+    QVERIFY(m_apps->insert(appTech));
+
+    // 4. Offer (rank 5) - reached ranks 1, 2, 3, 4, 5
+    JobApplication appOffer;
+    appOffer.company = u"OfferCorp"_s;
+    appOffer.position = u"Dev"_s;
+    appOffer.status = ApplicationStatus::Offer;
+    QVERIFY(m_apps->insert(appOffer));
+
+    // 5. Rejected application that reached Technical via status_history
+    JobApplication appRejected;
+    appRejected.company = u"RejectedCorp"_s;
+    appRejected.position = u"Dev"_s;
+    appRejected.status = ApplicationStatus::Applied;
+    QVERIFY(m_apps->insert(appRejected));
+    // Move to hr_screen, then technical, then rejected
+    QVERIFY(m_apps->setStatus(appRejected.id, ApplicationStatus::HrScreen));
+    QVERIFY(m_apps->setStatus(appRejected.id, ApplicationStatus::Technical));
+    QVERIFY(m_apps->setStatus(appRejected.id, ApplicationStatus::Rejected));
+
+    auto counts = m_apps->funnelStageCounts();
+    // Rank 1 (Applied): AppliedCorp, TechCorp, OfferCorp, RejectedCorp = 4
+    QCOMPARE(counts.value(1), 4);
+    // Rank 2 (HrScreen): TechCorp, OfferCorp, RejectedCorp = 3
+    QCOMPARE(counts.value(2), 3);
+    // Rank 3 (Technical): TechCorp, OfferCorp, RejectedCorp = 3
+    QCOMPARE(counts.value(3), 3);
+    // Rank 4 (Final): OfferCorp = 1
+    QCOMPARE(counts.value(4), 1);
+    // Rank 5 (Offer): OfferCorp = 1
+    QCOMPARE(counts.value(5), 1);
+}
+
+void tst_ApplicationRepository::byNextActionDateUpToQueries() {
+    JobApplication app1;
+    app1.company = u"Past1"_s;
+    app1.position = u"Dev"_s;
+    app1.status = ApplicationStatus::Applied;
+    app1.nextAction = u"Action 1"_s;
+    app1.nextActionDate = QDate(2026, 9, 20);
+    QVERIFY(m_apps->insert(app1));
+
+    JobApplication app2;
+    app2.company = u"OnUpTo"_s;
+    app2.position = u"Dev"_s;
+    app2.status = ApplicationStatus::Applied;
+    app2.nextAction = u"Action 2"_s;
+    app2.nextActionDate = QDate(2026, 10, 10);
+    QVERIFY(m_apps->insert(app2));
+
+    JobApplication appFuture;
+    appFuture.company = u"Future"_s;
+    appFuture.position = u"Dev"_s;
+    appFuture.status = ApplicationStatus::Applied;
+    appFuture.nextAction = u"Action Future"_s;
+    appFuture.nextActionDate = QDate(2026, 10, 11);
+    QVERIFY(m_apps->insert(appFuture));
+
+    // Closed applications must be excluded even if next_action_date is <= upTo
+    JobApplication appRejected;
+    appRejected.company = u"Closed"_s;
+    appRejected.position = u"Dev"_s;
+    appRejected.status = ApplicationStatus::Rejected;
+    appRejected.nextAction = u"Action Closed"_s;
+    appRejected.nextActionDate = QDate(2026, 10, 5);
+    QVERIFY(m_apps->insert(appRejected));
+
+    const auto res = m_apps->byNextActionDateUpTo(QDate(2026, 10, 10));
+    QCOMPARE(res.size(), 2);
+    QCOMPARE(res[0].company, u"Past1"_s);
+    QCOMPARE(res[1].company, u"OnUpTo"_s);
 }
 
 QTEST_GUILESS_MAIN(tst_ApplicationRepository)

@@ -43,6 +43,7 @@ private slots:
     void moveTopicAppendAtEnd();
     void moveTopicUnknownIdAndNoOp();
     void subtaskProgressBatchedQuery();
+    void byTargetDateUpToQueries();
 
 private:
     int addTrack(const QString& name);
@@ -530,6 +531,50 @@ void tst_TopicRepository::subtaskProgressBatchedQuery() {
     QVERIFY(!progress.contains(t3));
     QCOMPARE(progress.value(t3).done, 0);
     QCOMPARE(progress.value(t3).total, 0);
+}
+
+void tst_TopicRepository::byTargetDateUpToQueries() {
+    const int trackId = addTrack(u"C++"_s);
+
+    // 1. Empty case
+    QCOMPARE(m_topics->byTargetDateUpTo(QDate(2026, 10, 10)).size(), 0);
+
+    // 2. Before upTo
+    Topic t1;
+    t1.trackId = trackId;
+    t1.title = u"Past Target"_s;
+    t1.status = TopicStatus::Backlog;
+    t1.targetDate = QDate(2026, 10, 5);
+    QVERIFY(m_topics->insert(t1));
+
+    // 3. On upTo
+    Topic t2;
+    t2.trackId = trackId;
+    t2.title = u"On Target"_s;
+    t2.status = TopicStatus::InProgress;
+    t2.targetDate = QDate(2026, 10, 10);
+    QVERIFY(m_topics->insert(t2));
+
+    // 4. After upTo
+    Topic t3;
+    t3.trackId = trackId;
+    t3.title = u"Future Target"_s;
+    t3.status = TopicStatus::Backlog;
+    t3.targetDate = QDate(2026, 10, 15);
+    QVERIFY(m_topics->insert(t3));
+
+    // 5. Done topic on or before upTo (must be excluded)
+    Topic tDone;
+    tDone.trackId = trackId;
+    tDone.title = u"Done Topic"_s;
+    tDone.status = TopicStatus::Done;
+    tDone.targetDate = QDate(2026, 10, 8);
+    QVERIFY(m_topics->insert(tDone));
+
+    const auto res = m_topics->byTargetDateUpTo(QDate(2026, 10, 10));
+    QCOMPARE(res.size(), 2);
+    QCOMPARE(res[0].id, t1.id);
+    QCOMPARE(res[1].id, t2.id);
 }
 
 QTEST_GUILESS_MAIN(tst_TopicRepository)

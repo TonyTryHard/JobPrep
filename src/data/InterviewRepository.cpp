@@ -110,6 +110,28 @@ std::optional<Domain::Interview> InterviewRepository::nextUpcoming(const QDateTi
     return readInterview(m_database, statement.query());
 }
 
+int InterviewRepository::countUpcoming(const QDateTime& from, const QDateTime& to) const {
+    SqlStatement statement(
+        m_database,
+        u"SELECT COUNT(*) FROM interviews "
+        u"WHERE start_at >= ? AND start_at <= ? AND outcome != 'cancelled'"_s);
+    statement.bind(1, from);
+    statement.bind(2, to);
+    if (!statement.exec() || !statement.query().next()) return 0;
+    return statement.query().value(0).toInt();
+}
+
+QList<Domain::Interview> InterviewRepository::upcoming(const QDateTime& from, int limit) const {
+    SqlStatement statement(
+        m_database,
+        selectInterviews() +
+            u" WHERE start_at >= ? AND outcome != 'cancelled' "
+            u"ORDER BY start_at, id LIMIT ?"_s);
+    statement.bind(1, from);
+    statement.bind(2, limit);
+    return collect(m_database, statement);
+}
+
 bool InterviewRepository::insert(Domain::Interview& interview) {
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;

@@ -29,6 +29,8 @@ private slots:
     void inRangeIsInclusiveAndOrdered();
     void inRangeIncludesLastSecond();
     void nextUpcomingSkipsPast();
+    void countUpcomingExcludesCancelledAndRespectsBounds();
+    void upcomingExcludesCancelledOrdersAndLimits();
 
 private:
     int addApplication();
@@ -231,6 +233,105 @@ void tst_InterviewRepository::nextUpcomingSkipsPast() {
     QVERIFY(!m_interviews->nextUpcoming(QDateTime(QDate(2027, 1, 1), QTime(0, 0))).has_value());
     QVERIFY(m_interviews->byId(past).has_value());
     QVERIFY(m_interviews->byId(later).has_value());
+}
+
+void tst_InterviewRepository::countUpcomingExcludesCancelledAndRespectsBounds() {
+    const int appId = addApplication();
+
+    // 1. Empty case
+    QCOMPARE(m_interviews->countUpcoming(QDateTime(QDate(2026, 10, 1), QTime(0, 0)),
+                                         QDateTime(QDate(2026, 10, 7), QTime(23, 59))), 0);
+
+    // Interview on lower bound (counts)
+    Interview iv1;
+    iv1.applicationId = appId;
+    iv1.startAt = QDateTime(QDate(2026, 10, 1), QTime(10, 0));
+    QVERIFY(m_interviews->insert(iv1));
+
+    // Interview inside range (counts)
+    Interview iv2;
+    iv2.applicationId = appId;
+    iv2.startAt = QDateTime(QDate(2026, 10, 4), QTime(14, 0));
+    QVERIFY(m_interviews->insert(iv2));
+
+    // Interview on upper bound (counts)
+    Interview iv3;
+    iv3.applicationId = appId;
+    iv3.startAt = QDateTime(QDate(2026, 10, 7), QTime(23, 59));
+    QVERIFY(m_interviews->insert(iv3));
+
+    // Cancelled interview inside range (must be excluded)
+    Interview ivCancelled;
+    ivCancelled.applicationId = appId;
+    ivCancelled.startAt = QDateTime(QDate(2026, 10, 3), QTime(11, 0));
+    ivCancelled.outcome = InterviewOutcome::Cancelled;
+    QVERIFY(m_interviews->insert(ivCancelled));
+
+    // Interview before bound (not counted)
+    Interview ivBefore;
+    ivBefore.applicationId = appId;
+    ivBefore.startAt = QDateTime(QDate(2026, 9, 30), QTime(23, 59));
+    QVERIFY(m_interviews->insert(ivBefore));
+
+    // Interview after bound (not counted)
+    Interview ivAfter;
+    ivAfter.applicationId = appId;
+    ivAfter.startAt = QDateTime(QDate(2026, 10, 8), QTime(0, 0));
+    QVERIFY(m_interviews->insert(ivAfter));
+
+    const int count = m_interviews->countUpcoming(QDateTime(QDate(2026, 10, 1), QTime(10, 0)),
+                                                  QDateTime(QDate(2026, 10, 7), QTime(23, 59)));
+    QCOMPARE(count, 3);
+}
+
+void tst_InterviewRepository::upcomingExcludesCancelledOrdersAndLimits() {
+    const int appId = addApplication();
+
+    // Past interview
+    Interview ivPast;
+    ivPast.applicationId = appId;
+    ivPast.startAt = QDateTime(QDate(2026, 10, 1), QTime(9, 0));
+    QVERIFY(m_interviews->insert(ivPast));
+
+    // Upcoming 1
+    Interview iv1;
+    iv1.applicationId = appId;
+    iv1.startAt = QDateTime(QDate(2026, 10, 2), QTime(10, 0));
+    QVERIFY(m_interviews->insert(iv1));
+
+    // Cancelled upcoming interview
+    Interview ivCanc;
+    ivCanc.applicationId = appId;
+    ivCanc.startAt = QDateTime(QDate(2026, 10, 2), QTime(15, 0));
+    ivCanc.outcome = InterviewOutcome::Cancelled;
+    QVERIFY(m_interviews->insert(ivCanc));
+
+    // Upcoming 2
+    Interview iv2;
+    iv2.applicationId = appId;
+    iv2.startAt = QDateTime(QDate(2026, 10, 3), QTime(11, 0));
+    QVERIFY(m_interviews->insert(iv2));
+
+    // Upcoming 3
+    Interview iv3;
+    iv3.applicationId = appId;
+    iv3.startAt = QDateTime(QDate(2026, 10, 4), QTime(12, 0));
+    QVERIFY(m_interviews->insert(iv3));
+
+    const QDateTime from(QDate(2026, 10, 2), QTime(0, 0));
+
+    // Limit 2: should return iv1 and iv2, skipping cancelled ivCanc
+    const auto list = m_interviews->upcoming(from, 2);
+    QCOMPARE(list.size(), 2);
+    QCOMPARE(list[0].id, iv1.id);
+    QCOMPARE(list[1].id, iv2.id);
+
+    // Limit 10: should return all 3 non-cancelled upcoming interviews
+    const auto listAll = m_interviews->upcoming(from, 10);
+    QCOMPARE(listAll.size(), 3);
+    QCOMPARE(listAll[0].id, iv1.id);
+    QCOMPARE(listAll[1].id, iv2.id);
+    QCOMPARE(listAll[2].id, iv3.id);
 }
 
 QTEST_GUILESS_MAIN(tst_InterviewRepository)

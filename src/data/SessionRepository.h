@@ -32,6 +32,9 @@ public:
 
     int count() const;
     int totalMinutesInRange(QDate from, QDate to) const;
+
+    /// Distinct dates with at least one study session on or before `upTo`, ordered descending.
+    QList<QDate> distinctSessionDates(QDate upTo) const;
     QString lastError() const;
     JobPrep::Data::Database& database() const;
 

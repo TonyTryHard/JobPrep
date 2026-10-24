@@ -28,6 +28,8 @@ public:
     QList<Domain::Topic> byTrack(int trackId) const;
     /// Non-done topics with target_date in [from, to] inclusive.
     QList<Domain::Topic> byTargetDateRange(QDate from, QDate to) const;
+    /// Non-done topics with target_date <= upTo.
+    QList<Domain::Topic> byTargetDateUpTo(QDate upTo) const;
     std::optional<Domain::Topic> byId(int id) const;
 
     /// Inserts `topic`, fills its id and timestamps. `resources` is stored as-is.
