@@ -204,9 +204,10 @@ $ grep -n "commitAndNotify" src/data/TopicRepository.cpp | head -30
 501:    return commitAndNotify(m_database, transaction);
 ```
 
-### Open Question for User
+### Open Question for User (Resolved)
 **Should an active, visible window also show an in-app toast, because GNOME desktop banners can be suppressed by Do Not Disturb?**  
-Currently, per SPEC §14, `TrayNotifier` handles delivery when the tray is available and messages are supported, while `InAppNotifier` handles delivery when the tray is absent or unsupported. If the user desires simultaneous in-app toasts even when the tray is active, this can be introduced as a configurable setting.
+- **Resolution:** No. The user confirmed: "no it shouldn't".
+- **Behavior:** The architecture strictly follows the existing fallback model: `TrayNotifier` delivers notifications via OS tray/desktop banners whenever system tray is available and message support is reported; `InAppNotifier` delivers in-app toast notifications only when system tray is unavailable or message support is missing. No duplicate in-app toasts are displayed when system tray is active.
 
 ---
 
