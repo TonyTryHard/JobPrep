@@ -2,11 +2,13 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QMessageBox>
+#include <QSystemTrayIcon>
 #include "app/AppContext.h"
 #include "data/Database.h"
 #include "services/SeedService.h"
 #include "services/SettingsService.h"
 #include "ui/MainWindow.h"
+#include "ui/ReminderCoordinator.h"
 
 using namespace Qt::StringLiterals;
 
@@ -55,6 +57,18 @@ int main(int argc, char* argv[]) {
     // Create and show main window
     JobPrep::Ui::MainWindow mainWindow(ctx);
     mainWindow.show();
+
+    // Start reminders via coordinator (owned locally, destroyed before window)
+    const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable();
+    JobPrep::Ui::ReminderCoordinator reminderCoordinator(
+        ctx.interviews(),
+        ctx.applications(),
+        ctx.reminderLog(),
+        ctx.settings(),
+        mainWindow,
+        trayAvailable
+    );
+    reminderCoordinator.start();
 
     return app.exec();
 }

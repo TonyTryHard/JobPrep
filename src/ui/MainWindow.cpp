@@ -15,6 +15,7 @@
 #include "data/ApplicationRepository.h"
 #include "data/InterviewRepository.h"
 #include "data/TopicRepository.h"
+#include "services/INotifier.h"
 #include "services/SettingsService.h"
 #include "ui/DashboardController.h"
 #include "ui/FormatHelper.h"
@@ -131,6 +132,7 @@ void MainWindow::setupUi() {
 
     // Pages stack
     m_pageStack = new QStackedWidget(rightContainer);
+    m_pageStack->setObjectName(u"PageStack"_s);
 
     m_homePage = new Pages::HomePage(*m_dashboardController, m_ctx.themeManager(), m_pageStack);
     m_pages.append(m_homePage);
@@ -310,6 +312,41 @@ void MainWindow::openApplication(int applicationId) {
     if (m_jobsIndex < 0) return;
     goToPage(m_jobsIndex);
     m_jobsPage->openApplication(applicationId);
+}
+
+Theme::ThemeManager& MainWindow::themeManager() const {
+    return m_ctx.themeManager();
+}
+
+void MainWindow::bringToFront() {
+    if (isMinimized()) {
+        showNormal();
+    }
+    raise();
+    activateWindow();
+}
+
+void MainWindow::routeNotification(const Services::Notification& notification) {
+    switch (notification.kind) {
+        case Services::NotificationKind::Interview:
+            openInterview(notification.refId);
+            break;
+        case Services::NotificationKind::FollowUp:
+            openApplication(notification.refId);
+            break;
+        case Services::NotificationKind::OverdueFollowUps:
+            if (notification.refId > 0) {
+                openApplication(notification.refId);
+            } else if (m_jobsIndex >= 0) {
+                goToPage(m_jobsIndex);
+            }
+            break;
+    }
+}
+
+void MainWindow::openItemFromNotification(const Services::Notification& notification) {
+    bringToFront();
+    routeNotification(notification);
 }
 
 void MainWindow::setupConnections() {

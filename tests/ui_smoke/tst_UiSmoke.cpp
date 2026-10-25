@@ -42,11 +42,13 @@
 #include "models/TopicListModel.h"
 #include "services/DayWatcher.h"
 #include "services/ExportService.h"
+#include "services/INotifier.h"
 #include "services/SeedService.h"
 #include "services/SettingsService.h"
 #include "services/StatsService.h"
 #include "ui/DashboardController.h"
 #include "ui/FormatHelper.h"
+#include "ui/InAppNotifier.h"
 #include "ui/MainWindow.h"
 #include "ui/Sidebar.h"
 #include "ui/dialogs/ApplicationDialog.h"
@@ -75,6 +77,9 @@
 #include "ui/widgets/TopicListView.h"
 
 using namespace Qt::StringLiterals;
+using JobPrep::Services::Notification;
+using JobPrep::Services::NotificationKind;
+using JobPrep::Ui::InAppNotifier;
 
 namespace {
 
@@ -286,6 +291,8 @@ private slots:
     void testWidgetMetricsAndRingWrapping();
     void testDashboardIgnoresThemeSidebarAndSplitterChanges();
     void testDashboardScreenshots();
+    void testToastNotificationSmoke();
+    void testToastScreenshots();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -4069,6 +4076,159 @@ void tst_UiSmoke::testDashboardScreenshots() {
             const QString fileName = (mode == JobPrep::Ui::Theme::ThemeMode::Light)
                                          ? u"dashboard-empty-light.png"_s
                                          : u"dashboard-empty-dark.png"_s;
+            QVERIFY(img.save(QDir(dir).filePath(fileName)));
+        }
+    }
+}
+
+void tst_UiSmoke::testToastNotificationSmoke() {
+    AppContext ctx(u":memory:"_s);
+    MainWindow win(ctx);
+    win.resize(1100, 700);
+    win.showNormal();
+    win.show();
+    QCoreApplication::processEvents();
+
+    InAppNotifier notifier(win, win.themeManager());
+    Notification n;
+    n.kind = NotificationKind::Interview;
+    n.company = u"Acme Smoke Corp"_s;
+    n.position = u"Software Engineer"_s;
+    n.interviewType = InterviewType::Technical;
+    n.leadMinutes = 60;
+
+    QVERIFY(notifier.notify(n));
+    QCoreApplication::processEvents();
+    QCOMPARE(notifier.visibleToastCount(), 1);
+
+    for (auto mode : {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
+        ctx.themeManager().setThemeMode(mode);
+        QCoreApplication::processEvents();
+    }
+
+    notifier.dismissNewest();
+    QCoreApplication::processEvents();
+    QCOMPARE(notifier.totalToastCount(), 0);
+}
+
+void tst_UiSmoke::testToastScreenshots() {
+    const QString dir = qEnvironmentVariable("JOBPREP_REPORT_IMG_DIR");
+    if (dir.isEmpty()) QSKIP("JOBPREP_REPORT_IMG_DIR is not set");
+    QVERIFY(QDir().mkpath(dir));
+
+    // 1. Single toast on dashboard
+    {
+        AppContext ctx(u":memory:"_s);
+        const QDateTime now(QDate(2026, 10, 29), QTime(10, 0));
+        ctx.statsService().setClock([now] { return now; });
+        ctx.dayWatcher().setClock([now] { return now.date(); });
+
+        Track t1; t1.name = u"C++"_s; t1.color = u"#3b82f6"_s; QVERIFY(ctx.tracks().insert(t1));
+        Track t2; t2.name = u"English"_s; t2.color = u"#10b981"_s; QVERIFY(ctx.tracks().insert(t2));
+        Topic tp1; tp1.trackId = t1.id; tp1.title = u"Smart Pointers"_s; tp1.status = TopicStatus::Done; QVERIFY(ctx.topics().insert(tp1));
+        Topic tp2; tp2.trackId = t2.id; tp2.title = u"Behavioral Questions"_s; tp2.status = TopicStatus::InProgress; tp2.targetDate = now.date(); QVERIFY(ctx.topics().insert(tp2));
+
+        JobApplication a1; a1.company = u"Acme Corp"_s; a1.position = u"C++ Engineer"_s; a1.status = ApplicationStatus::Technical; a1.appliedDate = QDate(2026, 10, 27); QVERIFY(ctx.applications().insert(a1));
+        JobApplication a2; a2.company = u"Globex"_s; a2.position = u"Systems Dev"_s; a2.status = ApplicationStatus::Applied; a2.appliedDate = QDate(2026, 10, 29); a2.nextActionDate = now.date(); a2.nextAction = u"Send code samples"_s; QVERIFY(ctx.applications().insert(a2));
+        JobApplication a3; a3.company = u"Initech"_s; a3.position = u"Senior Architect"_s; a3.status = ApplicationStatus::Final; a3.appliedDate = QDate(2026, 10, 15); QVERIFY(ctx.applications().insert(a3));
+
+        StudySession s1; s1.sessionDate = QDate(2026, 10, 26); s1.minutes = 60; QVERIFY(ctx.sessions().insert(s1));
+        StudySession s2; s2.sessionDate = QDate(2026, 10, 27); s2.minutes = 120; QVERIFY(ctx.sessions().insert(s2));
+        StudySession s3; s3.sessionDate = QDate(2026, 10, 28); s3.minutes = 80; QVERIFY(ctx.sessions().insert(s3));
+
+        Interview iv1; iv1.applicationId = a1.id; iv1.startAt = QDateTime(QDate(2026, 10, 29), QTime(8, 0)); iv1.type = InterviewType::Hr; QVERIFY(ctx.interviews().insert(iv1));
+        Interview iv2; iv2.applicationId = a1.id; iv2.startAt = QDateTime(QDate(2026, 10, 30), QTime(14, 0)); iv2.type = InterviewType::Technical; QVERIFY(ctx.interviews().insert(iv2));
+
+        MainWindow win(ctx);
+        win.resize(1100, 700);
+        win.show();
+        win.dashboardController()->refreshNow();
+        QCoreApplication::processEvents();
+
+        InAppNotifier notifier(win, win.themeManager());
+        Notification n;
+        n.kind = NotificationKind::Interview;
+        n.company = u"Globex Systems"_s;
+        n.position = u"Systems Developer"_s;
+        n.interviewType = InterviewType::Technical;
+        n.leadMinutes = 60;
+        QVERIFY(notifier.notify(n));
+        QCoreApplication::processEvents();
+
+        for (auto mode : {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
+            ctx.themeManager().setThemeMode(mode);
+            QCoreApplication::processEvents();
+            const QImage img = win.grab().toImage();
+            QVERIFY(!img.isNull());
+            const QString fileName = (mode == JobPrep::Ui::Theme::ThemeMode::Light)
+                                         ? u"dashboard-toast-light.png"_s
+                                         : u"dashboard-toast-dark.png"_s;
+            QVERIFY(img.save(QDir(dir).filePath(fileName)));
+        }
+    }
+
+    // 2. Stack of 4 toasts on dashboard
+    {
+        AppContext ctx(u":memory:"_s);
+        const QDateTime now(QDate(2026, 10, 29), QTime(10, 0));
+        ctx.statsService().setClock([now] { return now; });
+        ctx.dayWatcher().setClock([now] { return now.date(); });
+
+        Track t1; t1.name = u"C++"_s; t1.color = u"#3b82f6"_s; QVERIFY(ctx.tracks().insert(t1));
+        Topic tp1; tp1.trackId = t1.id; tp1.title = u"Smart Pointers"_s; tp1.status = TopicStatus::Done; QVERIFY(ctx.topics().insert(tp1));
+
+        JobApplication a1; a1.company = u"Acme Corp"_s; a1.position = u"C++ Engineer"_s; a1.status = ApplicationStatus::Technical; a1.appliedDate = QDate(2026, 10, 27); QVERIFY(ctx.applications().insert(a1));
+        JobApplication a2; a2.company = u"Globex"_s; a2.position = u"Systems Dev"_s; a2.status = ApplicationStatus::Applied; a2.appliedDate = QDate(2026, 10, 29); QVERIFY(ctx.applications().insert(a2));
+
+        MainWindow win(ctx);
+        win.resize(1100, 700);
+        win.show();
+        win.dashboardController()->refreshNow();
+        QCoreApplication::processEvents();
+
+        InAppNotifier notifier(win, win.themeManager());
+
+        Notification n1;
+        n1.kind = NotificationKind::Interview;
+        n1.company = u"Globex Systems"_s;
+        n1.position = u"Systems Dev"_s;
+        n1.interviewType = InterviewType::Technical;
+        n1.leadMinutes = 60;
+        notifier.notify(n1);
+
+        Notification n2;
+        n2.kind = NotificationKind::FollowUp;
+        n2.company = u"Initech Inc"_s;
+        n2.position = u"QA Automation"_s;
+        notifier.notify(n2);
+
+        Notification n3;
+        n3.kind = NotificationKind::Interview;
+        n3.company = u"Acme Corp"_s;
+        n3.position = u"C++ Engineer"_s;
+        n3.interviewType = InterviewType::Final;
+        n3.leadMinutes = 1440;
+        notifier.notify(n3);
+
+        Notification n4;
+        n4.kind = NotificationKind::OverdueFollowUps;
+        n4.refId = 0;
+        n4.count = 2;
+        notifier.notify(n4);
+
+        QCoreApplication::processEvents();
+        QCOMPARE(notifier.totalToastCount(), 4);
+        QCOMPARE(notifier.visibleToastCount(), 3);
+        QVERIFY(notifier.isOverflowVisible());
+
+        for (auto mode : {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
+            ctx.themeManager().setThemeMode(mode);
+            QCoreApplication::processEvents();
+            const QImage img = win.grab().toImage();
+            QVERIFY(!img.isNull());
+            const QString fileName = (mode == JobPrep::Ui::Theme::ThemeMode::Light)
+                                         ? u"dashboard-toasts-stack-light.png"_s
+                                         : u"dashboard-toasts-stack-dark.png"_s;
             QVERIFY(img.save(QDir(dir).filePath(fileName)));
         }
     }

@@ -202,6 +202,20 @@ add_library(jobprep_core STATIC
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
 
+    # Notifiers & Reminders UI
+    src/ui/NotificationText.h
+    src/ui/NotificationText.cpp
+    src/ui/Toast.h
+    src/ui/Toast.cpp
+    src/ui/InAppNotifier.h
+    src/ui/InAppNotifier.cpp
+    src/ui/TrayNotifier.h
+    src/ui/TrayNotifier.cpp
+    src/ui/NotifierFactory.h
+    src/ui/NotifierFactory.cpp
+    src/ui/ReminderCoordinator.h
+    src/ui/ReminderCoordinator.cpp
+
     # Resources
     resources/resources.qrc
 )

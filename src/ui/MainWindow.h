@@ -13,9 +13,17 @@ namespace JobPrep::App {
 class AppContext;
 }
 
+namespace JobPrep::Services {
+struct Notification;
+}
+
 namespace JobPrep::Ui {
 class Sidebar;
 class PageBase;
+
+namespace Theme {
+class ThemeManager;
+}
 
 namespace Pages {
 class CalendarPage;
@@ -45,6 +53,18 @@ public:
 
     /// Switches to the Jobs page and opens the application editor (B2).
     void openApplication(int applicationId);
+
+    /// Returns the application theme manager.
+    Theme::ThemeManager& themeManager() const;
+
+    /// Brings the application window to front (unminimizes, raises, activates).
+    void bringToFront();
+
+    /// Routes notification activation to the appropriate page/item.
+    void routeNotification(const Services::Notification& notification);
+
+    /// Activates window and opens the notification's target item.
+    void openItemFromNotification(const Services::Notification& notification);
 
     Pages::HomePage* homePage() const { return m_homePage; }
     DashboardController* dashboardController() const { return m_dashboardController.get(); }
