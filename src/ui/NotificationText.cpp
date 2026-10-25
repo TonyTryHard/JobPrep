@@ -53,18 +53,18 @@ QString NotificationText::formatRemainingTime(const Services::Notification& noti
     return formatLeadTime(notification.leadMinutes);
 }
 
-QString NotificationText::formatTitle(const Services::Notification& notification) {
+QString NotificationText::formatTitle(const Services::Notification& notification,
+                                      const QDateTime& now) {
     switch (notification.kind) {
-        case Services::NotificationKind::Interview:
-            if (!notification.company.isEmpty()) {
-                return notification.company;
+        case Services::NotificationKind::Interview: {
+            const QString timeStr = formatRemainingTime(notification, now);
+            if (!timeStr.isEmpty()) {
+                return QCoreApplication::translate("NotificationText", "Interview %1").arg(timeStr);
             }
             return QCoreApplication::translate("NotificationText", "Interview Reminder");
+        }
         case Services::NotificationKind::FollowUp:
-            if (!notification.company.isEmpty()) {
-                return notification.company;
-            }
-            return QCoreApplication::translate("NotificationText", "Follow-up Reminder");
+            return QCoreApplication::translate("NotificationText", "Follow-up due today");
         case Services::NotificationKind::OverdueFollowUps:
             if (notification.refId > 0 && notification.count <= 1) {
                 return QCoreApplication::translate("NotificationText", "Overdue Follow-up");
@@ -76,28 +76,39 @@ QString NotificationText::formatTitle(const Services::Notification& notification
 
 QString NotificationText::formatMessage(const Services::Notification& notification,
                                         const QDateTime& now) {
+    Q_UNUSED(now);
     switch (notification.kind) {
         case Services::NotificationKind::Interview: {
             const QString typeLabel = notification.interviewType
                                           ? Theme::StatusStyle::label(*notification.interviewType)
-                                          : QCoreApplication::translate("NotificationText", "Interview");
-            const QString timeStr = formatRemainingTime(notification, now);
-            if (!notification.position.isEmpty() && !timeStr.isEmpty()) {
-                return QCoreApplication::translate("NotificationText", "%1 (%2) %3")
-                    .arg(typeLabel, notification.position, timeStr);
-            } else if (!timeStr.isEmpty()) {
-                return QCoreApplication::translate("NotificationText", "%1 %2")
-                    .arg(typeLabel, timeStr);
-            } else if (!notification.position.isEmpty()) {
-                return QCoreApplication::translate("NotificationText", "%1 (%2)")
-                    .arg(typeLabel, notification.position);
+                                          : QString();
+            // Format: Company · Type (position)
+            if (!notification.company.isEmpty()) {
+                if (!typeLabel.isEmpty() && !notification.position.isEmpty()) {
+                    return u"%1 · %2 (%3)"_s.arg(notification.company, typeLabel, notification.position);
+                } else if (!typeLabel.isEmpty()) {
+                    return u"%1 · %2"_s.arg(notification.company, typeLabel);
+                } else if (!notification.position.isEmpty()) {
+                    return u"%1 (%2)"_s.arg(notification.company, notification.position);
+                }
+                return notification.company;
             }
-            return typeLabel;
+            if (!typeLabel.isEmpty() && !notification.position.isEmpty()) {
+                return u"%1 (%2)"_s.arg(typeLabel, notification.position);
+            } else if (!typeLabel.isEmpty()) {
+                return typeLabel;
+            } else if (!notification.position.isEmpty()) {
+                return notification.position;
+            }
+            return QCoreApplication::translate("NotificationText", "Interview");
         }
         case Services::NotificationKind::FollowUp: {
-            if (!notification.position.isEmpty()) {
-                return QCoreApplication::translate("NotificationText", "%1 — Follow-up due today")
-                    .arg(notification.position);
+            if (!notification.company.isEmpty() && !notification.position.isEmpty()) {
+                return u"%1 · %2"_s.arg(notification.company, notification.position);
+            } else if (!notification.company.isEmpty()) {
+                return notification.company;
+            } else if (!notification.position.isEmpty()) {
+                return notification.position;
             }
             return QCoreApplication::translate("NotificationText", "Follow-up due today");
         }

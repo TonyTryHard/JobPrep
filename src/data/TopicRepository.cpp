@@ -175,7 +175,20 @@ bool TopicRepository::insert(Domain::Topic& topic) {
 }
 
 bool TopicRepository::update(const Domain::Topic& topic) {
-    if (!acceptExisting(m_database, byId(topic.id).has_value(), u"topic"_s, topic.id)) return false;
+    const auto existing = byId(topic.id);
+    if (!acceptExisting(m_database, existing.has_value(), u"topic"_s, topic.id)) return false;
+
+    if (existing->trackId == topic.trackId &&
+        existing->title == topic.title &&
+        existing->status == topic.status &&
+        existing->priority == topic.priority &&
+        existing->targetDate == topic.targetDate &&
+        existing->notes == topic.notes &&
+        existing->resources == topic.resources &&
+        existing->tags == topic.tags &&
+        existing->position == topic.position) {
+        return true;
+    }
 
     auto transaction = m_database.transaction();
     if (!transaction.isActive()) return false;

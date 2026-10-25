@@ -1,7 +1,9 @@
 #include "ui/TrayNotifier.h"
 
 #include <QCoreApplication>
+#include <QLoggingCategory>
 #include <QMenu>
+#include "ui/InAppNotifier.h"
 #include "ui/MainWindow.h"
 #include "ui/NotificationText.h"
 #include "ui/theme/IconProvider.h"
@@ -9,6 +11,8 @@
 #include "ui/theme/Tokens.h"
 
 using namespace Qt::StringLiterals;
+
+Q_DECLARE_LOGGING_CATEGORY(lcReminders)
 
 namespace JobPrep::Ui {
 
@@ -56,10 +60,36 @@ void TrayNotifier::updateIcon() {
 }
 
 bool TrayNotifier::notify(const Services::Notification& notification) {
+    if (!QSystemTrayIcon::isSystemTrayAvailable()) {
+        qCDebug(lcReminders) << "notify: tray unavailable, delivery failed";
+        return false;
+    }
+    if (!m_trayIcon.isVisible()) {
+        qCDebug(lcReminders) << "notify: tray icon not visible, delivery failed";
+        return false;
+    }
+    if (!QSystemTrayIcon::supportsMessages()) {
+        if (!m_inAppFallback) {
+            m_inAppFallback = std::make_unique<InAppNotifier>(m_window, m_window.themeManager(), m_clickHandler);
+        }
+        qCDebug(lcReminders) << "notify: tray messages unsupported, falling back to in-app toast";
+        return m_inAppFallback->notify(notification);
+    }
+
     m_lastNotification = notification;
     const QString title = NotificationText::formatTitle(notification);
     const QString message = NotificationText::formatMessage(notification);
-    m_trayIcon.showMessage(title, message, QSystemTrayIcon::Information, 10000);
+
+    QSystemTrayIcon::MessageIcon icon = QSystemTrayIcon::Information;
+    switch (notification.kind) {
+        case Services::NotificationKind::Interview:
+        case Services::NotificationKind::FollowUp:
+        case Services::NotificationKind::OverdueFollowUps:
+            icon = QSystemTrayIcon::Warning;
+            break;
+    }
+
+    m_trayIcon.showMessage(title, message, icon, 10000);
     return true;
 }
 

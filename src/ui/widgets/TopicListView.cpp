@@ -22,7 +22,6 @@ TopicListView::TopicListView(Theme::ThemeManager& theme, QWidget* parent)
     setDragEnabled(true);
     setAcceptDrops(true);
     viewport()->setAcceptDrops(true);
-    viewport()->installEventFilter(this);
     setDropIndicatorShown(true);
     setDragDropMode(QAbstractItemView::DragDrop);
     setDefaultDropAction(Qt::MoveAction);
@@ -48,28 +47,6 @@ bool TopicListView::event(QEvent* event) {
     return QListView::event(event);
 }
 
-bool TopicListView::eventFilter(QObject* watched, QEvent* event) {
-    if (watched == viewport()) {
-        switch (event->type()) {
-            case QEvent::DragEnter:
-                dragEnterEvent(static_cast<QDragEnterEvent*>(event));
-                return event->isAccepted();
-            case QEvent::DragMove:
-                dragMoveEvent(static_cast<QDragMoveEvent*>(event));
-                return event->isAccepted();
-            case QEvent::DragLeave:
-                dragLeaveEvent(static_cast<QDragLeaveEvent*>(event));
-                return event->isAccepted();
-            case QEvent::Drop:
-                dropEvent(static_cast<QDropEvent*>(event));
-                return event->isAccepted();
-            default:
-                break;
-        }
-    }
-    return QListView::eventFilter(watched, event);
-}
-
 bool TopicListView::viewportEvent(QEvent* event) {
     switch (event->type()) {
         case QEvent::DragEnter:
@@ -91,12 +68,14 @@ bool TopicListView::viewportEvent(QEvent* event) {
 }
 
 void TopicListView::startDrag(Qt::DropActions supportedActions) {
+    if (m_isDragging) return;
     const QModelIndex current = currentIndex();
     if (!current.isValid() || !model()) return;
 
     QMimeData* mime = model()->mimeData({current});
     if (!mime) return;
 
+    m_isDragging = true;
     auto* drag = new QDrag(this);
     drag->setMimeData(mime);
 
@@ -117,6 +96,7 @@ void TopicListView::startDrag(Qt::DropActions supportedActions) {
     }
 
     drag->exec(supportedActions, Qt::MoveAction);
+    m_isDragging = false;
 }
 
 void TopicListView::dragEnterEvent(QDragEnterEvent* event) {

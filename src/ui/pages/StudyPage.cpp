@@ -23,6 +23,7 @@
 #include "models/TopicListModel.h"
 #include "models/TopicTableProxy.h"
 #include "services/SettingsService.h"
+#include "ui/StudyLogging.h"
 #include "ui/delegates/ProgressBarDelegate.h"
 #include "ui/delegates/StatusBadgeDelegate.h"
 #include "ui/dialogs/SessionDialog.h"
@@ -69,6 +70,7 @@ StudyPage::StudyPage(Data::TopicRepository& topics,
     rootLayout->setSpacing(16);
 
     m_model = new Models::TopicListModel(topics, tracks, this, m_todayProvider);
+    connect(m_model, &QAbstractItemModel::modelAboutToBeReset, this, [this] { m_inReset = true; });
     connect(m_model, &QAbstractItemModel::modelReset, this, &StudyPage::onModelReset);
     connect(&m_topics, &Data::TopicRepository::changed, this, &StudyPage::onTopicsChanged);
     connect(&m_tracks, &Data::TrackRepository::changed, this, &StudyPage::onTracksChanged);
@@ -515,6 +517,7 @@ int StudyPage::visibleTopicCount() const {
 }
 
 void StudyPage::onTopicsChanged() {
+    qCDebug(lcStudy) << "TopicRepository::changed";
     m_detail->refreshFromRepository();
     refreshViewState();
 }
@@ -527,6 +530,7 @@ void StudyPage::onTracksChanged() {
 }
 
 void StudyPage::onModelReset() {
+    m_inReset = true;
     if (!m_selectedTopicId.has_value()) {
         for (auto* col : m_columns) col->clearSelection();
         m_detail->clearTopic();
@@ -692,6 +696,7 @@ void StudyPage::onColumnSelectionChanged(Widgets::TopicBoardColumn* activeColumn
         }
         if (!anySelected) {
             if (m_selectedTopicId) {
+                qCDebug(lcStudy) << "selectionChanged: topic=none";
                 m_detail->flush();
                 m_detail->clearTopic();
                 m_selectedTopicId.reset();
@@ -713,6 +718,8 @@ void StudyPage::onColumnSelectionChanged(Widgets::TopicBoardColumn* activeColumn
             col->clearSelection();
         }
     }
+
+    qCDebug(lcStudy) << "selectionChanged: topic=" << id;
 
     if (m_selectedTopicId == id) return;
     m_selectedTopicId = id;

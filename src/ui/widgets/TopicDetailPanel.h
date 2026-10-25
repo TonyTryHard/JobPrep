@@ -86,7 +86,7 @@ private slots:
     void addResource();
     void openResource();
     void deleteResource();
-    void toggleTargetDate();
+    void clearTargetDate();
 
 private:
     bool saveNow();

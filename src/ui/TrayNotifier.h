@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <QObject>
 #include <QSystemTrayIcon>
@@ -9,6 +10,7 @@
 class QMenu;
 
 namespace JobPrep::Ui {
+class InAppNotifier;
 class MainWindow;
 
 /// Concrete system tray notification provider (SPEC §8, Amendment D1).
@@ -40,6 +42,7 @@ private:
     QSystemTrayIcon m_trayIcon;
     QMenu* m_trayMenu{nullptr};
     std::optional<Services::Notification> m_lastNotification;
+    std::unique_ptr<InAppNotifier> m_inAppFallback;
 };
 
 }  // namespace JobPrep::Ui

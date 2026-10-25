@@ -1985,17 +1985,23 @@ void tst_UiSmoke::testStudyDetailPanelAutosaveAndValidation() {
     QVERIFY(msgLabel->text().contains(u"Title cannot be empty"_s));
     QCOMPARE(m_studyCtx->topics().byId(t2Id)->title, u"Topic B"_s);
 
-    // Target date set and clear
+    // Target date set and clear (SPEC S2 / F2)
+    auto* dateEdit = childNamed<QDateEdit>(detail, u"StudyDetailDateEdit"_s);
     auto* dateBtn = childNamed<QPushButton>(detail, u"StudyDetailDateClearBtn"_s);
-    QCOMPARE(dateBtn->text(), u"Set date"_s);
-    dateBtn->click();
-    QCoreApplication::processEvents();
+    QVERIFY(dateEdit->isEnabled());
     QCOMPARE(dateBtn->text(), u"Clear"_s);
+    QVERIFY(!dateBtn->isEnabled());
+
+    dateEdit->setDate(QDate(2026, 11, 20));
+    detail->flush();
+    QCoreApplication::processEvents();
+    QVERIFY(dateBtn->isEnabled());
     QVERIFY(m_studyCtx->topics().byId(t2Id)->targetDate.has_value());
 
     dateBtn->click();
     QCoreApplication::processEvents();
-    QCOMPARE(dateBtn->text(), u"Set date"_s);
+    QVERIFY(dateEdit->isEnabled());
+    QVERIFY(!dateBtn->isEnabled());
     QVERIFY(!m_studyCtx->topics().byId(t2Id)->targetDate.has_value());
 
     // Resources http/https validation

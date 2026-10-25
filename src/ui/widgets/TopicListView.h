@@ -28,7 +28,6 @@ signals:
 
 protected:
     bool event(QEvent* event) override;
-    bool eventFilter(QObject* watched, QEvent* event) override;
     bool viewportEvent(QEvent* event) override;
     void startDrag(Qt::DropActions supportedActions) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -42,6 +41,7 @@ private:
 
     Theme::ThemeManager& m_theme;
     bool m_dragOver{false};
+    bool m_isDragging{false};
     QRect m_dropIndicatorRect;
 };
 

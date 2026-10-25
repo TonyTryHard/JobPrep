@@ -93,10 +93,9 @@ void tst_Notifiers::notificationTextInterviewLeadTimes() {
     n60.interviewType = InterviewType::Technical;
     n60.leadMinutes = 60;
 
-    QCOMPARE(NotificationText::formatTitle(n60), u"Globex"_s);
+    QCOMPARE(NotificationText::formatTitle(n60), u"Interview in 1 hour"_s);
     QCOMPARE(NotificationText::formatLeadTime(60), u"in 1 hour"_s);
-    QVERIFY(NotificationText::formatMessage(n60).contains(u"in 1 hour"_s));
-    QVERIFY(NotificationText::formatMessage(n60).contains(u"Technical"_s));
+    QCOMPARE(NotificationText::formatMessage(n60), u"Globex · Technical (Dev)"_s);
 
     // 1440 minutes
     Notification n1440;
@@ -104,8 +103,9 @@ void tst_Notifiers::notificationTextInterviewLeadTimes() {
     n1440.company = u"Initech"_s;
     n1440.leadMinutes = 1440;
 
+    QCOMPARE(NotificationText::formatTitle(n1440), u"Interview in 24 hours"_s);
     QCOMPARE(NotificationText::formatLeadTime(1440), u"in 24 hours"_s);
-    QVERIFY(NotificationText::formatMessage(n1440).contains(u"in 24 hours"_s));
+    QCOMPARE(NotificationText::formatMessage(n1440), u"Initech"_s);
 
     // 90 minutes
     Notification n90;
@@ -113,8 +113,9 @@ void tst_Notifiers::notificationTextInterviewLeadTimes() {
     n90.company = u"Acme"_s;
     n90.leadMinutes = 90;
 
+    QCOMPARE(NotificationText::formatTitle(n90), u"Interview in 90 minutes"_s);
     QCOMPARE(NotificationText::formatLeadTime(90), u"in 90 minutes"_s);
-    QVERIFY(NotificationText::formatMessage(n90).contains(u"in 90 minutes"_s));
+    QCOMPARE(NotificationText::formatMessage(n90), u"Acme"_s);
 
     // Singular / plural checks
     QCOMPARE(NotificationText::formatLeadTime(1), u"in 1 minute"_s);
@@ -134,9 +135,8 @@ void tst_Notifiers::notificationTextInterviewRemainingTime() {
     n3h.when = QDateTime(QDate(2026, 10, 25), QTime(17, 0));
     n3h.leadMinutes = 1440;
 
-    const QString msg3h = NotificationText::formatMessage(n3h, now);
-    QVERIFY(!msg3h.contains(u"in 24 hours"_s));
-    QVERIFY(msg3h.contains(u"today at 17:00"_s));
+    QCOMPARE(NotificationText::formatTitle(n3h, now), u"Interview today at 17:00"_s);
+    QCOMPARE(NotificationText::formatMessage(n3h, now), u"Globex · Technical (Dev)"_s);
 
     // Interview 50 minutes away
     Notification n50m;
@@ -146,8 +146,8 @@ void tst_Notifiers::notificationTextInterviewRemainingTime() {
     n50m.when = QDateTime(QDate(2026, 10, 25), QTime(14, 50));
     n50m.leadMinutes = 60;
 
-    const QString msg50m = NotificationText::formatMessage(n50m, now);
-    QVERIFY(msg50m.contains(u"in 50 minutes"_s));
+    QCOMPARE(NotificationText::formatTitle(n50m, now), u"Interview in 50 minutes"_s);
+    QCOMPARE(NotificationText::formatMessage(n50m, now), u"Acme (Backend)"_s);
 
     // Interview tomorrow at 10:00
     Notification nTomorrow;
@@ -156,8 +156,8 @@ void tst_Notifiers::notificationTextInterviewRemainingTime() {
     nTomorrow.when = QDateTime(QDate(2026, 10, 26), QTime(10, 0));
     nTomorrow.leadMinutes = 1440;
 
-    const QString msgTomorrow = NotificationText::formatMessage(nTomorrow, now);
-    QVERIFY(msgTomorrow.contains(u"tomorrow at 10:00"_s));
+    QCOMPARE(NotificationText::formatTitle(nTomorrow, now), u"Interview tomorrow at 10:00"_s);
+    QCOMPARE(NotificationText::formatMessage(nTomorrow, now), u"Initech"_s);
 }
 
 void tst_Notifiers::notificationTextFollowUp() {
@@ -166,15 +166,15 @@ void tst_Notifiers::notificationTextFollowUp() {
     nWithPos.company = u"Acme Corp"_s;
     nWithPos.position = u"Systems Dev"_s;
 
-    QCOMPARE(NotificationText::formatTitle(nWithPos), u"Acme Corp"_s);
-    QVERIFY(NotificationText::formatMessage(nWithPos).contains(u"Follow-up due today"_s));
-    QVERIFY(NotificationText::formatMessage(nWithPos).contains(u"Systems Dev"_s));
+    QCOMPARE(NotificationText::formatTitle(nWithPos), u"Follow-up due today"_s);
+    QCOMPARE(NotificationText::formatMessage(nWithPos), u"Acme Corp · Systems Dev"_s);
 
     Notification nNoPos;
     nNoPos.kind = NotificationKind::FollowUp;
     nNoPos.company = u"Acme Corp"_s;
 
-    QCOMPARE(NotificationText::formatMessage(nNoPos), u"Follow-up due today"_s);
+    QCOMPARE(NotificationText::formatTitle(nNoPos), u"Follow-up due today"_s);
+    QCOMPARE(NotificationText::formatMessage(nNoPos), u"Acme Corp"_s);
 }
 
 void tst_Notifiers::notificationTextOverdueSingleAndSummarySingularPlural() {
@@ -333,6 +333,7 @@ void tst_Notifiers::inAppNotifierFocusWidgetUnchangedOnToast() {
     win.showNormal();
     win.show();
     win.activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(&win));
     QCoreApplication::processEvents();
 
     auto* searchEdit = win.findChild<QLineEdit*>(u"HeaderSearchEdit"_s);
@@ -383,8 +384,8 @@ void tst_Notifiers::toastAccessibleNameAndDescription() {
     n.position = u"Engineer"_s;
 
     Toast toast(n, ctx.themeManager());
-    QCOMPARE(toast.accessibleName(), u"Access Corp: Engineer — Follow-up due today"_s);
-    QCOMPARE(toast.accessibleDescription(), u"Engineer — Follow-up due today"_s);
+    QCOMPARE(toast.accessibleName(), u"Follow-up due today: Access Corp · Engineer"_s);
+    QCOMPARE(toast.accessibleDescription(), u"Access Corp · Engineer"_s);
 }
 
 void tst_Notifiers::trayNotifierOffscreenBehavior() {
@@ -400,6 +401,12 @@ void tst_Notifiers::trayNotifierOffscreenBehavior() {
     n.kind = NotificationKind::Interview;
     n.refId = 888;
     n.company = u"Tray Tech"_s;
+
+    if (!QSystemTrayIcon::isSystemTrayAvailable()) {
+        // Under offscreen platform without a system tray, notify() returns false per F5
+        QVERIFY(!tray.notify(n));
+        return;
+    }
 
     QVERIFY(tray.notify(n));
     QVERIFY(tray.lastNotification().has_value());
@@ -732,8 +739,12 @@ void tst_Notifiers::coordinatorEndToEndInterview50MinutesAheadInAppAndTrayPaths(
 
         auto* tray = dynamic_cast<TrayNotifier*>(&coord.notifier());
         QVERIFY(tray != nullptr);
-        QVERIFY(tray->lastNotification().has_value());
-        QCOMPARE(tray->lastNotification()->company, u"Tray Co"_s);
+        if (!QSystemTrayIcon::isSystemTrayAvailable()) {
+            QVERIFY(!tray->lastNotification().has_value());
+        } else {
+            QVERIFY(tray->lastNotification().has_value());
+            QCOMPARE(tray->lastNotification()->company, u"Tray Co"_s);
+        }
     }
 }
 

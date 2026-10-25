@@ -143,6 +143,8 @@ add_library(jobprep_core STATIC
     src/ui/delegates/ProgressBarDelegate.cpp
 
     # Widgets & Base Pages
+    src/ui/StudyLogging.h
+    src/ui/StudyLogging.cpp
     src/ui/FormatHelper.h
     src/ui/FormatHelper.cpp
     src/ui/DashboardController.h

@@ -1,6 +1,7 @@
 #include "ui/widgets/TopicDetailPanel.h"
 
 #include <QApplication>
+#include <QCalendarWidget>
 #include <QComboBox>
 #include <QDateEdit>
 #include <QDesktopServices>
@@ -22,6 +23,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include "data/TopicRepository.h"
+#include "ui/StudyLogging.h"
 #include "ui/theme/StatusStyle.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
@@ -142,9 +144,13 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     m_dateEdit->setDisplayFormat(u"yyyy-MM-dd"_s);
     m_dateEdit->setSpecialValueText(tr("No target date"));
     m_dateEdit->setDate(m_dateEdit->minimumDate());
-    m_dateBtn = new QPushButton(m_form);
+    if (auto* cal = m_dateEdit->calendarWidget()) {
+        cal->installEventFilter(this);
+    }
+    m_dateBtn = new QPushButton(tr("Clear"), m_form);
     m_dateBtn->setObjectName(u"StudyDetailDateClearBtn"_s);
-    m_dateBtn->setToolTip(tr("Clear the target date, or set it again"));
+    m_dateBtn->setToolTip(tr("Clear the target date"));
+    m_dateBtn->setEnabled(false);
     dateRow->addWidget(m_dateEdit, 1);
     dateRow->addWidget(m_dateBtn, 0);
     form->addLayout(dateRow);
@@ -246,7 +252,8 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     const auto editors = {static_cast<QObject*>(m_titleEdit), static_cast<QObject*>(m_trackCombo),
                           static_cast<QObject*>(m_statusCombo),
                           static_cast<QObject*>(m_priorityCombo), static_cast<QObject*>(m_dateEdit),
-                          static_cast<QObject*>(m_tagsEdit), static_cast<QObject*>(m_notesEdit)};
+                          static_cast<QObject*>(m_tagsEdit), static_cast<QObject*>(m_notesEdit),
+                          static_cast<QObject*>(m_checkAddEdit)};
     for (QObject* editor : editors) {
         editor->installEventFilter(this);
         if (auto* widget = qobject_cast<QWidget*>(editor)) {
@@ -264,11 +271,12 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
             m_hasTargetDate = true;
             updateDateControls();
             markDirty();
+            flush();
         }
     });
     connect(m_tagsEdit, &QLineEdit::textChanged, this, &TopicDetailPanel::markDirty);
     connect(m_notesEdit, &QTextEdit::textChanged, this, &TopicDetailPanel::markDirty);
-    connect(m_dateBtn, &QPushButton::clicked, this, &TopicDetailPanel::toggleTargetDate);
+    connect(m_dateBtn, &QPushButton::clicked, this, &TopicDetailPanel::clearTargetDate);
     connect(checkAddBtn, &QPushButton::clicked, this, &TopicDetailPanel::addChecklistItem);
     connect(m_checkAddEdit, &QLineEdit::returnPressed, this,
             &TopicDetailPanel::addChecklistItem);
@@ -311,12 +319,16 @@ void TopicDetailPanel::setTracks(const QList<Domain::Track>& tracks) {
 }
 
 bool TopicDetailPanel::loadFrom(int topicId) {
-    if (m_topicId == topicId && !m_dirty) {
-        const auto topic = m_topics.byId(topicId);
-        if (topic) {
-            loadEditors(*topic);
-            return true;
+    qCDebug(lcStudy) << "panel loadFrom:" << topicId;
+    if (m_topicId == topicId) {
+        if (!m_dirty) {
+            const auto topic = m_topics.byId(topicId);
+            if (topic) {
+                loadEditors(*topic);
+                return true;
+            }
         }
+        return true;
     }
     flush();
     const auto topic = m_topics.byId(topicId);
@@ -336,6 +348,7 @@ bool TopicDetailPanel::flush() {
 }
 
 void TopicDetailPanel::clearTopic() {
+    qCDebug(lcStudy) << "panel clearTopic";
     m_topicId.reset();
     m_dirty = false;
     m_loading = true;
@@ -348,6 +361,7 @@ void TopicDetailPanel::clearTopic() {
     m_tagsEdit->clear();
     m_notesEdit->clear();
     m_checkList->clear();
+    m_checkAddEdit->clear();
     m_resourcesTable->setRowCount(0);
     m_loading = false;
     showMessage(tr("Select a topic"), "info");
@@ -387,13 +401,28 @@ bool TopicDetailPanel::eventFilter(QObject* watched, QEvent* event) {
         // Autosave when focus leaves an editor (B5). Guard against the focus-out of a
         // child popup (combo dropdown, calendar) by checking the new focus widget.
         const QWidget* next = QApplication::focusWidget();
-        if (!next || (!isAncestorOf(next) && next != this)) {
+        bool isChildPopup = false;
+        if (next) {
+            if (m_dateEdit && (next == m_dateEdit->calendarWidget() || m_dateEdit->calendarWidget()->isAncestorOf(next))) {
+                isChildPopup = true;
+            }
+            if (m_trackCombo && next == m_trackCombo->view()) isChildPopup = true;
+            if (m_statusCombo && next == m_statusCombo->view()) isChildPopup = true;
+            if (m_priorityCombo && next == m_priorityCombo->view()) isChildPopup = true;
+        }
+        if (!isChildPopup) {
             flush();
         }
     }
 
     if (event->type() == QEvent::KeyPress && m_topicId) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (watched == m_dateEdit &&
+            (keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_Backspace)) {
+            clearTargetDate();
+            return true;
+        }
+
         // Esc collapses the panel from any editor (B1); QLineEdit would swallow it.
         if (keyEvent->key() == Qt::Key_Escape) {
             flush();
@@ -419,6 +448,12 @@ bool TopicDetailPanel::eventFilter(QObject* watched, QEvent* event) {
         if (watched == m_checkList && keyEvent->key() == Qt::Key_Delete) {
             deleteChecklistItem();
             return true;
+        }
+    }
+
+    if (m_dateEdit && watched == m_dateEdit->calendarWidget() && event->type() == QEvent::Show) {
+        if (!m_hasTargetDate) {
+            m_dateEdit->calendarWidget()->setSelectedDate(QDate::currentDate());
         }
     }
 
@@ -474,6 +509,22 @@ bool TopicDetailPanel::saveNow() {
     updated.tags = m_tagsEdit->text().trimmed();
     updated.resources = resourcesJson();
 
+    const bool changed = (updated.title != topic->title ||
+                          updated.trackId != topic->trackId ||
+                          updated.status != topic->status ||
+                          updated.priority != topic->priority ||
+                          updated.targetDate != topic->targetDate ||
+                          updated.notes != topic->notes ||
+                          updated.tags != topic->tags ||
+                          updated.resources != topic->resources);
+
+    qCDebug(lcStudy) << "panel save: wrote=" << changed;
+
+    if (!changed) {
+        m_dirty = false;
+        hideMessage();
+        return true;
+    }
 
     {
         const InternalWriteGuard guard(m_internalWrite);
@@ -491,7 +542,7 @@ void TopicDetailPanel::loadEditors(const Domain::Topic& topic) {
     m_loading = true;
     m_headingLabel->setText(topic.title.isEmpty() ? tr("Topic details") : topic.title);
 
-    {
+    if (!m_titleEdit->hasFocus() || m_titleEdit->text() != topic.title) {
         const QSignalBlocker blocker(m_titleEdit);
         m_titleEdit->setText(topic.title);
     }
@@ -500,19 +551,26 @@ void TopicDetailPanel::loadEditors(const Domain::Topic& topic) {
         int index = m_trackCombo->findData(topic.trackId);
         if (index < 0 && m_trackCombo->count() > 0) index = 0;
         if (index < 0 && !topic.trackId) index = -1;
-        m_trackCombo->setCurrentIndex(index);
+        if (m_trackCombo->currentIndex() != index) {
+            m_trackCombo->setCurrentIndex(index);
+        }
     }
     {
         const QSignalBlocker blocker(m_statusCombo);
-        m_statusCombo->setCurrentIndex(m_statusCombo->findData(static_cast<int>(topic.status)));
+        const int idx = m_statusCombo->findData(static_cast<int>(topic.status));
+        if (m_statusCombo->currentIndex() != idx) {
+            m_statusCombo->setCurrentIndex(idx);
+        }
     }
     {
         const QSignalBlocker blocker(m_priorityCombo);
-        m_priorityCombo->setCurrentIndex(
-            m_priorityCombo->findData(static_cast<int>(topic.priority)));
+        const int idx = m_priorityCombo->findData(static_cast<int>(topic.priority));
+        if (m_priorityCombo->currentIndex() != idx) {
+            m_priorityCombo->setCurrentIndex(idx);
+        }
     }
     m_hasTargetDate = topic.targetDate.has_value();
-    {
+    if (!m_dateEdit->hasFocus()) {
         const QSignalBlocker blocker(m_dateEdit);
         if (topic.targetDate) {
             m_dateEdit->setDate(*topic.targetDate);
@@ -520,11 +578,11 @@ void TopicDetailPanel::loadEditors(const Domain::Topic& topic) {
             m_dateEdit->setDate(m_dateEdit->minimumDate());
         }
     }
-    {
+    if (!m_tagsEdit->hasFocus() || m_tagsEdit->text() != topic.tags) {
         const QSignalBlocker blocker(m_tagsEdit);
         m_tagsEdit->setText(topic.tags);
     }
-    {
+    if (!m_notesEdit->hasFocus() || m_notesEdit->toPlainText() != topic.notes) {
         const QSignalBlocker blocker(m_notesEdit);
         m_notesEdit->setPlainText(topic.notes);
     }
@@ -540,9 +598,24 @@ void TopicDetailPanel::loadEditors(const Domain::Topic& topic) {
 }
 
 void TopicDetailPanel::fillChecklist(int topicId) {
+    const auto subtasks = m_topics.subtasks(topicId);
+    if (m_checkList->count() == subtasks.size()) {
+        bool matches = true;
+        for (int i = 0; i < subtasks.size(); ++i) {
+            const auto* item = m_checkList->item(i);
+            const auto& st = subtasks.at(i);
+            if (!item || item->data(kSubtaskRole).toInt() != st.id ||
+                item->text() != st.text ||
+                (item->checkState() == Qt::Checked) != st.done) {
+                matches = false;
+                break;
+            }
+        }
+        if (matches) return;
+    }
+
     const QSignalBlocker blocker(m_checkList->model());
     m_checkList->clear();
-    const auto subtasks = m_topics.subtasks(topicId);
     for (const auto& subtask : subtasks) {
         auto* item = new QListWidgetItem(subtask.text, m_checkList);
         item->setData(kSubtaskRole, subtask.id);
@@ -612,18 +685,14 @@ void TopicDetailPanel::updateResourceButtons() {
 }
 
 void TopicDetailPanel::updateDateControls() {
-    const QSignalBlocker blocker(m_dateEdit);
-    m_dateEdit->setEnabled(m_hasTargetDate);
+    const bool enabled = m_form->isEnabled();
+    m_dateEdit->setEnabled(enabled);
+    m_dateBtn->setText(tr("Clear"));
+    m_dateBtn->setToolTip(tr("Clear the target date"));
+    m_dateBtn->setEnabled(enabled && m_hasTargetDate);
     if (!m_hasTargetDate) {
+        const QSignalBlocker blocker(m_dateEdit);
         m_dateEdit->setDate(m_dateEdit->minimumDate());
-        m_dateBtn->setText(tr("Set date"));
-        m_dateBtn->setToolTip(tr("Set a target date for this topic"));
-    } else {
-        if (m_dateEdit->date() == m_dateEdit->minimumDate()) {
-            m_dateEdit->setDate(QDate::currentDate());
-        }
-        m_dateBtn->setText(tr("Clear"));
-        m_dateBtn->setToolTip(tr("Clear the target date"));
     }
 }
 
@@ -674,8 +743,9 @@ void TopicDetailPanel::onChecklistItemChanged(QListWidgetItem* item) {
 }
 
 void TopicDetailPanel::addChecklistItem() {
-    if (!m_topicId) return;
     const QString text = m_checkAddEdit->text().trimmed();
+    qCDebug(lcStudy) << "checklist add: topic=" << (m_topicId ? *m_topicId : -1) << "len=" << text.length();
+    if (!m_topicId) return;
     if (text.isEmpty()) return;
 
     Domain::Subtask subtask;
@@ -770,12 +840,9 @@ void TopicDetailPanel::deleteResource() {
     flush();
 }
 
-void TopicDetailPanel::toggleTargetDate() {
+void TopicDetailPanel::clearTargetDate() {
     if (!m_topicId) return;
-    m_hasTargetDate = !m_hasTargetDate;
-    if (m_hasTargetDate && (m_dateEdit->date() == m_dateEdit->minimumDate() || !m_dateEdit->isEnabled())) {
-        m_dateEdit->setDate(QDate::currentDate());
-    }
+    m_hasTargetDate = false;
     updateDateControls();
     markDirty();
     flush();

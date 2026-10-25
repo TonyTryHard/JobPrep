@@ -11,11 +11,20 @@
 
 using namespace Qt::StringLiterals;
 
-Q_LOGGING_CATEGORY(lcReminders, "jobprep.reminders")
+Q_LOGGING_CATEGORY(lcReminders, "jobprep.reminders", QtInfoMsg)
 
 namespace JobPrep::Services {
 
 namespace {
+
+const char* kindToString(NotificationKind kind) {
+    switch (kind) {
+        case NotificationKind::Interview: return "interview";
+        case NotificationKind::FollowUp: return "followup";
+        case NotificationKind::OverdueFollowUps: return "overdue";
+    }
+    return "unknown";
+}
 
 bool isClosed(Domain::ApplicationStatus status) {
     return status == Domain::ApplicationStatus::Accepted ||
@@ -107,7 +116,7 @@ void ReminderService::checkNow(bool startupPass) {
     // 4. Compute plan via pure function
     const auto plan = computePlan(now, startupPass, m_leadMinutes, candidates,
                                   todayFollowUps, overdueFollowUps, lookup);
-    qCDebug(lcReminders) << "Check tick: due reminders count=" << plan.notifications.size();
+    qCDebug(lcReminders) << "tick: due=" << plan.notifications.size();
 
     // 5. Record silent keys (e.g. larger due lead added after smaller was delivered)
     for (const auto& key : plan.silentKeysToRecord) {
@@ -115,20 +124,24 @@ void ReminderService::checkNow(bool startupPass) {
             m_reminderLog.remove(key);
         }
         m_reminderLog.markSent(key, now);
-        qCDebug(lcReminders) << "Recorded reminder key:" << key;
+        qCDebug(lcReminders) << "recorded:" << key;
     }
 
     // 6. Deliver notifications
     for (const auto& due : plan.notifications) {
         const bool success = m_notifier.notify(due.notification);
-        qCDebug(lcReminders) << "Notify result:" << success;
+        qCDebug(lcReminders) << "notify: kind=" << kindToString(due.notification.kind)
+                             << "refId=" << due.notification.refId
+                             << "result=" << success;
         if (success) {
+            qCInfo(lcReminders) << "delivered: kind=" << kindToString(due.notification.kind)
+                                << "refId=" << due.notification.refId;
             for (const auto& key : due.keysToRecord) {
                 if (m_reminderLog.wasSent(key)) {
                     m_reminderLog.remove(key);
                 }
                 m_reminderLog.markSent(key, now);
-                qCDebug(lcReminders) << "Recorded reminder key:" << key;
+                qCDebug(lcReminders) << "recorded:" << key;
             }
         }
     }

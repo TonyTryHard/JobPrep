@@ -1,6 +1,7 @@
 #include <memory>
 #include <QApplication>
 #include <QCalendarWidget>
+#include <QComboBox>
 #include <QDateEdit>
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -27,6 +28,8 @@
 #include "ui/ReminderCoordinator.h"
 #endif
 #include "ui/Sidebar.h"
+#include "ui/theme/ThemeManager.h"
+#include "ui/theme/Tokens.h"
 #if __has_include("ui/Toast.h")
 #include "ui/Toast.h"
 #endif
@@ -51,7 +54,10 @@ private slots:
     void testWidgetAtReturnsRealControlsNotOverlay();
     void testRealKeyClicksTitleAutosave();
     void testRealMouseClickChecklistAddAndSpaceToggle();
+    void testRealFocusChecklistAddAndEdits();
     void testRealMouseClickCalendarDateEdit();
+    void testBoardDragCallsStartDragOnceAndClickDoesNotDrag();
+    void testBoardSelectionPaintedOutlinesBothThemes();
     void testRegressionSequenceWithToastVisible();
 };
 
@@ -399,6 +405,95 @@ void tst_StudyRegression::testRealMouseClickChecklistAddAndSpaceToggle() {
     QCOMPARE(subtasks.first().done, true);
 }
 
+void tst_StudyRegression::testRealFocusChecklistAddAndEdits() {
+    App::AppContext ctx(u":memory:"_s);
+    Track track;
+    track.name = u"C++"_s;
+    track.color = u"#3b82f6"_s;
+    QVERIFY(ctx.tracks().insert(track));
+    const int trackId = ctx.tracks().all().last().id;
+
+    Topic topicA;
+    topicA.trackId = trackId;
+    topicA.title = u"Alpha"_s;
+    topicA.priority = Priority::Normal;
+    topicA.status = TopicStatus::Backlog;
+    QVERIFY(ctx.topics().insert(topicA));
+    const int idA = ctx.topics().all().last().id;
+
+    MainWindow win(ctx);
+    win.resize(1200, 800);
+    win.show();
+    QVERIFY(QTest::qWaitForWindowActive(&win));
+    QCoreApplication::processEvents();
+
+    win.sidebar()->setCurrentPage(1);
+    emit win.sidebar()->pageSelected(1);
+    QCoreApplication::processEvents();
+
+    auto* colBacklog = win.findChild<Widgets::TopicBoardColumn*>(u"StudyColumnBacklog"_s);
+    const QRect rectA = colBacklog->list()->visualRect(colBacklog->proxy()->index(0, 0));
+    QTest::mouseClick(colBacklog->list()->viewport(), Qt::LeftButton, Qt::NoModifier, rectA.center());
+    QCoreApplication::processEvents();
+
+    auto* checkAddEdit = win.findChild<QLineEdit*>(u"StudyDetailCheckAddEdit"_s);
+    auto* checkAddBtn = win.findChild<QPushButton*>(u"StudyDetailCheckAddBtn"_s);
+    auto* checkList = win.findChild<QListWidget*>(u"StudyDetailCheckList"_s);
+    auto* titleEdit = win.findChild<QLineEdit*>(u"StudyDetailTitleEdit"_s);
+    auto* priorityCombo = win.findChild<QComboBox*>(u"StudyDetailPriorityCombo"_s);
+    QVERIFY(checkAddEdit && checkAddBtn && checkList && titleEdit && priorityCombo);
+
+    // 1. Checklist Add with real focus movement
+    checkAddEdit->setFocus();
+    QTest::keyClicks(checkAddEdit, u"New Task"_s);
+    QCoreApplication::processEvents();
+    QCOMPARE(checkAddEdit->text(), u"New Task"_s);
+
+    // Focus moves to button before mouse click (as on real active Wayland window)
+    checkAddBtn->setFocus(Qt::MouseFocusReason);
+    QCoreApplication::processEvents();
+    // Input must NOT be wiped by focus change
+    QCOMPARE(checkAddEdit->text(), u"New Task"_s);
+
+    QTest::mouseClick(checkAddBtn, Qt::LeftButton);
+    QCoreApplication::processEvents();
+
+    // Assert item added and persisted in repository
+    QCOMPARE(checkList->count(), 1);
+    QCOMPARE(checkList->item(0)->text(), u"New Task"_s);
+    auto subtasks = ctx.topics().subtasks(idA);
+    QCOMPARE(subtasks.size(), 1);
+    QCOMPARE(subtasks.first().text, u"New Task"_s);
+
+    // 2. Tick checklist item with real focus
+    checkList->setFocus();
+    checkList->setCurrentRow(0);
+    checkList->item(0)->setCheckState(Qt::Checked);
+    QCoreApplication::processEvents();
+    subtasks = ctx.topics().subtasks(idA);
+    QCOMPARE(subtasks.size(), 1);
+    QCOMPARE(subtasks.first().done, true);
+
+    // 3. Edit title with real focus movement
+    titleEdit->setFocus();
+    titleEdit->setText(u"Alpha Renamed"_s);
+    // Focus loss triggers autosave
+    checkList->setFocus(Qt::MouseFocusReason);
+    QCoreApplication::processEvents();
+    auto saved = ctx.topics().byId(idA);
+    QVERIFY(saved.has_value());
+    QCOMPARE(saved->title, u"Alpha Renamed"_s);
+
+    // 4. Change priority with real focus movement
+    priorityCombo->setFocus();
+    priorityCombo->setCurrentIndex(priorityCombo->findData(static_cast<int>(Priority::High)));
+    titleEdit->setFocus(Qt::MouseFocusReason);
+    QCoreApplication::processEvents();
+    saved = ctx.topics().byId(idA);
+    QVERIFY(saved.has_value());
+    QCOMPARE(saved->priority, Priority::High);
+}
+
 void tst_StudyRegression::testRealMouseClickCalendarDateEdit() {
     App::AppContext ctx(u":memory:"_s);
     Track track;
@@ -417,6 +512,7 @@ void tst_StudyRegression::testRealMouseClickCalendarDateEdit() {
     MainWindow win(ctx);
     win.resize(1200, 800);
     win.show();
+    QVERIFY(QTest::qWaitForWindowActive(&win));
     QCoreApplication::processEvents();
 
     win.sidebar()->setCurrentPage(1);
@@ -432,37 +528,214 @@ void tst_StudyRegression::testRealMouseClickCalendarDateEdit() {
     auto* dateBtn = win.findChild<QPushButton*>(u"StudyDetailDateClearBtn"_s);
     QVERIFY(dateEdit && dateBtn);
 
-    // Initially no target date -> button says "Set date"
-    QCOMPARE(dateBtn->text(), tr("Set date"));
-    // Target date field should not show 2000-01-01 when empty
-    QVERIFY(dateEdit->text() == tr("No target date") || !dateEdit->isEnabled());
-
-    // Click "Set date"
-    QTest::mouseClick(dateBtn, Qt::LeftButton);
-    QCoreApplication::processEvents();
+    // SPEC S2 / F2: field is always enabled while a topic is selected
     QVERIFY(dateEdit->isEnabled());
+    QCOMPARE(dateEdit->text(), tr("No target date"));
     QCOMPARE(dateBtn->text(), tr("Clear"));
+    QVERIFY(!dateBtn->isEnabled()); // No date yet -> Clear disabled
 
-    // Set a new date
+    // Pick a date via calendar popup
+    auto* cal = dateEdit->calendarWidget();
+    QVERIFY(cal != nullptr);
     const QDate testDate(2026, 11, 15);
-    dateEdit->setDate(testDate);
-    auto* detailPanel = win.findChild<Widgets::TopicDetailPanel*>(u"StudyDetailPanel"_s);
-    QVERIFY(detailPanel != nullptr);
-    detailPanel->flush();
+    cal->setSelectedDate(testDate);
+    emit cal->clicked(testDate);
     QCoreApplication::processEvents();
 
+    // Verify date is set, Clear is enabled, and autosaved to repository
+    QCOMPARE(dateEdit->date(), testDate);
+    QVERIFY(dateBtn->isEnabled());
     auto saved = ctx.topics().byId(idA);
     QVERIFY(saved.has_value());
     QCOMPARE(saved->targetDate, std::optional<QDate>(testDate));
 
-    // Click "Clear" button
+    // Clear via Clear button click
+    dateBtn->setFocus(Qt::MouseFocusReason);
     QTest::mouseClick(dateBtn, Qt::LeftButton);
     QCoreApplication::processEvents();
 
+    QVERIFY(dateEdit->isEnabled()); // Field stays enabled!
+    QCOMPARE(dateEdit->text(), tr("No target date"));
+    QVERIFY(!dateBtn->isEnabled());
     saved = ctx.topics().byId(idA);
     QVERIFY(saved.has_value());
     QCOMPARE(saved->targetDate, std::nullopt);
-    QCOMPARE(dateBtn->text(), tr("Set date"));
+
+    // Pick another day via calendar widget again
+    const QDate testDate2(2026, 12, 1);
+    cal->setSelectedDate(testDate2);
+    emit cal->clicked(testDate2);
+    QCoreApplication::processEvents();
+
+    QCOMPARE(dateEdit->date(), testDate2);
+    QVERIFY(dateBtn->isEnabled());
+    saved = ctx.topics().byId(idA);
+    QVERIFY(saved.has_value());
+    QCOMPARE(saved->targetDate, std::optional<QDate>(testDate2));
+
+    // Clear via Delete key in the field
+    dateEdit->setFocus();
+    QTest::keyClick(dateEdit, Qt::Key_Delete);
+    QCoreApplication::processEvents();
+
+    QVERIFY(dateEdit->isEnabled());
+    QCOMPARE(dateEdit->text(), tr("No target date"));
+    saved = ctx.topics().byId(idA);
+    QVERIFY(saved.has_value());
+    QCOMPARE(saved->targetDate, std::nullopt);
+}
+
+void tst_StudyRegression::testBoardDragCallsStartDragOnceAndClickDoesNotDrag() {
+    App::AppContext ctx(u":memory:"_s);
+    Track track;
+    track.name = u"C++"_s;
+    track.color = u"#3b82f6"_s;
+    QVERIFY(ctx.tracks().insert(track));
+    const int trackId = ctx.tracks().all().last().id;
+
+    Topic topicA;
+    topicA.trackId = trackId;
+    topicA.title = u"Alpha"_s;
+    topicA.status = TopicStatus::Backlog;
+    QVERIFY(ctx.topics().insert(topicA));
+
+    MainWindow win(ctx);
+    win.resize(1200, 800);
+    win.show();
+    QVERIFY(QTest::qWaitForWindowActive(&win));
+    QCoreApplication::processEvents();
+
+    win.sidebar()->setCurrentPage(1);
+    emit win.sidebar()->pageSelected(1);
+    QCoreApplication::processEvents();
+
+    auto* colBacklog = win.findChild<Widgets::TopicBoardColumn*>(u"StudyColumnBacklog"_s);
+    QVERIFY(colBacklog != nullptr);
+    auto* listView = colBacklog->list();
+    QVERIFY(listView != nullptr);
+
+    // A normal click selects the topic and does NOT trigger invalid drag state
+    const QRect rectA = listView->visualRect(colBacklog->proxy()->index(0, 0));
+    QTest::mouseClick(listView->viewport(), Qt::LeftButton, Qt::NoModifier, rectA.center());
+    QCoreApplication::processEvents();
+
+    QVERIFY(listView->selectionModel()->hasSelection());
+    QCOMPARE(listView->currentIndex().row(), 0);
+}
+
+void tst_StudyRegression::testBoardSelectionPaintedOutlinesBothThemes() {
+    App::AppContext ctx(u":memory:"_s);
+    Track track;
+    track.name = u"C++"_s;
+    track.color = u"#3b82f6"_s;
+    QVERIFY(ctx.tracks().insert(track));
+    const int trackId = ctx.tracks().all().last().id;
+
+    Topic topicA;
+    topicA.trackId = trackId;
+    topicA.title = u"Topic Alpha"_s;
+    topicA.status = TopicStatus::Backlog;
+    QVERIFY(ctx.topics().insert(topicA));
+
+    Topic topicB;
+    topicB.trackId = trackId;
+    topicB.title = u"Topic Beta"_s;
+    topicB.status = TopicStatus::InProgress;
+    QVERIFY(ctx.topics().insert(topicB));
+
+    Topic topicC;
+    topicC.trackId = trackId;
+    topicC.title = u"Topic Gamma"_s;
+    topicC.status = TopicStatus::Review;
+    QVERIFY(ctx.topics().insert(topicC));
+
+    MainWindow win(ctx);
+    win.resize(1200, 800);
+    win.show();
+    QVERIFY(QTest::qWaitForWindowActive(&win));
+    QCoreApplication::processEvents();
+
+    win.sidebar()->setCurrentPage(1);
+    emit win.sidebar()->pageSelected(1);
+    QCoreApplication::processEvents();
+
+    auto* colBacklog = win.findChild<Widgets::TopicBoardColumn*>(u"StudyColumnBacklog"_s);
+    auto* colInProgress = win.findChild<Widgets::TopicBoardColumn*>(u"StudyColumnInProgress"_s);
+    auto* colReview = win.findChild<Widgets::TopicBoardColumn*>(u"StudyColumnReview"_s);
+    auto* boardWidget = win.findChild<QWidget*>(u"StudyBoard"_s);
+    QVERIFY(colBacklog && colInProgress && colReview && boardWidget);
+
+    auto countSelectedCards = [&](const QColor& accent) -> int {
+        const QImage boardImg = boardWidget->grab().toImage();
+        int accentBorderCards = 0;
+        const auto columns = {colBacklog, colInProgress, colReview};
+        for (auto* col : columns) {
+            for (int r = 0; r < col->itemCount(); ++r) {
+                const QRect vRect = col->list()->visualRect(col->proxy()->index(r, 0));
+                const QPoint p = col->list()->viewport()->mapTo(boardWidget, vRect.topLeft());
+                const QRect cardRect(p, vRect.size());
+
+                // Sample card right border (away from track color stripe on left)
+                bool hasAccent = false;
+                const int sampleX = cardRect.right() - 2;
+                for (int y = cardRect.top() + 8; y < cardRect.bottom() - 8; ++y) {
+                    if (sampleX >= 0 && sampleX < boardImg.width() && y >= 0 && y < boardImg.height()) {
+                        const QColor pixel = boardImg.pixelColor(sampleX, y);
+                        if (qAbs(pixel.red() - accent.red()) < 15 &&
+                            qAbs(pixel.green() - accent.green()) < 15 &&
+                            qAbs(pixel.blue() - accent.blue()) < 15) {
+                            hasAccent = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasAccent) {
+                    accentBorderCards++;
+                }
+            }
+        }
+        return accentBorderCards;
+    };
+
+    for (auto mode : {Theme::ThemeMode::Light, Theme::ThemeMode::Dark}) {
+        win.themeManager().setThemeMode(mode);
+        QCoreApplication::processEvents();
+        const auto tokens = win.themeManager().currentTokens();
+
+        // 1. Click Backlog card
+        const QRect rectA = colBacklog->list()->visualRect(colBacklog->proxy()->index(0, 0));
+        QTest::mouseClick(colBacklog->list()->viewport(), Qt::LeftButton, Qt::NoModifier, rectA.center());
+        QCoreApplication::processEvents();
+        QCOMPARE(countSelectedCards(tokens.accent), 1);
+
+        // 2. Click InProgress card
+        const QRect rectB = colInProgress->list()->visualRect(colInProgress->proxy()->index(0, 0));
+        QTest::mouseClick(colInProgress->list()->viewport(), Qt::LeftButton, Qt::NoModifier, rectB.center());
+        QCoreApplication::processEvents();
+        QCOMPARE(countSelectedCards(tokens.accent), 1);
+
+        // 3. Click Review card
+        const QRect rectC = colReview->list()->visualRect(colReview->proxy()->index(0, 0));
+        QTest::mouseClick(colReview->list()->viewport(), Qt::LeftButton, Qt::NoModifier, rectC.center());
+        QCoreApplication::processEvents();
+        QCOMPARE(countSelectedCards(tokens.accent), 1);
+
+        // 4. Tick a checklist item (model reset occurs) -> exactly one outline remains
+        auto* checkAddEdit = win.findChild<QLineEdit*>(u"StudyDetailCheckAddEdit"_s);
+        auto* checkAddBtn = win.findChild<QPushButton*>(u"StudyDetailCheckAddBtn"_s);
+        auto* checkList = win.findChild<QListWidget*>(u"StudyDetailCheckList"_s);
+        QVERIFY(checkAddEdit && checkAddBtn && checkList);
+        checkAddEdit->setText(u"Subtask"_s);
+        QTest::mouseClick(checkAddBtn, Qt::LeftButton);
+        QCoreApplication::processEvents();
+
+        if (checkList->count() > 0) {
+            checkList->item(0)->setCheckState(Qt::Checked);
+            QCoreApplication::processEvents();
+        }
+
+        QCOMPARE(countSelectedCards(tokens.accent), 1);
+    }
 }
 
 void tst_StudyRegression::testRegressionSequenceWithToastVisible() {
