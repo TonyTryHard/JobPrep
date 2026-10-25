@@ -1,6 +1,7 @@
 #include "services/ReminderService.h"
 
 #include <algorithm>
+#include <QLoggingCategory>
 #include <QTime>
 #include <QTimer>
 #include "data/ApplicationRepository.h"
@@ -9,6 +10,8 @@
 #include "domain/Enums.h"
 
 using namespace Qt::StringLiterals;
+
+Q_LOGGING_CATEGORY(lcReminders, "jobprep.reminders")
 
 namespace JobPrep::Services {
 
@@ -62,6 +65,7 @@ void ReminderService::setClock(Clock clock) {
 }
 
 void ReminderService::start() {
+    qCDebug(lcReminders) << "Reminders service started";
     checkNow(true);
     if (!m_timer->isActive()) {
         m_timer->start();
@@ -103,6 +107,7 @@ void ReminderService::checkNow(bool startupPass) {
     // 4. Compute plan via pure function
     const auto plan = computePlan(now, startupPass, m_leadMinutes, candidates,
                                   todayFollowUps, overdueFollowUps, lookup);
+    qCDebug(lcReminders) << "Check tick: due reminders count=" << plan.notifications.size();
 
     // 5. Record silent keys (e.g. larger due lead added after smaller was delivered)
     for (const auto& key : plan.silentKeysToRecord) {
@@ -110,16 +115,20 @@ void ReminderService::checkNow(bool startupPass) {
             m_reminderLog.remove(key);
         }
         m_reminderLog.markSent(key, now);
+        qCDebug(lcReminders) << "Recorded reminder key:" << key;
     }
 
     // 6. Deliver notifications
     for (const auto& due : plan.notifications) {
-        if (m_notifier.notify(due.notification)) {
+        const bool success = m_notifier.notify(due.notification);
+        qCDebug(lcReminders) << "Notify result:" << success;
+        if (success) {
             for (const auto& key : due.keysToRecord) {
                 if (m_reminderLog.wasSent(key)) {
                     m_reminderLog.remove(key);
                 }
                 m_reminderLog.markSent(key, now);
+                qCDebug(lcReminders) << "Recorded reminder key:" << key;
             }
         }
     }

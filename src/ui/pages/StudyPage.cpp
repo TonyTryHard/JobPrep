@@ -292,6 +292,10 @@ void StudyPage::setupBoardView() {
                 [this, column](const QModelIndex& current, const QModelIndex&) {
                     onColumnCurrentChanged(column, current);
                 });
+        connect(column->list()->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+                [this, column](const QItemSelection&, const QItemSelection&) {
+                    onColumnSelectionChanged(column);
+                });
     }
 
     boardLayout->addStretch(1);
@@ -673,14 +677,15 @@ void StudyPage::onWriteError(const QString& what, const QString& error) {
     showMessage(error.isEmpty() ? what : u"%1 %2"_s.arg(what, error), "error");
 }
 
-void StudyPage::onColumnCurrentChanged(Widgets::TopicBoardColumn* activeColumn, const QModelIndex& current) {
+void StudyPage::onColumnSelectionChanged(Widgets::TopicBoardColumn* activeColumn) {
     if (m_inReset) return;
-    if (!current.isValid() || (activeColumn->list()->selectionModel() && !activeColumn->list()->selectionModel()->isSelected(current))) {
+    if (!activeColumn || !activeColumn->list() || !activeColumn->list()->selectionModel()) return;
+
+    const auto selected = activeColumn->list()->selectionModel()->selectedIndexes();
+    if (selected.isEmpty()) {
         bool anySelected = false;
         for (const auto* col : m_columns) {
-            if (col->list()->currentIndex().isValid() &&
-                col->list()->selectionModel() &&
-                col->list()->selectionModel()->isSelected(col->list()->currentIndex())) {
+            if (col->list()->selectionModel() && col->list()->selectionModel()->hasSelection()) {
                 anySelected = true;
                 break;
             }
@@ -694,17 +699,36 @@ void StudyPage::onColumnCurrentChanged(Widgets::TopicBoardColumn* activeColumn, 
         }
         return;
     }
+
+    const QModelIndex current = selected.first();
     const int id = current.data(Models::TopicListModel::IdRole).toInt();
+
+    if (activeColumn->list()->currentIndex() != current) {
+        const QSignalBlocker blocker(activeColumn->list()->selectionModel());
+        activeColumn->list()->setCurrentIndex(current);
+    }
+
     for (auto* col : m_columns) {
         if (col != activeColumn) {
             col->clearSelection();
         }
     }
+
     if (m_selectedTopicId == id) return;
     m_selectedTopicId = id;
     m_detail->setTracks(m_tracks.all());
     m_detail->loadFrom(id);
     if (!m_suppressDetailOpen) setDetailVisible(true);
+}
+
+void StudyPage::onColumnCurrentChanged(Widgets::TopicBoardColumn* activeColumn, const QModelIndex& current) {
+    if (m_inReset) return;
+    if (!current.isValid()) return;
+    if (activeColumn->list()->selectionModel() && !activeColumn->list()->selectionModel()->isSelected(current)) {
+        activeColumn->list()->selectionModel()->select(current, QItemSelectionModel::ClearAndSelect);
+        return;
+    }
+    onColumnSelectionChanged(activeColumn);
 }
 
 void StudyPage::focusColumn(int fromColumn, int delta) {

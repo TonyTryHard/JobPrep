@@ -183,6 +183,7 @@ void TopicBoardColumn::clearSelection() {
         const QSignalBlocker blocker(m_list->selectionModel());
         m_list->selectionModel()->clearSelection();
         m_list->selectionModel()->clearCurrentIndex();
+        m_list->viewport()->update();
     }
     if (m_restorer) {
         m_restorer->setSavedId(std::nullopt);

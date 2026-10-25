@@ -9,8 +9,11 @@ namespace JobPrep::Ui {
 class NotificationText {
 public:
     static QString formatLeadTime(int leadMinutes);
+    static QString formatRemainingTime(const Services::Notification& notification,
+                                       const QDateTime& now = QDateTime());
     static QString formatTitle(const Services::Notification& notification);
-    static QString formatMessage(const Services::Notification& notification);
+    static QString formatMessage(const Services::Notification& notification,
+                                 const QDateTime& now = QDateTime());
 };
 
 }  // namespace JobPrep::Ui

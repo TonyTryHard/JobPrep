@@ -41,6 +41,7 @@ private slots:
 
     // 2. Notification Text formatting
     void notificationTextInterviewLeadTimes();
+    void notificationTextInterviewRemainingTime();
     void notificationTextFollowUp();
     void notificationTextOverdueSingleAndSummarySingularPlural();
 
@@ -64,6 +65,7 @@ private slots:
     void coordinatorEndToEndMinimizedWindowDelaysUntilShowNormal();
     void coordinatorEndToEndNoTrayFallbackToToast();
     void coordinatorEndToEndSettingsLeadMinutesChangeTakesEffect();
+    void coordinatorEndToEndInterview50MinutesAheadInAppAndTrayPaths();
 };
 
 void tst_Notifiers::initTestCase() {
@@ -118,6 +120,44 @@ void tst_Notifiers::notificationTextInterviewLeadTimes() {
     QCOMPARE(NotificationText::formatLeadTime(1), u"in 1 minute"_s);
     QCOMPARE(NotificationText::formatLeadTime(2), u"in 2 minutes"_s);
     QCOMPARE(NotificationText::formatLeadTime(120), u"in 2 hours"_s);
+}
+
+void tst_Notifiers::notificationTextInterviewRemainingTime() {
+    const QDateTime now(QDate(2026, 10, 25), QTime(14, 0));
+
+    // Interview 3 hours away today (at 17:00), lead 1440
+    Notification n3h;
+    n3h.kind = NotificationKind::Interview;
+    n3h.company = u"Globex"_s;
+    n3h.position = u"Dev"_s;
+    n3h.interviewType = InterviewType::Technical;
+    n3h.when = QDateTime(QDate(2026, 10, 25), QTime(17, 0));
+    n3h.leadMinutes = 1440;
+
+    const QString msg3h = NotificationText::formatMessage(n3h, now);
+    QVERIFY(!msg3h.contains(u"in 24 hours"_s));
+    QVERIFY(msg3h.contains(u"today at 17:00"_s));
+
+    // Interview 50 minutes away
+    Notification n50m;
+    n50m.kind = NotificationKind::Interview;
+    n50m.company = u"Acme"_s;
+    n50m.position = u"Backend"_s;
+    n50m.when = QDateTime(QDate(2026, 10, 25), QTime(14, 50));
+    n50m.leadMinutes = 60;
+
+    const QString msg50m = NotificationText::formatMessage(n50m, now);
+    QVERIFY(msg50m.contains(u"in 50 minutes"_s));
+
+    // Interview tomorrow at 10:00
+    Notification nTomorrow;
+    nTomorrow.kind = NotificationKind::Interview;
+    nTomorrow.company = u"Initech"_s;
+    nTomorrow.when = QDateTime(QDate(2026, 10, 26), QTime(10, 0));
+    nTomorrow.leadMinutes = 1440;
+
+    const QString msgTomorrow = NotificationText::formatMessage(nTomorrow, now);
+    QVERIFY(msgTomorrow.contains(u"tomorrow at 10:00"_s));
 }
 
 void tst_Notifiers::notificationTextFollowUp() {
@@ -247,10 +287,16 @@ void tst_Notifiers::inAppNotifierEscDismissesToast() {
     notifier.notify(n);
     QCOMPARE(notifier.totalToastCount(), 1);
 
-    // Press Escape
+    // Press Escape on win while focus is not in toast -> toast NOT dismissed
     QKeyEvent escPress(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
     QCoreApplication::sendEvent(&win, &escPress);
+    QCOMPARE(notifier.totalToastCount(), 1);
 
+    // Press Escape on the toast itself -> toast dismissed
+    Toast* toast = notifier.activeToasts().first();
+    QVERIFY(toast != nullptr);
+    toast->setFocus();
+    QCoreApplication::sendEvent(toast, &escPress);
     QCOMPARE(notifier.totalToastCount(), 0);
 }
 
@@ -610,6 +656,85 @@ void tst_Notifiers::coordinatorEndToEndSettingsLeadMinutesChangeTakesEffect() {
 
     // Reset back to default
     ctx.settings().setInterviewLeadMinutes({1440, 60});
+}
+
+void tst_Notifiers::coordinatorEndToEndInterview50MinutesAheadInAppAndTrayPaths() {
+    const QDateTime clockTime(QDate(2026, 10, 29), QTime(10, 0));
+    const QDateTime interviewTime(QDate(2026, 10, 29), QTime(10, 50));
+
+    // 1. In-app path (trayAvailable = false): gives one visible notification (toast)
+    {
+        App::AppContext ctx(u":memory:"_s);
+        MainWindow win(ctx);
+        win.resize(1100, 700);
+        win.showNormal();
+        win.show();
+        QCoreApplication::processEvents();
+
+        JobApplication app;
+        app.company = u"InApp Co"_s;
+        app.position = u"Dev"_s;
+        app.status = ApplicationStatus::Applied;
+        QVERIFY(ctx.applications().insert(app));
+
+        ctx.settings().setInterviewLeadMinutes({1440, 60});
+
+        Interview iv;
+        iv.applicationId = app.id;
+        iv.startAt = interviewTime;
+        iv.type = InterviewType::Technical;
+        QVERIFY(ctx.interviews().insert(iv));
+
+        ReminderCoordinator coord(
+            ctx.interviews(), ctx.applications(), ctx.reminderLog(),
+            ctx.settings(), win, false,
+            [&clockTime] { return clockTime; }
+        );
+        coord.start();
+        QCoreApplication::processEvents();
+
+        auto* inApp = dynamic_cast<InAppNotifier*>(&coord.notifier());
+        QVERIFY(inApp != nullptr);
+        QCOMPARE(inApp->visibleToastCount(), 1);
+        QCOMPARE(inApp->totalToastCount(), 1);
+    }
+
+    // 2. Tray path (trayAvailable = true): gives one notify call
+    {
+        App::AppContext ctx(u":memory:"_s);
+        MainWindow win(ctx);
+        win.resize(1100, 700);
+        win.showNormal();
+        win.show();
+        QCoreApplication::processEvents();
+
+        JobApplication app;
+        app.company = u"Tray Co"_s;
+        app.position = u"Dev"_s;
+        app.status = ApplicationStatus::Applied;
+        QVERIFY(ctx.applications().insert(app));
+
+        ctx.settings().setInterviewLeadMinutes({1440, 60});
+
+        Interview iv;
+        iv.applicationId = app.id;
+        iv.startAt = interviewTime;
+        iv.type = InterviewType::Technical;
+        QVERIFY(ctx.interviews().insert(iv));
+
+        ReminderCoordinator coord(
+            ctx.interviews(), ctx.applications(), ctx.reminderLog(),
+            ctx.settings(), win, true,
+            [&clockTime] { return clockTime; }
+        );
+        coord.start();
+        QCoreApplication::processEvents();
+
+        auto* tray = dynamic_cast<TrayNotifier*>(&coord.notifier());
+        QVERIFY(tray != nullptr);
+        QVERIFY(tray->lastNotification().has_value());
+        QCOMPARE(tray->lastNotification()->company, u"Tray Co"_s);
+    }
 }
 
 QTEST_MAIN(tst_Notifiers)

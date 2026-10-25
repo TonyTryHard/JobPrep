@@ -158,13 +158,6 @@ bool InAppNotifier::eventFilter(QObject* watched, QEvent* event) {
     if (watched == &m_window) {
         if (event->type() == QEvent::Resize) {
             updateLayout();
-        } else if (event->type() == QEvent::KeyPress) {
-            auto* ke = static_cast<QKeyEvent*>(event);
-            if (ke->key() == Qt::Key_Escape && !m_toasts.isEmpty()) {
-                dismissNewest();
-                ke->accept();
-                return true;
-            }
         }
     }
     return QObject::eventFilter(watched, event);

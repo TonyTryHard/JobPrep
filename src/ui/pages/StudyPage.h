@@ -128,6 +128,7 @@ private:
     void refreshViewState();
     void updateQuickAddTracks();
     void onColumnCurrentChanged(Widgets::TopicBoardColumn* activeColumn, const QModelIndex& current);
+    void onColumnSelectionChanged(Widgets::TopicBoardColumn* activeColumn);
     void onTableSelectionChanged();
     void focusColumn(int fromColumn, int delta);
     void moveTopicTo(int id, Domain::TopicStatus status);

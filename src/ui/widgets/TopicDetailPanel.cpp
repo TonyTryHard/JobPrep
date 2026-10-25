@@ -140,6 +140,8 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     m_dateEdit->setObjectName(u"StudyDetailDateEdit"_s);
     m_dateEdit->setCalendarPopup(true);
     m_dateEdit->setDisplayFormat(u"yyyy-MM-dd"_s);
+    m_dateEdit->setSpecialValueText(tr("No target date"));
+    m_dateEdit->setDate(m_dateEdit->minimumDate());
     m_dateBtn = new QPushButton(m_form);
     m_dateBtn->setObjectName(u"StudyDetailDateClearBtn"_s);
     m_dateBtn->setToolTip(tr("Clear the target date, or set it again"));
@@ -256,11 +258,13 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     connect(m_statusCombo, &QComboBox::currentIndexChanged, this, &TopicDetailPanel::markDirty);
     connect(m_priorityCombo, &QComboBox::currentIndexChanged, this,
             &TopicDetailPanel::markDirty);
-    connect(m_dateEdit, &QDateEdit::dateChanged, this, [this](const QDate&) {
+    connect(m_dateEdit, &QDateEdit::dateChanged, this, [this](const QDate& d) {
         if (m_loading) return;
-        m_hasTargetDate = true;
-        updateDateControls();
-        markDirty();
+        if (d != m_dateEdit->minimumDate()) {
+            m_hasTargetDate = true;
+            updateDateControls();
+            markDirty();
+        }
     });
     connect(m_tagsEdit, &QLineEdit::textChanged, this, &TopicDetailPanel::markDirty);
     connect(m_notesEdit, &QTextEdit::textChanged, this, &TopicDetailPanel::markDirty);
@@ -335,7 +339,7 @@ void TopicDetailPanel::clearTopic() {
     m_topicId.reset();
     m_dirty = false;
     m_loading = true;
-    m_headingLabel->setText(tr("Topic details"));
+    m_headingLabel->setText(tr("Select a topic"));
     m_titleEdit->clear();
     m_trackCombo->clear();
     m_statusCombo->setCurrentIndex(1);
@@ -346,7 +350,7 @@ void TopicDetailPanel::clearTopic() {
     m_checkList->clear();
     m_resourcesTable->setRowCount(0);
     m_loading = false;
-    hideMessage();
+    showMessage(tr("Select a topic"), "info");
     setFormEnabled(false);
     updateDateControls();
     updateResourceButtons();
@@ -463,7 +467,9 @@ bool TopicDetailPanel::saveNow() {
     updated.status = static_cast<Domain::TopicStatus>(m_statusCombo->currentData().toInt());
     updated.priority = static_cast<Domain::Priority>(m_priorityCombo->currentData().toInt());
     updated.targetDate =
-        m_hasTargetDate ? std::optional<QDate>(m_dateEdit->date()) : std::nullopt;
+        (m_hasTargetDate && m_dateEdit->date() != m_dateEdit->minimumDate())
+            ? std::optional<QDate>(m_dateEdit->date())
+            : std::nullopt;
     updated.notes = m_notesEdit->toPlainText();
     updated.tags = m_tagsEdit->text().trimmed();
     updated.resources = resourcesJson();
@@ -506,9 +512,13 @@ void TopicDetailPanel::loadEditors(const Domain::Topic& topic) {
             m_priorityCombo->findData(static_cast<int>(topic.priority)));
     }
     m_hasTargetDate = topic.targetDate.has_value();
-    if (topic.targetDate) {
+    {
         const QSignalBlocker blocker(m_dateEdit);
-        m_dateEdit->setDate(*topic.targetDate);
+        if (topic.targetDate) {
+            m_dateEdit->setDate(*topic.targetDate);
+        } else {
+            m_dateEdit->setDate(m_dateEdit->minimumDate());
+        }
     }
     {
         const QSignalBlocker blocker(m_tagsEdit);
@@ -605,10 +615,13 @@ void TopicDetailPanel::updateDateControls() {
     const QSignalBlocker blocker(m_dateEdit);
     m_dateEdit->setEnabled(m_hasTargetDate);
     if (!m_hasTargetDate) {
-        m_dateEdit->setDate(QDate::currentDate());
+        m_dateEdit->setDate(m_dateEdit->minimumDate());
         m_dateBtn->setText(tr("Set date"));
         m_dateBtn->setToolTip(tr("Set a target date for this topic"));
     } else {
+        if (m_dateEdit->date() == m_dateEdit->minimumDate()) {
+            m_dateEdit->setDate(QDate::currentDate());
+        }
         m_dateBtn->setText(tr("Clear"));
         m_dateBtn->setToolTip(tr("Clear the target date"));
     }
@@ -618,7 +631,8 @@ void TopicDetailPanel::setFormEnabled(bool enabled) {
     m_form->setEnabled(enabled);
     m_headingLabel->setEnabled(enabled);
     if (!enabled) {
-        m_headingLabel->setText(tr("Topic details"));
+        m_headingLabel->setText(tr("Select a topic"));
+        showMessage(tr("Select a topic"), "info");
     }
 }
 
@@ -759,7 +773,7 @@ void TopicDetailPanel::deleteResource() {
 void TopicDetailPanel::toggleTargetDate() {
     if (!m_topicId) return;
     m_hasTargetDate = !m_hasTargetDate;
-    if (m_hasTargetDate && !m_dateEdit->isEnabled()) {
+    if (m_hasTargetDate && (m_dateEdit->date() == m_dateEdit->minimumDate() || !m_dateEdit->isEnabled())) {
         m_dateEdit->setDate(QDate::currentDate());
     }
     updateDateControls();
