@@ -7,8 +7,12 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QStackedWidget>
+#include <QTableView>
+#include <QTableWidget>
 #include <QTest>
+#include <QVBoxLayout>
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
 #include "data/InterviewRepository.h"
@@ -59,6 +63,9 @@ private slots:
     void testBoardDragCallsStartDragOnceAndClickDoesNotDrag();
     void testBoardSelectionPaintedOutlinesBothThemes();
     void testRegressionSequenceWithToastVisible();
+    void testChecklistStartupContrastDarkAndLight();
+    void testChecklistAddFocusScrollAndOverflowSizing();
+    void testGeneralStartupContrastAllPagesBothThemes();
 };
 
 void tst_StudyRegression::initTestCase() {
@@ -819,6 +826,380 @@ void tst_StudyRegression::testRegressionSequenceWithToastVisible() {
     QVERIFY(!colBacklog->list()->currentIndex().isValid());
     QCOMPARE(titleEdit->text(), u"Beta"_s);
 
+}
+
+static double srgbToLinear(double c) {
+    return (c <= 0.04045) ? (c / 12.92) : std::pow((c + 0.055) / 1.055, 2.4);
+}
+static double relativeLuminance(const QColor& c) {
+    return 0.2126 * srgbToLinear(c.redF()) +
+           0.7152 * srgbToLinear(c.greenF()) +
+           0.0722 * srgbToLinear(c.blueF());
+}
+static double calcContrastRatio(const QColor& c1, const QColor& c2) {
+    double l1 = relativeLuminance(c1);
+    double l2 = relativeLuminance(c2);
+    if (l1 < l2) std::swap(l1, l2);
+    return (l1 + 0.05) / (l2 + 0.05);
+}
+
+void tst_StudyRegression::testChecklistStartupContrastDarkAndLight() {
+    auto runTestForMode = [](const QString& modeStr) {
+        // 1. Saved theme mode set before AppContext is created, matching main.cpp startup
+        {
+            Services::SettingsService settings;
+            settings.setThemeMode(modeStr);
+        }
+
+        App::AppContext ctx(u":memory:"_s);
+        QCOMPARE(ctx.settings().themeMode(), modeStr);
+
+        Track track;
+        track.name = u"C++"_s;
+        track.color = u"#3b82f6"_s;
+        QVERIFY(ctx.tracks().insert(track));
+        const int trackId = ctx.tracks().all().last().id;
+
+        Topic topic;
+        topic.trackId = trackId;
+        topic.title = u"Pointers & Memory"_s;
+        topic.status = TopicStatus::InProgress;
+        QVERIFY(ctx.topics().insert(topic));
+        const int topicId = ctx.topics().all().last().id;
+
+        for (int i = 1; i <= 4; ++i) {
+            Subtask st;
+            st.topicId = topicId;
+            st.text = QString(u"Checklist item %1"_s).arg(i);
+            st.position = i - 1;
+            st.done = (i == 1);
+            QVERIFY(ctx.topics().addSubtask(st));
+        }
+
+        MainWindow win(ctx);
+        win.resize(1200, 800);
+        win.show();
+        QCoreApplication::processEvents();
+
+        win.sidebar()->setCurrentPage(1);
+        emit win.sidebar()->pageSelected(1);
+        QCoreApplication::processEvents();
+
+        auto* colInProgress = win.findChild<Widgets::TopicBoardColumn*>(u"StudyColumnInProgress"_s);
+        auto* detailPanel = win.findChild<Widgets::TopicDetailPanel*>(u"StudyDetailPanel"_s);
+        auto* checkList = detailPanel->findChild<QListWidget*>(u"StudyDetailCheckList"_s);
+        auto* checkAddEdit = detailPanel->findChild<QLineEdit*>(u"StudyDetailCheckAddEdit"_s);
+        auto* checkAddBtn = detailPanel->findChild<QPushButton*>(u"StudyDetailCheckAddBtn"_s);
+        QVERIFY(colInProgress && detailPanel && checkList && checkAddEdit && checkAddBtn);
+
+        // Click the card with a real mouse click
+        const QRect cardRect = colInProgress->list()->visualRect(colInProgress->proxy()->index(0, 0));
+        QTest::mouseClick(colInProgress->list()->viewport(), Qt::LeftButton, Qt::NoModifier, cardRect.center());
+        QCoreApplication::processEvents();
+
+        QCOMPARE(checkList->count(), 4);
+
+        // Add 5th item through the Add button with real events
+        QTest::mouseClick(checkAddEdit, Qt::LeftButton);
+        QTest::keyClicks(checkAddEdit, u"Checklist item 5"_s);
+        QTest::mouseClick(checkAddBtn, Qt::LeftButton);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(checkList->count(), 5);
+
+        // Measure painted contrast on checklist list viewport at fresh start
+        QWidget* viewport = checkList->viewport();
+        const QImage imgFresh = viewport->grab().toImage();
+        const QRect vpRect = viewport->rect();
+
+        // Assert new row is visible in viewport
+        auto* newRowItem = checkList->item(4);
+        const QRect newRowRect = checkList->visualItemRect(newRowItem);
+        QVERIFY2(newRowRect.intersects(vpRect), "New row not visible in viewport");
+
+        // Measure painted contrast on checklist list viewport for every row
+        for (int row = 0; row < checkList->count(); ++row) {
+            auto* item = checkList->item(row);
+            checkList->scrollToItem(item);
+            QCoreApplication::processEvents();
+
+            const QRect rowRect = checkList->visualItemRect(item);
+            QVERIFY2(rowRect.intersects(vpRect), qPrintable(QString("Row %1 not in viewport").arg(row)));
+
+            const QImage imgRow = viewport->grab().toImage();
+            const QColor bgRow = imgRow.pixelColor(2, 2);
+
+            double maxContrast = 1.0;
+            // Sample text region (avoiding checkbox on the left, e.g. x >= rowRect.left() + 28)
+            const int startX = qMax(rowRect.left() + 28, 0);
+            const int endX = qMin(rowRect.right() - 5, imgRow.width() - 1);
+            const int startY = qMax(rowRect.top(), 0);
+            const int endY = qMin(rowRect.bottom(), imgRow.height() - 1);
+
+            for (int y = startY; y <= endY; ++y) {
+                for (int x = startX; x <= endX; ++x) {
+                    const QColor pixel = imgRow.pixelColor(x, y);
+                    const double cr = calcContrastRatio(pixel, bgRow);
+                    if (cr > maxContrast) {
+                        maxContrast = cr;
+                    }
+                }
+            }
+            QVERIFY2(maxContrast >= 3.0,
+                     qPrintable(QString("[%1] Row %2 text contrast (%3:1) is below 3:1 (invisible)")
+                                    .arg(modeStr).arg(row).arg(maxContrast, 0, 'f', 2)));
+        }
+
+        // Switch theme: dark -> light -> dark (or light -> dark -> light)
+        if (modeStr == u"dark"_s) {
+            win.themeManager().setThemeMode(Theme::ThemeMode::Light);
+            QCoreApplication::processEvents();
+            win.themeManager().setThemeMode(Theme::ThemeMode::Dark);
+            QCoreApplication::processEvents();
+        } else {
+            win.themeManager().setThemeMode(Theme::ThemeMode::Dark);
+            QCoreApplication::processEvents();
+            win.themeManager().setThemeMode(Theme::ThemeMode::Light);
+            QCoreApplication::processEvents();
+        }
+
+        const QImage imgAfterSwitch = viewport->grab().toImage();
+        // Assert that the painted result is the same as the initial one
+        QCOMPARE(imgFresh, imgAfterSwitch);
+    };
+
+    runTestForMode(u"dark"_s);
+    runTestForMode(u"light"_s);
+}
+
+void tst_StudyRegression::testChecklistAddFocusScrollAndOverflowSizing() {
+    auto testMode = [](const QString& modeStr) {
+        {
+            Services::SettingsService settings;
+            settings.setThemeMode(modeStr);
+        }
+
+        App::AppContext ctx(u":memory:"_s);
+        Track track;
+        track.name = u"C++"_s;
+        track.color = u"#3b82f6"_s;
+        QVERIFY(ctx.tracks().insert(track));
+        const int trackId = ctx.tracks().all().last().id;
+
+        Topic topic;
+        topic.trackId = trackId;
+        topic.title = u"Memory Management"_s;
+        topic.status = TopicStatus::InProgress;
+        QVERIFY(ctx.topics().insert(topic));
+        const int topicId = ctx.topics().all().last().id;
+
+        MainWindow win(ctx);
+        win.resize(1100, 700);
+        win.show();
+        win.activateWindow();
+        QCoreApplication::processEvents();
+
+        win.sidebar()->setCurrentPage(1);
+        emit win.sidebar()->pageSelected(1);
+        QCoreApplication::processEvents();
+
+        auto* colInProgress = win.findChild<Widgets::TopicBoardColumn*>(u"StudyColumnInProgress"_s);
+        auto* detailPanel = win.findChild<Widgets::TopicDetailPanel*>(u"StudyDetailPanel"_s);
+        auto* checkList = detailPanel->findChild<QListWidget*>(u"StudyDetailCheckList"_s);
+        auto* checkAddEdit = detailPanel->findChild<QLineEdit*>(u"StudyDetailCheckAddEdit"_s);
+        auto* checkAddBtn = detailPanel->findChild<QPushButton*>(u"StudyDetailCheckAddBtn"_s);
+        QVERIFY(colInProgress && detailPanel && checkList && checkAddEdit && checkAddBtn);
+
+        // Select topic
+        const QRect cardRect = colInProgress->list()->visualRect(colInProgress->proxy()->index(0, 0));
+        QTest::mouseClick(colInProgress->list()->viewport(), Qt::LeftButton, Qt::NoModifier, cardRect.center());
+        QCoreApplication::processEvents();
+
+        // 1. Checklist minimum height shows at least 5 rows without fixed pixel heights
+        const int fiveRows = checkList->fontMetrics().height() * 5;
+        QVERIFY(checkList->minimumHeight() >= fiveRows);
+
+        // 2. Add first item via Return key in checkAddEdit
+        checkAddEdit->setFocus();
+        QTest::keyClicks(checkAddEdit, u"Item Alpha"_s);
+        QTest::keyClick(checkAddEdit, Qt::Key_Return);
+        QCoreApplication::processEvents();
+
+        // Check list refreshed from repository
+        const auto subtasksAfter1 = ctx.topics().subtasks(topicId);
+        QCOMPARE(subtasksAfter1.size(), 1);
+        QCOMPARE(checkList->count(), 1);
+        QCOMPARE(checkList->item(0)->text(), u"Item Alpha"_s);
+
+        // Input cleared and keeps keyboard focus
+        QVERIFY(checkAddEdit->text().isEmpty());
+        QVERIFY(checkAddEdit->hasFocus() || win.focusWidget() == checkAddEdit);
+
+        // New row is scrolled to / visible
+        QRect row0Rect = checkList->visualItemRect(checkList->item(0));
+        QVERIFY(row0Rect.intersects(checkList->viewport()->rect()));
+
+        // Add second item immediately via Enter
+        QTest::keyClicks(checkAddEdit, u"Item Beta"_s);
+        QTest::keyClick(checkAddEdit, Qt::Key_Return);
+        QCoreApplication::processEvents();
+
+        const auto subtasksAfter2 = ctx.topics().subtasks(topicId);
+        QCOMPARE(subtasksAfter2.size(), 2);
+        QCOMPARE(checkList->count(), 2);
+        QCOMPARE(checkList->item(1)->text(), u"Item Beta"_s);
+        QVERIFY(checkAddEdit->text().isEmpty());
+        QVERIFY(checkAddEdit->hasFocus() || win.focusWidget() == checkAddEdit);
+
+        // 3. Takes spare panel height: layout assigns stretch factor 1 and Expanding policy
+        auto* formWidget = checkList->parentWidget();
+        QVERIFY(formWidget && formWidget->layout());
+        auto* formLayout = qobject_cast<QVBoxLayout*>(formWidget->layout());
+        QVERIFY(formLayout != nullptr);
+        QCOMPARE(formLayout->stretch(formLayout->indexOf(checkList)), 1);
+        QCOMPARE(checkList->sizePolicy().verticalPolicy(), QSizePolicy::Expanding);
+
+        const int initialCheckListHeight = checkList->height();
+        win.resize(1200, 1400);
+        QCoreApplication::processEvents();
+        QVERIFY2(checkList->height() > initialCheckListHeight,
+                 qPrintable(QString("Checklist height %1 did not expand with spare panel height (was %2)")
+                                .arg(checkList->height()).arg(initialCheckListHeight)));
+
+        // 4. Shows visible scrollbar when it overflows
+        for (int i = 3; i <= 20; ++i) {
+            Subtask st;
+            st.topicId = topicId;
+            st.text = QString(u"Overflow item %1"_s).arg(i);
+            st.position = i - 1;
+            QVERIFY(ctx.topics().addSubtask(st));
+        }
+        detailPanel->loadFrom(topicId);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(checkList->count(), 20);
+        QVERIFY(checkList->verticalScrollBar()->maximum() > 0);
+        QVERIFY(checkList->verticalScrollBar()->isVisible());
+
+        // Verify scrollbar handle is painted / has contrast
+        const QImage sbImg = checkList->verticalScrollBar()->grab().toImage();
+        QVERIFY(sbImg.width() > 0 && sbImg.height() > 0);
+    };
+
+    testMode(u"dark"_s);
+    testMode(u"light"_s);
+}
+
+void tst_StudyRegression::testGeneralStartupContrastAllPagesBothThemes() {
+    auto testMode = [](const QString& modeStr) {
+        {
+            Services::SettingsService settings;
+            settings.setThemeMode(modeStr);
+        }
+
+        App::AppContext ctx(u":memory:"_s);
+
+        // Populate sample data
+        Track track;
+        track.name = u"C++ Track"_s;
+        track.color = u"#3b82f6"_s;
+        QVERIFY(ctx.tracks().insert(track));
+        const int trackId = ctx.tracks().all().last().id;
+
+        Topic topic;
+        topic.trackId = trackId;
+        topic.title = u"Modern C++ Concurrency"_s;
+        topic.status = TopicStatus::InProgress;
+        topic.resources = u"[{\"title\":\"cppreference\",\"url\":\"https://en.cppreference.com\"}]"_s;
+        QVERIFY(ctx.topics().insert(topic));
+        const int topicId = ctx.topics().all().last().id;
+
+        for (int i = 1; i <= 3; ++i) {
+            Subtask st;
+            st.topicId = topicId;
+            st.text = QString(u"Concurrency subtask %1"_s).arg(i);
+            st.position = i - 1;
+            st.done = (i == 1);
+            QVERIFY(ctx.topics().addSubtask(st));
+        }
+
+        JobApplication app;
+        app.company = u"Tech Corp"_s;
+        app.position = u"Senior C++ Engineer"_s;
+        app.status = ApplicationStatus::Applied;
+        QVERIFY(ctx.applications().insert(app));
+        const int appId = ctx.applications().all().last().id;
+
+        Interview interview;
+        interview.applicationId = appId;
+        interview.type = InterviewType::Technical;
+        interview.startAt = QDateTime::currentDateTime().addDays(1);
+        QVERIFY(ctx.interviews().insert(interview));
+
+        MainWindow win(ctx);
+        win.resize(1200, 800);
+        win.show();
+        QCoreApplication::processEvents();
+
+        auto verifyContrastOnWidget = [&](QWidget* w, const QString& name) {
+            QVERIFY(w != nullptr);
+            const QImage img = w->grab().toImage();
+            const QColor bg = img.pixelColor(2, 2);
+            double maxContrast = 1.0;
+            for (int y = 5; y < img.height() - 5; y += 4) {
+                for (int x = 5; x < img.width() - 5; x += 4) {
+                    const double cr = calcContrastRatio(img.pixelColor(x, y), bg);
+                    if (cr > maxContrast) maxContrast = cr;
+                }
+            }
+            QVERIFY2(maxContrast >= 3.0,
+                     qPrintable(QString("[%1] Widget %2 max contrast %3:1 is below 3:1")
+                                    .arg(modeStr, name).arg(maxContrast, 0, 'f', 2)));
+        };
+
+        // 1. Dashboard (HomePage)
+        win.sidebar()->setCurrentPage(0);
+        emit win.sidebar()->pageSelected(0);
+        QCoreApplication::processEvents();
+        verifyContrastOnWidget(win.centralWidget(), u"Dashboard"_s);
+
+        // 2. StudyPage (Board, Detail Checklist & Resources Table)
+        win.sidebar()->setCurrentPage(1);
+        emit win.sidebar()->pageSelected(1);
+        QCoreApplication::processEvents();
+
+        auto* col = win.findChild<Widgets::TopicBoardColumn*>(u"StudyColumnInProgress"_s);
+        auto* detail = win.findChild<Widgets::TopicDetailPanel*>(u"StudyDetailPanel"_s);
+        auto* checkList = detail ? detail->findChild<QListWidget*>(u"StudyDetailCheckList"_s) : nullptr;
+        auto* resTable = detail ? detail->findChild<QTableWidget*>(u"StudyDetailResourcesTable"_s) : nullptr;
+        QVERIFY(col && detail && checkList && resTable);
+
+        // Select topic
+        const QRect cardRect = col->list()->visualRect(col->proxy()->index(0, 0));
+        QTest::mouseClick(col->list()->viewport(), Qt::LeftButton, Qt::NoModifier, cardRect.center());
+        QCoreApplication::processEvents();
+
+        verifyContrastOnWidget(col->list()->viewport(), u"StudyBoardColumn"_s);
+        verifyContrastOnWidget(checkList->viewport(), u"StudyChecklist"_s);
+        verifyContrastOnWidget(resTable->viewport(), u"StudyResourcesTable"_s);
+
+        // 3. JobsPage
+        win.sidebar()->setCurrentPage(2);
+        emit win.sidebar()->pageSelected(2);
+        QCoreApplication::processEvents();
+        auto* jobsView = win.findChild<QTableView*>();
+        QVERIFY(jobsView != nullptr);
+        verifyContrastOnWidget(jobsView->viewport(), u"JobsTableView"_s);
+
+        // 4. CalendarPage
+        win.sidebar()->setCurrentPage(3);
+        emit win.sidebar()->pageSelected(3);
+        QCoreApplication::processEvents();
+        verifyContrastOnWidget(win.centralWidget(), u"CalendarPage"_s);
+    };
+
+    testMode(u"dark"_s);
+    testMode(u"light"_s);
 }
 
 QTEST_MAIN(tst_StudyRegression)

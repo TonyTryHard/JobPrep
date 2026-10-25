@@ -452,11 +452,13 @@ QPushButton[chip="true"]:checked {
 
 #StudyDetailCheckList {
     background-color: @bg;
+    color: @text;
     border: 1px solid @border;
     border-radius: 8px;
 }
 
 #StudyDetailCheckList::item {
+    color: @text;
     border-radius: 6px;
     padding: 3px 6px;
 }
@@ -465,8 +467,10 @@ QPushButton[chip="true"]:checked {
     background-color: @surfaceAlt;
 }
 
-#StudyDetailResources {
+#StudyDetailResources,
+#StudyDetailResourcesTable {
     background-color: @bg;
+    color: @text;
     border: 1px solid @border;
     border-radius: 8px;
 }

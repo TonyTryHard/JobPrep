@@ -111,6 +111,7 @@ private:
     /// does not refill the form under the user (the write itself just completed).
     bool m_internalWrite{false};
     bool m_hasTargetDate{false};
+    bool m_syncingChecklist{false};
 
     QWidget* m_form{nullptr};
     QLabel* m_headingLabel{nullptr};

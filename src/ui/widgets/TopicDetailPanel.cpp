@@ -176,9 +176,12 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     m_checkList->setDragDropMode(QAbstractItemView::InternalMove);
     m_checkList->setEditTriggers(QAbstractItemView::DoubleClicked |
                                  QAbstractItemView::EditKeyPressed);
-    m_checkList->setMinimumHeight(140);
+    const int rowHeight = m_checkList->fontMetrics().lineSpacing() + 8;
+    const int fiveRowsHeight = rowHeight * 5 + 4;
+    m_checkList->setMinimumHeight(fiveRowsHeight);
+    m_checkList->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_checkList->installEventFilter(this);
-    form->addWidget(m_checkList);
+    form->addWidget(m_checkList, 1);
 
     auto* checkAddRow = new QHBoxLayout;
     m_checkAddEdit = new QLineEdit(m_form);
@@ -186,6 +189,9 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     m_checkAddEdit->setPlaceholderText(tr("New checklist item"));
     auto* checkAddBtn = new QPushButton(tr("Add"), m_form);
     checkAddBtn->setObjectName(u"StudyDetailCheckAddBtn"_s);
+    checkAddBtn->setAutoDefault(false);
+    checkAddBtn->setDefault(false);
+    checkAddBtn->setFocusPolicy(Qt::ClickFocus);
     checkAddRow->addWidget(m_checkAddEdit, 1);
     checkAddRow->addWidget(checkAddBtn, 0);
     form->addLayout(checkAddRow);
@@ -241,7 +247,6 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     });
     form->addWidget(m_logTimeBtn, 0, Qt::AlignLeft);
 
-    form->addStretch(1);
     m_scroll->setWidget(m_form);
     cardLayout->addWidget(m_scroll, 1);
     layout->addWidget(card, 1);
@@ -283,9 +288,13 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     connect(m_checkList, &QListWidget::itemChanged, this,
             &TopicDetailPanel::onChecklistItemChanged);
     connect(m_checkList->model(), &QAbstractItemModel::rowsInserted, this,
-            [this] { persistChecklistOrder(); });
+            [this] { if (!m_syncingChecklist) persistChecklistOrder(); });
     connect(m_checkList->model(), &QAbstractItemModel::rowsRemoved, this,
-            [this] { persistChecklistOrder(); });
+            [this] { if (!m_syncingChecklist) persistChecklistOrder(); });
+    connect(&m_theme, &Theme::ThemeManager::themeChanged, this, [this]() {
+        if (m_checkList) m_checkList->viewport()->update();
+        if (m_resourcesTable) m_resourcesTable->viewport()->update();
+    });
     connect(resourceAddBtn, &QPushButton::clicked, this, &TopicDetailPanel::addResource);
     connect(m_resourceUrlEdit, &QLineEdit::returnPressed, this, &TopicDetailPanel::addResource);
     connect(m_resourceOpenBtn, &QPushButton::clicked, this, &TopicDetailPanel::openResource);
@@ -614,7 +623,7 @@ void TopicDetailPanel::fillChecklist(int topicId) {
         if (matches) return;
     }
 
-    const QSignalBlocker blocker(m_checkList->model());
+    m_syncingChecklist = true;
     m_checkList->clear();
     for (const auto& subtask : subtasks) {
         auto* item = new QListWidgetItem(subtask.text, m_checkList);
@@ -622,6 +631,9 @@ void TopicDetailPanel::fillChecklist(int topicId) {
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable);
         item->setCheckState(subtask.done ? Qt::Checked : Qt::Unchecked);
     }
+    m_syncingChecklist = false;
+
+    qCDebug(lcStudy) << "checklist refreshed: count=" << m_checkList->count();
 }
 
 void TopicDetailPanel::fillResources(const QString& json) {
@@ -725,13 +737,14 @@ void TopicDetailPanel::onChecklistItemChanged(QListWidgetItem* item) {
     }
 
     if (updated.text.isEmpty()) {
-        const QSignalBlocker blocker(m_checkList->model());
+        m_syncingChecklist = true;
         for (const auto& existing : subtasks) {
             if (existing.id == subtaskId) {
                 item->setText(existing.text);
                 break;
             }
         }
+        m_syncingChecklist = false;
         showMessage(tr("Checklist text cannot be empty."), "error");
         return;
     }
@@ -760,12 +773,12 @@ void TopicDetailPanel::addChecklistItem() {
         }
     }
 
-    const QSignalBlocker blocker(m_checkList->model());
-    auto* item = new QListWidgetItem(subtask.text, m_checkList);
-    item->setData(kSubtaskRole, subtask.id);
-    item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable);
-    item->setCheckState(Qt::Unchecked);
+    fillChecklist(*m_topicId);
+    if (m_checkList->count() > 0) {
+        m_checkList->scrollToItem(m_checkList->item(m_checkList->count() - 1));
+    }
     m_checkAddEdit->clear();
+    m_checkAddEdit->setFocus();
 }
 
 void TopicDetailPanel::deleteChecklistItem() {
@@ -780,8 +793,10 @@ void TopicDetailPanel::deleteChecklistItem() {
             return;
         }
     }
-    const QSignalBlocker blocker(m_checkList->model());
+    m_syncingChecklist = true;
     delete m_checkList->takeItem(m_checkList->row(item));
+    m_syncingChecklist = false;
+    persistChecklistOrder();
 }
 
 void TopicDetailPanel::moveChecklistItem(int delta) {
@@ -789,10 +804,11 @@ void TopicDetailPanel::moveChecklistItem(int delta) {
     if (row < 0) return;
     const int target = row + delta;
     if (target < 0 || target >= m_checkList->count()) return;
-    const QSignalBlocker blocker(m_checkList->model());
+    m_syncingChecklist = true;
     auto* item = m_checkList->takeItem(row);
     m_checkList->insertItem(target, item);
     m_checkList->setCurrentItem(item);
+    m_syncingChecklist = false;
     persistChecklistOrder();
 }
 
