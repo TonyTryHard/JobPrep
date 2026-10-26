@@ -9,12 +9,14 @@ if (-not (Test-Path $ReportImgDir)) {
     New-Item -ItemType Directory -Path $ReportImgDir | Out-Null
 }
 
-Write-Host "==> Building ui_smoke..."
-cmake --build --preset dev-windows --target ui_smoke
+Write-Host "==> Building screenshot test binaries..."
+cmake --build --preset dev-windows --target tst_PageCalendar tst_PageStudy tst_PageHome
 
 Write-Host "==> Running screenshot generation with JOBPREP_REPORT_IMG_DIR=$ReportImgDir..."
 $env:JOBPREP_REPORT_IMG_DIR = $ReportImgDir
 $env:QT_QPA_PLATFORM = "offscreen"
-& .\build\dev-windows\tests\ui_smoke\ui_smoke.exe testCalendarScreenshots testStudyScreenshots
+& .\build\dev-windows\tests\ui\tst_PageCalendar.exe testCalendarScreenshots
+& .\build\dev-windows\tests\ui\tst_PageStudy.exe testStudyScreenshots
+& .\build\dev-windows\tests\ui\tst_PageHome.exe testDashboardScreenshots testToastScreenshots
 
 Write-Host "==> Screenshots successfully regenerated in $ReportImgDir!"

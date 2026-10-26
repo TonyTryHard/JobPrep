@@ -17,5 +17,6 @@ foreach(test_name IN LISTS MODELS_TESTS)
     add_test(NAME ${test_name} COMMAND ${test_name})
     set_tests_properties(${test_name} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        LABELS "model"
     )
 endforeach()

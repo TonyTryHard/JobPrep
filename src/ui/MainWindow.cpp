@@ -204,6 +204,14 @@ void MainWindow::setupShortcuts() {
         updateHeader(4);
     });
 
+    // On Linux/X11, QKeySequence::Preferences maps to Qt::Key_Settings rather than
+    // Ctrl+,, but SPEC §3.7 explicitly specifies Ctrl+, for settings.
+    auto* ctrlCommaShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Comma), this);
+    connect(ctrlCommaShortcut, &QShortcut::activated, this, [this]() {
+        m_sidebar->setCurrentPage(4);
+        updateHeader(4);
+    });
+
     // Shortcuts live here only, never on a widget, so none of them is ambiguous.
     auto* findShortcut = new QShortcut(QKeySequence::Find, this);
     connect(findShortcut, &QShortcut::activated, this, &MainWindow::focusCurrentPageSearch);
