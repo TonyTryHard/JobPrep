@@ -13,6 +13,6 @@ echo "==> Building JobPrep with dev-linux preset..."
 cmake --build --preset dev-linux
 
 echo "==> Running tests with dev-linux preset..."
-ctest --preset dev-linux --output-on-failure
+CTEST_PARALLEL_LEVEL="${CTEST_PARALLEL_LEVEL:-2}" ctest --preset dev-linux -j "${CTEST_PARALLEL_LEVEL:-2}" --output-on-failure
 
 echo "==> Quality check PASSED with zero warnings and all tests green!"

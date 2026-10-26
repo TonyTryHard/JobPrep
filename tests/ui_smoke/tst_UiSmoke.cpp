@@ -60,6 +60,7 @@
 #include "ui/pages/CalendarPage.h"
 #include "ui/pages/HomePage.h"
 #include "ui/pages/JobsPage.h"
+#include "ui/pages/SettingsPage.h"
 #include "ui/pages/StudyPage.h"
 #include "ui/theme/StatusStyle.h"
 #include "ui/theme/ThemeManager.h"
@@ -99,7 +100,11 @@ using JobPrep::Domain::TopicStatus;
 using JobPrep::Domain::Track;
 using JobPrep::Models::ApplicationTableModel;
 using JobPrep::Ui::MainWindow;
+using JobPrep::Ui::Pages::CalendarPage;
 using JobPrep::Ui::Pages::HomePage;
+using JobPrep::Ui::Pages::JobsPage;
+using JobPrep::Ui::Pages::SettingsPage;
+using JobPrep::Ui::Pages::StudyPage;
 using JobPrep::Ui::Dialogs::ApplicationDialog;
 using JobPrep::Ui::Dialogs::FollowUpDialog;
 using JobPrep::Ui::Dialogs::InterviewDialog;
@@ -273,22 +278,27 @@ void tst_UiSmoke::testPageSwitchShortcutsRealKeyEvents() {
     m_window->sidebar()->setCurrentPage(0);
     emit m_window->sidebar()->pageSelected(0);
     QCOMPARE(m_window->pageStack()->currentIndex(), 0);
+    QVERIFY(qobject_cast<HomePage*>(m_window->pageStack()->currentWidget()) != nullptr);
 
-    // Ctrl+2 -> Jobs (page 1)
+    // Ctrl+2 -> Study (page 1) per sidebar order (SPEC §3.7, §7.1)
     QVERIFY(JobPrep::UiTest::sendKeySequence(m_window.get(), QKeySequence(Qt::CTRL | Qt::Key_2)));
     QCOMPARE(m_window->pageStack()->currentIndex(), 1);
+    QVERIFY(qobject_cast<StudyPage*>(m_window->pageStack()->currentWidget()) != nullptr);
 
-    // Ctrl+3 -> Calendar (page 2)
+    // Ctrl+3 -> Jobs (page 2) per sidebar order (SPEC §3.7, §7.1)
     QVERIFY(JobPrep::UiTest::sendKeySequence(m_window.get(), QKeySequence(Qt::CTRL | Qt::Key_3)));
     QCOMPARE(m_window->pageStack()->currentIndex(), 2);
+    QVERIFY(qobject_cast<JobsPage*>(m_window->pageStack()->currentWidget()) != nullptr);
 
-    // Ctrl+4 -> Study (page 3)
+    // Ctrl+4 -> Calendar (page 3) per sidebar order (SPEC §3.7, §7.1)
     QVERIFY(JobPrep::UiTest::sendKeySequence(m_window.get(), QKeySequence(Qt::CTRL | Qt::Key_4)));
     QCOMPARE(m_window->pageStack()->currentIndex(), 3);
+    QVERIFY(qobject_cast<CalendarPage*>(m_window->pageStack()->currentWidget()) != nullptr);
 
-    // Ctrl+1 -> Home (page 0)
+    // Ctrl+1 -> Home (page 0) per sidebar order (SPEC §3.7, §7.1)
     QVERIFY(JobPrep::UiTest::sendKeySequence(m_window.get(), QKeySequence(Qt::CTRL | Qt::Key_1)));
     QCOMPARE(m_window->pageStack()->currentIndex(), 0);
+    QVERIFY(qobject_cast<HomePage*>(m_window->pageStack()->currentWidget()) != nullptr);
 }
 
 void tst_UiSmoke::testPreferencesShortcutRealKeyEvents() {
@@ -303,6 +313,7 @@ void tst_UiSmoke::testPreferencesShortcutRealKeyEvents() {
     // Ctrl+, switches to Settings (page 4) per SPEC §3.7
     QVERIFY(JobPrep::UiTest::sendKeySequence(m_window.get(), QKeySequence(Qt::CTRL | Qt::Key_Comma)));
     QCOMPARE(m_window->pageStack()->currentIndex(), 4);
+    QVERIFY(qobject_cast<SettingsPage*>(m_window->pageStack()->currentWidget()) != nullptr);
 }
 
 void tst_UiSmoke::testZeroWarnings() {

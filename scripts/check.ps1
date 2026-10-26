@@ -14,7 +14,8 @@ cmake --build --preset dev-windows
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "==> Running tests with dev-windows preset..." -ForegroundColor Cyan
-ctest --preset dev-windows --output-on-failure
+$ctestParallel = if ($env:CTEST_PARALLEL_LEVEL) { $env:CTEST_PARALLEL_LEVEL } else { 2 }
+ctest --preset dev-windows -j $ctestParallel --output-on-failure
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "==> Quality check PASSED with zero warnings and all tests green!" -ForegroundColor Green
