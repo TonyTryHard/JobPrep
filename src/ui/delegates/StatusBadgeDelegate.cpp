@@ -38,7 +38,7 @@ void StatusBadgeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     path.addRoundedRect(rect, radius, radius);
 
     QColor bg = color;
-    bg.setAlphaF(0.15);
+    bg.setAlphaF(0.15f);
     painter->fillPath(path, bg);
 
     painter->setPen(color);

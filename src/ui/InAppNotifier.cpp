@@ -86,7 +86,7 @@ void InAppNotifier::updateLayout() {
         return;
     }
 
-    const int total = m_toasts.size();
+    const int total = static_cast<int>(m_toasts.size());
     const int visibleCount = std::min(total, 3);
     const int overflowCount = total - visibleCount;
 
@@ -174,7 +174,7 @@ int InAppNotifier::visibleToastCount() const {
 }
 
 int InAppNotifier::totalToastCount() const {
-    return m_toasts.size();
+    return static_cast<int>(m_toasts.size());
 }
 
 bool InAppNotifier::isOverflowVisible() const {

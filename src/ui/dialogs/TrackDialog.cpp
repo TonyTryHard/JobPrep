@@ -149,7 +149,7 @@ void TrackDialog::setupUi() {
     m_customSwatchBtn->setIconSize(QSize(24, 24));
     m_customSwatchBtn->installEventFilter(this);
     m_customSwatchBtn->hide();
-    m_swatchGroup->addButton(m_customSwatchBtn, swatches.size());
+    m_swatchGroup->addButton(m_customSwatchBtn, static_cast<int>(swatches.size()));
     swatchLayout->addWidget(m_customSwatchBtn);
 
     swatchLayout->addStretch(1);
@@ -236,15 +236,16 @@ bool TrackDialog::eventFilter(QObject* watched, QEvent* event) {
         if (m_customSwatchBtn && m_customSwatchBtn->isVisible()) {
             visibleButtons.append(m_customSwatchBtn);
         }
-        const int idx = visibleButtons.indexOf(qobject_cast<QPushButton*>(watched));
-        if (idx >= 0) {
+        const qsizetype numVisible = visibleButtons.size();
+        const qsizetype idx = visibleButtons.indexOf(qobject_cast<QPushButton*>(watched));
+        if (idx >= 0 && numVisible > 0) {
             if (keyEvent->key() == Qt::Key_Left || keyEvent->key() == Qt::Key_Up) {
-                const int next = (idx - 1 + visibleButtons.size()) % visibleButtons.size();
+                const qsizetype next = (idx - 1 + numVisible) % numVisible;
                 visibleButtons[next]->setFocus();
                 visibleButtons[next]->setChecked(true);
                 return true;
             } else if (keyEvent->key() == Qt::Key_Right || keyEvent->key() == Qt::Key_Down) {
-                const int next = (idx + 1) % visibleButtons.size();
+                const qsizetype next = (idx + 1) % numVisible;
                 visibleButtons[next]->setFocus();
                 visibleButtons[next]->setChecked(true);
                 return true;

@@ -296,7 +296,7 @@ void MonthView::paintEvent(QPaintEvent* event) {
 
             const DayMarkers markers = m_markers.value(date);
             if (markers.total > 0) {
-                const int count = qMin(markers.kinds.size(), 3);
+                const int count = static_cast<int>(qMin<qsizetype>(markers.kinds.size(), 3));
                 const int dotsWidth = count * kDotSize + (count - 1) * kDotGap;
                 int x = cell.center().x() - dotsWidth / 2;
                 const int y = cell.bottom() - kDotSize - 4;

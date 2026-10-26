@@ -384,7 +384,7 @@ void ApplicationDialog::reloadReadOnlyTabs() {
         reloadInterviewsTable();
 
         const auto history = m_apps.statusHistory(m_app.id);
-        m_timelineTable->setRowCount(history.size());
+        m_timelineTable->setRowCount(static_cast<int>(history.size()));
         for (int row = 0; row < history.size(); ++row) {
             const auto& change = history.at(row);
             m_timelineTable->setItem(row, 0, new QTableWidgetItem(
@@ -405,7 +405,7 @@ void ApplicationDialog::reloadInterviewsTable() {
     if (m_app.id == 0) return;
 
     const auto interviews = m_interviews.byApplication(m_app.id);
-    m_interviewsTable->setRowCount(interviews.size());
+    m_interviewsTable->setRowCount(static_cast<int>(interviews.size()));
     for (int row = 0; row < interviews.size(); ++row) {
         const auto& interview = interviews.at(row);
         auto* whenItem = new QTableWidgetItem(

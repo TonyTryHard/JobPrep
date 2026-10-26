@@ -30,7 +30,7 @@ void ApplicationTableModel::setClock(Clock clock) {
 
 int ApplicationTableModel::rowCount(const QModelIndex& parent) const {
     if (parent.isValid()) return 0;
-    return m_cache.size();
+    return static_cast<int>(m_cache.size());
 }
 
 int ApplicationTableModel::columnCount(const QModelIndex& parent) const {

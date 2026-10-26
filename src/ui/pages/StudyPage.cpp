@@ -267,7 +267,7 @@ void StudyPage::setupBoardView() {
     for (int i = 0; i < static_cast<int>(Widgets::kBoardStatuses.size()); ++i) {
         const auto status = Widgets::kBoardStatuses[static_cast<size_t>(i)];
         auto* column = new Widgets::TopicBoardColumn(status, m_model, m_topics, m_theme, board);
-        column->setObjectName(u"StudyColumn%1"_s.arg(QLatin1StringView(kColumnNames[i])));
+        column->setObjectName(u"StudyColumn%1"_s.arg(QLatin1StringView(kColumnNames[static_cast<size_t>(i)])));
         column->setMinimumWidth(220);
         boardLayout->addWidget(column, 1);
         m_columns.append(column);
@@ -645,7 +645,7 @@ void StudyPage::onReorderRequested(int id, int delta) {
     for (int row = 0; row < column->itemCount(); ++row) {
         orderedIds.append(*column->topicIdAt(row));
     }
-    const int from = orderedIds.indexOf(id);
+    const int from = static_cast<int>(orderedIds.indexOf(id));
     if (from < 0) return;
     const int to = std::clamp(from + delta, 0, static_cast<int>(orderedIds.size()) - 1);
     if (to == from) return;

@@ -496,7 +496,7 @@ QList<JobPrep::Services::ExportRow> JobsPage::buildExportRows() const {
 
 bool JobsPage::exportTo(const QString& path, int* exportedRows, QString* error) {
     const auto rows = buildExportRows();
-    if (exportedRows) *exportedRows = rows.size();
+    if (exportedRows) *exportedRows = static_cast<int>(rows.size());
     return m_exportService.exportToFile(rows, JobPrep::Services::ExportService::headers(), path,
                                         error);
 }

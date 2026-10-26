@@ -143,12 +143,12 @@ bool TopicBoardProxy::dropMimeData(const QMimeData* data,
     } else if (row >= 0) {
         destRow = row;
     } else {
-        destRow = visibleIds.size();
+        destRow = static_cast<int>(visibleIds.size());
     }
     destRow = std::clamp(destRow, 0, static_cast<int>(visibleIds.size()));
 
     if (visibleIds.contains(topicId)) {
-        const int srcRow = visibleIds.indexOf(topicId);
+        const int srcRow = static_cast<int>(visibleIds.indexOf(topicId));
         if (destRow > srcRow) {
             destRow--;
         }

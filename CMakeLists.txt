@@ -31,6 +31,10 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Test
 )
 
+if(WIN32)
+    add_compile_definitions(NOMINMAX)
+endif()
+
 # Quality gate: high warning level and zero warnings option
 option(JOBPREP_WERROR "Treat compiler warnings as errors" ON)
 
