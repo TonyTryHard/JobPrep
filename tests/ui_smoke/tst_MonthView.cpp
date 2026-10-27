@@ -70,6 +70,12 @@ void tst_MonthView::gridStartsOnMondayFirstAndSundayFirst() {
     QCOMPARE(range.first, QDate(2023, 10, 1));
     QCOMPARE(range.second, QDate(2023, 11, 11));
 
+    // Legacy / invalid day normalizes to Monday
+    view->setFirstDayOfWeek(99);
+    range = view->visibleRange();
+    QCOMPARE(range.first, QDate(2023, 9, 25));
+    QCOMPARE(range.second, QDate(2023, 11, 5));
+
     delete view;
 }
 

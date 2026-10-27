@@ -99,6 +99,17 @@ void SettingsService::setFirstDayOfWeek(int day) {
     emit firstDayOfWeekChanged(day);
 }
 
+Qt::DayOfWeek SettingsService::toDayOfWeek(int day) {
+    if (day == 7) {
+        return Qt::Sunday;
+    }
+    return Qt::Monday;
+}
+
+Qt::DayOfWeek SettingsService::firstDayOfWeekEnum() const {
+    return toDayOfWeek(firstDayOfWeek());
+}
+
 QList<int> SettingsService::interviewLeadMinutes() const {
     const auto val = m_settings->value(u"reminders/interviewLeadMinutes"_s);
     if (!val.isValid()) {
@@ -135,6 +146,16 @@ void SettingsService::setCloseToTray(bool enabled) {
     if (closeToTray() == enabled) return;
     m_settings->setValue(u"app/closeToTray"_s, enabled);
     emit closeToTrayChanged(enabled);
+}
+
+bool SettingsService::trayHintShown() const {
+    return m_settings->value(u"app/trayHintShown"_s, false).toBool();
+}
+
+void SettingsService::setTrayHintShown(bool shown) {
+    if (trayHintShown() == shown) return;
+    m_settings->setValue(u"app/trayHintShown"_s, shown);
+    emit trayHintShownChanged(shown);
 }
 
 bool SettingsService::sampleDataPrompted() const {

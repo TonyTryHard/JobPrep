@@ -35,8 +35,8 @@ using namespace Qt::StringLiterals;
 
 namespace JobPrep::Ui {
 
-MainWindow::MainWindow(App::AppContext& ctx, QWidget* parent)
-    : QMainWindow(parent), m_ctx(ctx) {
+MainWindow::MainWindow(App::AppContext& ctx, bool trayAvailable, QWidget* parent)
+    : QMainWindow(parent), m_ctx(ctx), m_trayAvailable(trayAvailable) {
     setObjectName(u"MainWindow"_s);
     setWindowTitle(u"JobPrep"_s);
     setMinimumSize(1100, 700);
@@ -67,17 +67,63 @@ MainWindow::MainWindow(App::AppContext& ctx, QWidget* parent)
 
     updateHeader(0);
     updateIcons();
+    updateQuitOnLastWindowClosed();
 }
 
 MainWindow::~MainWindow() = default;
 
-void MainWindow::closeEvent(QCloseEvent* event) {
-    // Flush pending editor changes before the repositories go away.
+void MainWindow::setTrayAvailable(bool available) {
+    if (m_trayAvailable == available) return;
+    m_trayAvailable = available;
+    if (m_settingsPage) {
+        m_settingsPage->setTrayAvailable(available);
+    }
+    updateQuitOnLastWindowClosed();
+}
+
+void MainWindow::setTrayMessageCallback(std::function<void(const QString& title, const QString& message)> callback) {
+    m_trayMessageCallback = std::move(callback);
+}
+
+void MainWindow::updateQuitOnLastWindowClosed() {
+    const bool keepRunningInTray = m_trayAvailable && m_ctx.settings().closeToTray();
+    qApp->setQuitOnLastWindowClosed(!keepRunningInTray);
+}
+
+void MainWindow::flushStateAndEdits() {
     for (auto* page : std::as_const(m_pages)) {
         page->flushEdits();
     }
     m_ctx.settings().setWindowGeometry(saveGeometry());
     m_ctx.settings().setWindowState(saveState());
+    if (m_dashboardController) {
+        m_dashboardController->stop();
+    }
+}
+
+void MainWindow::quitApplication() {
+    m_isQuitting = true;
+    flushStateAndEdits();
+    qApp->quit();
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (!m_isQuitting && m_trayAvailable && m_ctx.settings().closeToTray()) {
+        event->ignore();
+        hide();
+        if (!m_ctx.settings().trayHintShown()) {
+            if (m_trayMessageCallback) {
+                m_trayMessageCallback(
+                    tr("JobPrep"),
+                    tr("JobPrep keeps running in the tray; use the tray menu to quit")
+                );
+            }
+            m_ctx.settings().setTrayHintShown(true);
+        }
+        return;
+    }
+
+    flushStateAndEdits();
     QMainWindow::closeEvent(event);
 }
 
@@ -150,7 +196,9 @@ void MainWindow::setupUi() {
         m_ctx.agendaService(), m_ctx.settings(), m_ctx.themeManager(), m_pageStack);
     m_pages.append(m_calendarPage);
     m_calendarIndex = static_cast<int>(m_pages.size()) - 1;
-    m_pages.append(new Pages::SettingsPage(m_ctx.settings(), m_ctx.themeManager(), m_pageStack));
+    m_settingsPage = new Pages::SettingsPage(m_ctx.settings(), m_ctx.themeManager(), m_trayAvailable, m_pageStack);
+    m_pages.append(m_settingsPage);
+    m_settingsIndex = static_cast<int>(m_pages.size()) - 1;
 
     for (auto* page : m_pages) {
         m_pageStack->addWidget(page);
@@ -329,6 +377,8 @@ Theme::ThemeManager& MainWindow::themeManager() const {
 void MainWindow::bringToFront() {
     if (isMinimized()) {
         showNormal();
+    } else if (isHidden() || !isVisible()) {
+        show();
     }
     raise();
     activateWindow();
@@ -393,6 +443,10 @@ void MainWindow::setupConnections() {
 
     connect(&m_ctx.themeManager(), &Theme::ThemeManager::themeChanged, this, [this]() {
         updateIcons();
+    });
+
+    connect(&m_ctx.settings(), &Services::SettingsService::closeToTrayChanged, this, [this](bool) {
+        updateQuitOnLastWindowClosed();
     });
 }
 

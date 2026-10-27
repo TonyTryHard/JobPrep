@@ -1,16 +1,22 @@
 #include "ui/pages/SettingsPage.h"
+
+#include <algorithm>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
 #include <QFrame>
-#include <QGroupBox>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QVBoxLayout>
 #include "services/SettingsService.h"
+#include "ui/FormatHelper.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
 
@@ -18,12 +24,81 @@ using namespace Qt::StringLiterals;
 
 namespace JobPrep::Ui::Pages {
 
+class GoalSpinBox : public QSpinBox {
+public:
+    explicit GoalSpinBox(QWidget* parent = nullptr) : QSpinBox(parent) {
+        setRange(60, 2400);
+        setSingleStep(15);
+    }
+
+    QString textFromValue(int val) const override {
+        const int h = val / 60;
+        const int m = val % 60;
+        if (m == 0) {
+            return tr("%1 h").arg(h);
+        }
+        return tr("%1 h %2 min").arg(h).arg(m);
+    }
+
+    int valueFromText(const QString& text) const override {
+        const QString clean = text.trimmed();
+        const QRegularExpression re(
+            uR"(^(\d+)\s*(?:h|hours?|:)?\s*(\d+)?\s*(?:m|min|minutes?)?$)"_s,
+            QRegularExpression::CaseInsensitiveOption);
+        const auto match = re.match(clean);
+        if (match.hasMatch()) {
+            const int first = match.captured(1).toInt();
+            const QString secondStr = match.captured(2);
+            if (!secondStr.isEmpty()) {
+                const int second = secondStr.toInt();
+                return std::clamp(first * 60 + second, minimum(), maximum());
+            }
+            if (clean.contains(u'h', Qt::CaseInsensitive)) {
+                return std::clamp(first * 60, minimum(), maximum());
+            }
+            return std::clamp(first, minimum(), maximum());
+        }
+        return value();
+    }
+
+    QValidator::State validate(QString& text, int& pos) const override {
+        Q_UNUSED(pos);
+        if (text.trimmed().isEmpty()) return QValidator::Intermediate;
+        return QValidator::Acceptable;
+    }
+};
+
+QSpinBox* SettingsPage::studyGoalSpinBox() const {
+    return m_studyGoalSpinBox;
+}
+
 SettingsPage::SettingsPage(Services::SettingsService& settings,
                            Theme::ThemeManager& themeMgr,
+                           bool trayAvailable,
                            QWidget* parent)
-    : PageBase(tr("Settings"), parent), m_settings(settings), m_themeMgr(themeMgr) {
+    : PageBase(tr("Settings"), parent),
+      m_settings(settings),
+      m_themeMgr(themeMgr),
+      m_trayAvailable(trayAvailable) {
     setupUi();
     loadSettings();
+}
+
+void SettingsPage::setTrayAvailable(bool available) {
+    if (m_trayAvailable == available) return;
+    m_trayAvailable = available;
+    updateCloseToTrayState();
+}
+
+void SettingsPage::updateCloseToTrayState() {
+    if (!m_closeToTrayCheck) return;
+    if (m_trayAvailable) {
+        m_closeToTrayCheck->setEnabled(true);
+        m_closeToTrayCheck->setToolTip(tr("Keep JobPrep running in the system tray when closing the window"));
+    } else {
+        m_closeToTrayCheck->setEnabled(false);
+        m_closeToTrayCheck->setToolTip(tr("System tray is not available on this system"));
+    }
 }
 
 void SettingsPage::setupUi() {
@@ -40,8 +115,9 @@ void SettingsPage::setupUi() {
     containerLayout->setContentsMargins(0, 0, 0, 0);
     containerLayout->setSpacing(24);
 
-    // Appearance Card
+    // --- Appearance Card ---
     auto* appearanceCard = new QFrame(container);
+    appearanceCard->setObjectName(u"SettingsAppearanceCard"_s);
     appearanceCard->setProperty("card", true);
     auto* appearanceLayout = new QVBoxLayout(appearanceCard);
     appearanceLayout->setContentsMargins(24, 24, 24, 24);
@@ -55,12 +131,16 @@ void SettingsPage::setupUi() {
     appForm->setSpacing(12);
 
     m_themeCombo = new QComboBox(appearanceCard);
+    m_themeCombo->setObjectName(u"SettingsThemeCombo"_s);
+    m_themeCombo->setToolTip(tr("Select visual color theme"));
     m_themeCombo->addItem(tr("System Default"), u"system"_s);
     m_themeCombo->addItem(tr("Light"), u"light"_s);
     m_themeCombo->addItem(tr("Dark"), u"dark"_s);
     appForm->addRow(tr("Theme:"), m_themeCombo);
 
     m_accentCombo = new QComboBox(appearanceCard);
+    m_accentCombo->setObjectName(u"SettingsAccentCombo"_s);
+    m_accentCombo->setToolTip(tr("Select accent highlight color"));
     m_accentCombo->addItem(tr("Indigo"), u"indigo"_s);
     m_accentCombo->addItem(tr("Teal"), u"teal"_s);
     m_accentCombo->addItem(tr("Rose"), u"rose"_s);
@@ -72,8 +152,9 @@ void SettingsPage::setupUi() {
     appearanceLayout->addLayout(appForm);
     containerLayout->addWidget(appearanceCard);
 
-    // Study & Calendar Preferences Card
+    // --- Preferences Card ---
     auto* prefsCard = new QFrame(container);
+    prefsCard->setObjectName(u"SettingsPreferencesCard"_s);
     prefsCard->setProperty("card", true);
     auto* prefsLayout = new QVBoxLayout(prefsCard);
     prefsLayout->setContentsMargins(24, 24, 24, 24);
@@ -86,39 +167,132 @@ void SettingsPage::setupUi() {
     auto* prefsForm = new QFormLayout();
     prefsForm->setSpacing(12);
 
-    m_studyGoalSpinBox = new QSpinBox(prefsCard);
-    m_studyGoalSpinBox->setRange(1, 40);
-    m_studyGoalSpinBox->setSuffix(tr(" hours / week"));
+    // B1: Weekly study goal spinbox (60-2400 min, step 15)
+    m_studyGoalSpinBox = new GoalSpinBox(prefsCard);
+    m_studyGoalSpinBox->setObjectName(u"SettingsStudyGoalSpinBox"_s);
+    m_studyGoalSpinBox->setToolTip(tr("Weekly study goal in hours and minutes (steps of 15 min)"));
     prefsForm->addRow(tr("Weekly study goal:"), m_studyGoalSpinBox);
 
+    // B4: First day of week combo (Monday = 1, Sunday = 7)
     m_weekStartCombo = new QComboBox(prefsCard);
+    m_weekStartCombo->setObjectName(u"SettingsWeekStartCombo"_s);
+    m_weekStartCombo->setToolTip(tr("First day of the week for calendar and study statistics"));
     m_weekStartCombo->addItem(tr("Monday"), 1);
     m_weekStartCombo->addItem(tr("Sunday"), 7);
     prefsForm->addRow(tr("First day of week:"), m_weekStartCombo);
 
+    // B3: Close to tray checkbox
     m_closeToTrayCheck = new QCheckBox(tr("Minimize / Close to system tray"), prefsCard);
+    m_closeToTrayCheck->setObjectName(u"SettingsCloseToTrayCheck"_s);
     prefsForm->addRow(QString(), m_closeToTrayCheck);
 
     prefsLayout->addLayout(prefsForm);
+
+    // B2: Reminder Lead Times Editor
+    auto* leadSectionTitle = new QLabel(tr("Interview Reminder Lead Times"), prefsCard);
+    leadSectionTitle->setStyleSheet(u"font-size: 11pt; font-weight: 600;"_s);
+    prefsLayout->addWidget(leadSectionTitle);
+
+    m_leadList = new QListWidget(prefsCard);
+    m_leadList->setObjectName(u"SettingsLeadList"_s);
+    m_leadList->setToolTip(tr("Active interview reminder notifications before start time"));
+    prefsLayout->addWidget(m_leadList);
+
+    auto* leadControlRow = new QHBoxLayout();
+    leadControlRow->setSpacing(8);
+
+    m_leadPresetCombo = new QComboBox(prefsCard);
+    m_leadPresetCombo->setObjectName(u"SettingsLeadPresetCombo"_s);
+    m_leadPresetCombo->setToolTip(tr("Select a preset lead time or choose Custom"));
+    m_leadPresetCombo->addItem(tr("15 minutes"), 15);
+    m_leadPresetCombo->addItem(tr("30 minutes"), 30);
+    m_leadPresetCombo->addItem(tr("1 hour"), 60);
+    m_leadPresetCombo->addItem(tr("2 hours"), 120);
+    m_leadPresetCombo->addItem(tr("1 day"), 1440);
+    m_leadPresetCombo->addItem(tr("2 days"), 2880);
+    m_leadPresetCombo->addItem(tr("Custom..."), -1);
+    leadControlRow->addWidget(m_leadPresetCombo);
+
+    m_customLeadSpinBox = new QSpinBox(prefsCard);
+    m_customLeadSpinBox->setObjectName(u"SettingsCustomLeadSpinBox"_s);
+    m_customLeadSpinBox->setRange(1, 10080);
+    m_customLeadSpinBox->setValue(90);
+    m_customLeadSpinBox->setSuffix(tr(" min"));
+    m_customLeadSpinBox->setToolTip(tr("Custom reminder lead time in minutes (1 - 10080)"));
+    m_customLeadSpinBox->setEnabled(false);
+    leadControlRow->addWidget(m_customLeadSpinBox);
+
+    m_addLeadBtn = new QPushButton(tr("Add lead"), prefsCard);
+    m_addLeadBtn->setObjectName(u"SettingsAddLeadBtn"_s);
+    m_addLeadBtn->setToolTip(tr("Add reminder lead time to the list"));
+    m_addLeadBtn->setAutoDefault(true);
+    m_addLeadBtn->installEventFilter(this);
+    leadControlRow->addWidget(m_addLeadBtn);
+
+    m_removeLeadBtn = new QPushButton(tr("Remove selected"), prefsCard);
+    m_removeLeadBtn->setObjectName(u"SettingsRemoveLeadBtn"_s);
+    m_removeLeadBtn->setToolTip(tr("Remove the selected reminder lead time"));
+    m_removeLeadBtn->setAutoDefault(true);
+    leadControlRow->addWidget(m_removeLeadBtn);
+
+    m_resetLeadBtn = new QPushButton(tr("Reset to default"), prefsCard);
+    m_resetLeadBtn->setObjectName(u"SettingsResetLeadBtn"_s);
+    m_resetLeadBtn->setToolTip(tr("Reset reminder lead times to defaults (1 day and 1 hour)"));
+    m_resetLeadBtn->setAutoDefault(true);
+    leadControlRow->addWidget(m_resetLeadBtn);
+
+    prefsLayout->addLayout(leadControlRow);
     containerLayout->addWidget(prefsCard);
 
     containerLayout->addStretch(1);
     scrollArea->setWidget(container);
     mainLayout->addWidget(scrollArea);
 
-    // Wire controls
+    // --- Tab Order Setup ---
+    QWidget::setTabOrder(m_themeCombo, m_accentCombo);
+    QWidget::setTabOrder(m_accentCombo, m_studyGoalSpinBox);
+    QWidget::setTabOrder(m_studyGoalSpinBox, m_weekStartCombo);
+    QWidget::setTabOrder(m_weekStartCombo, m_closeToTrayCheck);
+    QWidget::setTabOrder(m_closeToTrayCheck, m_leadList);
+    QWidget::setTabOrder(m_leadList, m_leadPresetCombo);
+    QWidget::setTabOrder(m_leadPresetCombo, m_customLeadSpinBox);
+    QWidget::setTabOrder(m_customLeadSpinBox, m_addLeadBtn);
+    QWidget::setTabOrder(m_addLeadBtn, m_removeLeadBtn);
+    QWidget::setTabOrder(m_removeLeadBtn, m_resetLeadBtn);
+
+    // --- Signal Wiring ---
     connect(m_themeCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (m_syncingTheme) return;
         const QString modeStr = m_themeCombo->itemData(index).toString();
         m_themeMgr.setThemeMode(Theme::Tokens::themeModeFromString(modeStr));
     });
 
     connect(m_accentCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (m_syncingTheme) return;
         const QString accentStr = m_accentCombo->itemData(index).toString();
         m_themeMgr.setAccentPreset(Theme::Tokens::accentFromString(accentStr));
     });
 
-    connect(m_studyGoalSpinBox, &QSpinBox::valueChanged, this, [this](int hours) {
-        m_settings.setWeeklyGoalMinutes(hours * 60);
+    connect(&m_themeMgr, &Theme::ThemeManager::themeChanged, this, [this]() {
+        const QString modeStr = Theme::Tokens::themeModeToString(m_themeMgr.currentMode());
+        const int themeIdx = m_themeCombo->findData(modeStr);
+        if (themeIdx >= 0 && m_themeCombo->currentIndex() != themeIdx) {
+            m_syncingTheme = true;
+            m_themeCombo->setCurrentIndex(themeIdx);
+            m_syncingTheme = false;
+        }
+
+        const QString accentStr = Theme::Tokens::accentToString(m_themeMgr.currentAccent());
+        const int accentIdx = m_accentCombo->findData(accentStr);
+        if (accentIdx >= 0 && m_accentCombo->currentIndex() != accentIdx) {
+            m_syncingTheme = true;
+            m_accentCombo->setCurrentIndex(accentIdx);
+            m_syncingTheme = false;
+        }
+    });
+
+    connect(m_studyGoalSpinBox, &QSpinBox::valueChanged, this, [this](int minutes) {
+        m_settings.setWeeklyGoalMinutes(minutes);
     });
 
     connect(m_weekStartCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
@@ -129,6 +303,61 @@ void SettingsPage::setupUi() {
     connect(m_closeToTrayCheck, &QCheckBox::toggled, this, [this](bool checked) {
         m_settings.setCloseToTray(checked);
     });
+
+    connect(m_leadPresetCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const bool isCustom = m_leadPresetCombo->itemData(index).toInt() == -1;
+        m_customLeadSpinBox->setEnabled(isCustom);
+    });
+
+    connect(m_addLeadBtn, &QPushButton::clicked, this, [this]() {
+        int minutes = m_leadPresetCombo->currentData().toInt();
+        if (minutes == -1) {
+            minutes = m_customLeadSpinBox->value();
+        }
+        auto current = m_settings.interviewLeadMinutes();
+        if (!current.contains(minutes)) {
+            current.append(minutes);
+            std::sort(current.begin(), current.end(), std::greater<int>());
+            m_settings.setInterviewLeadMinutes(current);
+            refreshLeadList();
+        }
+    });
+
+    connect(m_removeLeadBtn, &QPushButton::clicked, this, [this]() {
+        auto current = m_settings.interviewLeadMinutes();
+        if (current.size() <= 1) return;
+        const int row = m_leadList->currentRow();
+        if (row >= 0 && row < current.size()) {
+            current.removeAt(row);
+            m_settings.setInterviewLeadMinutes(current);
+            refreshLeadList();
+        }
+    });
+
+    connect(m_resetLeadBtn, &QPushButton::clicked, this, [this]() {
+        m_settings.setInterviewLeadMinutes({1440, 60});
+        refreshLeadList();
+    });
+
+    connect(m_leadList, &QListWidget::currentRowChanged, this, [this](int row) {
+        m_removeLeadBtn->setEnabled(row >= 0 && m_leadList->count() > 1);
+    });
+
+    connect(&m_settings, &Services::SettingsService::interviewLeadMinutesChanged,
+            this, &SettingsPage::refreshLeadList);
+}
+
+void SettingsPage::refreshLeadList() {
+    m_leadList->clear();
+    const auto leads = m_settings.interviewLeadMinutes();
+    for (int m : leads) {
+        auto* item = new QListWidgetItem(FormatHelper::formatLeadTime(m), m_leadList);
+        item->setData(Qt::UserRole, m);
+    }
+    if (!leads.isEmpty()) {
+        m_leadList->setCurrentRow(0);
+    }
+    m_removeLeadBtn->setEnabled(leads.size() > 1 && m_leadList->currentRow() >= 0);
 }
 
 void SettingsPage::loadSettings() {
@@ -142,17 +371,35 @@ void SettingsPage::loadSettings() {
     const int accentIdx = m_accentCombo->findData(accent);
     if (accentIdx >= 0) m_accentCombo->setCurrentIndex(accentIdx);
 
-    // Weekly study goal (minutes to hours)
-    const int hours = qMax(1, m_settings.weeklyGoalMinutes() / 60);
-    m_studyGoalSpinBox->setValue(hours);
+    // B1: Weekly study goal (minutes: 60-2400)
+    m_studyGoalSpinBox->setValue(m_settings.weeklyGoalMinutes());
 
-    // First day of week
+    // B4: First day of week (1=Monday, 7=Sunday; invalid/legacy treated as Monday)
     const int day = m_settings.firstDayOfWeek();
     const int dayIdx = m_weekStartCombo->findData(day);
-    if (dayIdx >= 0) m_weekStartCombo->setCurrentIndex(dayIdx);
+    if (dayIdx >= 0) {
+        m_weekStartCombo->setCurrentIndex(dayIdx);
+    } else {
+        m_weekStartCombo->setCurrentIndex(0);
+    }
 
-    // Close to tray
+    // B3: Close to tray
     m_closeToTrayCheck->setChecked(m_settings.closeToTray());
+    updateCloseToTrayState();
+
+    // B2: Lead times list
+    refreshLeadList();
+}
+
+bool SettingsPage::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == m_addLeadBtn && event->type() == QEvent::KeyPress) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            m_addLeadBtn->click();
+            return true;
+        }
+    }
+    return PageBase::eventFilter(watched, event);
 }
 
 }  // namespace JobPrep::Ui::Pages

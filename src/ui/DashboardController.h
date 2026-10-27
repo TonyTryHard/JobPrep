@@ -63,6 +63,9 @@ public:
     /// Test seam: number of full snapshot refreshes executed.
     int refreshCount() const { return m_refreshCount; }
 
+    /// Stops any pending coalesce refresh timer.
+    void stop();
+
 public slots:
     /// Schedules a coalesced refresh on the next event loop turn (0 ms timer).
     void requestRefresh();

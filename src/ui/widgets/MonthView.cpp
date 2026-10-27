@@ -5,6 +5,7 @@
 #include <QLocale>
 #include <QMouseEvent>
 #include <QPainter>
+#include "services/SettingsService.h"
 #include "ui/theme/AgendaKindStyle.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
@@ -45,8 +46,9 @@ MonthView::MonthView(JobPrep::Ui::Theme::ThemeManager& theme,
 }
 
 void MonthView::setFirstDayOfWeek(int day) {
-    if (day < 1 || day > 7 || day == m_firstDayOfWeek) return;
-    m_firstDayOfWeek = day;
+    const int normalized = static_cast<int>(Services::SettingsService::toDayOfWeek(day));
+    if (normalized == m_firstDayOfWeek) return;
+    m_firstDayOfWeek = normalized;
     update();
 }
 

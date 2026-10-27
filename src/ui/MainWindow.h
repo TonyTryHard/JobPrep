@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <QMainWindow>
 #include <QList>
 
@@ -29,6 +30,7 @@ namespace Pages {
 class CalendarPage;
 class HomePage;
 class JobsPage;
+class SettingsPage;
 class StudyPage;
 }  // namespace Pages
 
@@ -39,11 +41,24 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    explicit MainWindow(App::AppContext& ctx, QWidget* parent = nullptr);
+    explicit MainWindow(App::AppContext& ctx, bool trayAvailable = false, QWidget* parent = nullptr);
     ~MainWindow() override;
 
     Sidebar* sidebar() const { return m_sidebar; }
     QStackedWidget* pageStack() const { return m_pageStack; }
+
+    /// Sets system tray availability learned once at startup (SPEC §8, B3).
+    void setTrayAvailable(bool available);
+    /// Returns whether the system tray is available.
+    bool isTrayAvailable() const { return m_trayAvailable; }
+
+    /// Shuts down the application running the same path as window close (B3).
+    void quitApplication();
+    /// Returns whether application shutdown is currently in progress.
+    bool isQuitting() const { return m_isQuitting; }
+
+    /// Registers a callback to display messages in the system tray.
+    void setTrayMessageCallback(std::function<void(const QString& title, const QString& message)> callback);
 
     /// Switches to the Study page and selects `topicId` (B9).
     void openTopic(int topicId);
@@ -67,6 +82,7 @@ public:
     void openItemFromNotification(const Services::Notification& notification);
 
     Pages::HomePage* homePage() const { return m_homePage; }
+    Pages::SettingsPage* settingsPage() const { return m_settingsPage; }
     DashboardController* dashboardController() const { return m_dashboardController.get(); }
 
     /// Focuses the search box of the page that is actually showing (Ctrl+F).
@@ -112,6 +128,15 @@ private:
     int m_studyIndex{-1};
     Pages::CalendarPage* m_calendarPage{nullptr};
     int m_calendarIndex{-1};
+    Pages::SettingsPage* m_settingsPage{nullptr};
+    int m_settingsIndex{-1};
+
+    bool m_trayAvailable{false};
+    bool m_isQuitting{false};
+    std::function<void(const QString& title, const QString& message)> m_trayMessageCallback;
+
+    void flushStateAndEdits();
+    void updateQuitOnLastWindowClosed();
 
     QLabel* m_statusStreakLabel{nullptr};
     QLabel* m_statusProcessesLabel{nullptr};

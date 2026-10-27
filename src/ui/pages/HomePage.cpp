@@ -229,6 +229,9 @@ void HomePage::setupUi() {
 }
 
 void HomePage::applySnapshot(const DashboardSnapshot& snapshot) {
+    m_progressRings->setTracks(snapshot.stats.trackProgress);
+    m_goalBar->setGoal(snapshot.stats.weekMinutes, snapshot.weeklyGoalMinutes);
+
     if (snapshot.isDataEmpty) {
         m_stack->setCurrentWidget(m_emptyState);
         return;

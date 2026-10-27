@@ -68,13 +68,18 @@ void DashboardController::requestRefresh() {
     }
 }
 
+void DashboardController::stop() {
+    if (m_coalesceTimer) {
+        m_coalesceTimer->stop();
+    }
+}
+
 void DashboardController::refreshNow() {
     m_coalesceTimer->stop();
     m_refreshCount++;
 
     const int goalMinutes = m_settings.weeklyGoalMinutes();
-    const Qt::DayOfWeek firstDay =
-        (m_settings.firstDayOfWeek() == 7) ? Qt::Sunday : Qt::Monday;
+    const Qt::DayOfWeek firstDay = Services::SettingsService::toDayOfWeek(m_settings.firstDayOfWeek());
 
     m_snapshot.weeklyGoalMinutes = goalMinutes;
     m_snapshot.isDataEmpty = m_apps.isEmpty() && m_topics.isEmpty();

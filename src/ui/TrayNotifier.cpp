@@ -26,6 +26,10 @@ TrayNotifier::TrayNotifier(MainWindow& window,
     setupTray();
 }
 
+TrayNotifier::~TrayNotifier() {
+    m_window.setTrayMessageCallback({});
+}
+
 void TrayNotifier::setupTray() {
     m_trayMenu = new QMenu(&m_window);
     auto* showAction = m_trayMenu->addAction(tr("Show JobPrep"));
@@ -34,9 +38,13 @@ void TrayNotifier::setupTray() {
     });
 
     auto* quitAction = m_trayMenu->addAction(tr("Quit"));
-    connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
+    connect(quitAction, &QAction::triggered, &m_window, &MainWindow::quitApplication);
 
     m_trayIcon.setContextMenu(m_trayMenu);
+
+    m_window.setTrayMessageCallback([this](const QString& title, const QString& message) {
+        m_trayIcon.showMessage(title, message, QSystemTrayIcon::Information, 5000);
+    });
 
     connect(&m_trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
         if (reason == QSystemTrayIcon::Trigger) {

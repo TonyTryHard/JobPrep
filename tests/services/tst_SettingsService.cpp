@@ -15,6 +15,9 @@ private slots:
     void sanitizingRemovesNonPositiveDuplicatesAndSortsDescending();
     void emptyOrInvalidStoredValueFallsBackToDefault();
     void signalEmittedOncePerRealChange();
+    void testLeadMinutesSanitizing();
+    void testTrayHintShownKey();
+    void testToDayOfWeekNormalization();
 };
 
 void tst_SettingsService::defaultLeadMinutesReturns1440And60() {
@@ -84,6 +87,67 @@ void tst_SettingsService::signalEmittedOncePerRealChange() {
     svc.setInterviewLeadMinutes({60});
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.takeFirst().at(0).value<QList<int>>(), QList<int>({60}));
+}
+
+void tst_SettingsService::testLeadMinutesSanitizing() {
+    QTemporaryFile temp;
+    QVERIFY(temp.open());
+    const QString path = temp.fileName();
+    temp.close();
+
+    auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+    SettingsService svc(std::move(qsettings));
+
+    // Empty list sanitizes to default {1440, 60}
+    svc.setInterviewLeadMinutes({});
+    QCOMPARE(svc.interviewLeadMinutes(), (QList<int>{1440, 60}));
+
+    // Large custom lead minutes and mixed order
+    svc.setInterviewLeadMinutes({15, 10080, 30, 2880});
+    QCOMPARE(svc.interviewLeadMinutes(), (QList<int>{10080, 2880, 30, 15}));
+}
+
+void tst_SettingsService::testTrayHintShownKey() {
+    QTemporaryFile temp;
+    QVERIFY(temp.open());
+    const QString path = temp.fileName();
+    temp.close();
+
+    {
+        auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        SettingsService svc(std::move(qsettings));
+        QCOMPARE(svc.trayHintShown(), false);
+
+        QSignalSpy spy(&svc, &SettingsService::trayHintShownChanged);
+        svc.setTrayHintShown(true);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), true);
+        QCOMPARE(svc.trayHintShown(), true);
+
+        // Setting same value does not emit
+        svc.setTrayHintShown(true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // Persists across SettingsService instances
+    {
+        auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        SettingsService svc(std::move(qsettings));
+        QCOMPARE(svc.trayHintShown(), true);
+    }
+}
+
+void tst_SettingsService::testToDayOfWeekNormalization() {
+    // 1 -> Monday, 7 -> Sunday
+    QCOMPARE(SettingsService::toDayOfWeek(1), Qt::Monday);
+    QCOMPARE(SettingsService::toDayOfWeek(7), Qt::Sunday);
+
+    // Invalid / legacy values normalize to Monday
+    QCOMPARE(SettingsService::toDayOfWeek(0), Qt::Monday);
+    QCOMPARE(SettingsService::toDayOfWeek(2), Qt::Monday);
+    QCOMPARE(SettingsService::toDayOfWeek(3), Qt::Monday);
+    QCOMPARE(SettingsService::toDayOfWeek(8), Qt::Monday);
+    QCOMPARE(SettingsService::toDayOfWeek(-1), Qt::Monday);
 }
 
 QTEST_GUILESS_MAIN(tst_SettingsService)

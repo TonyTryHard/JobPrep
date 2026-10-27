@@ -21,7 +21,7 @@ public:
     explicit TrayNotifier(MainWindow& window,
                           std::function<void(const Services::Notification&)> clickHandler = {},
                           QObject* parent = nullptr);
-    ~TrayNotifier() override = default;
+    ~TrayNotifier() override;
 
     bool notify(const Services::Notification& notification) override;
 

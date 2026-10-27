@@ -25,6 +25,21 @@ QString FormatHelper::formatGoalText(int weekMinutes, int goalMinutes) {
     return tr("%1 / %2").arg(formatDuration(weekMinutes), formatDuration(goalMinutes));
 }
 
+QString FormatHelper::formatLeadTime(int minutes) {
+    if (minutes <= 0) {
+        return tr("0 minutes");
+    }
+    if (minutes % 1440 == 0) {
+        const int days = minutes / 1440;
+        return days == 1 ? tr("1 day") : tr("%1 days").arg(days);
+    }
+    if (minutes % 60 == 0) {
+        const int hours = minutes / 60;
+        return hours == 1 ? tr("1 hour") : tr("%1 hours").arg(hours);
+    }
+    return minutes == 1 ? tr("1 minute") : tr("%1 minutes").arg(minutes);
+}
+
 QString FormatHelper::formatInterviewRate(const std::optional<double>& rate) {
     if (!rate.has_value()) {
         return QString::fromUtf8("\u2013");  // en-dash

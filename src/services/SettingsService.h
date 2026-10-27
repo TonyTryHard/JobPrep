@@ -38,12 +38,17 @@ public:
 
     int firstDayOfWeek() const;
     void setFirstDayOfWeek(int day);
+    Qt::DayOfWeek firstDayOfWeekEnum() const;
+    static Qt::DayOfWeek toDayOfWeek(int day);
 
     QList<int> interviewLeadMinutes() const;
     void setInterviewLeadMinutes(const QList<int>& minutes);
 
     bool closeToTray() const;
     void setCloseToTray(bool enabled);
+
+    bool trayHintShown() const;
+    void setTrayHintShown(bool shown);
 
     bool sampleDataPrompted() const;
     void setSampleDataPrompted(bool prompted);
@@ -77,6 +82,7 @@ signals:
     void firstDayOfWeekChanged(int day);
     void interviewLeadMinutesChanged(const QList<int>& minutes);
     void closeToTrayChanged(bool enabled);
+    void trayHintShownChanged(bool shown);
     void calendarLayerInterviewsChanged(bool enabled);
     void calendarLayerFollowUpsChanged(bool enabled);
     void calendarLayerTargetsChanged(bool enabled);

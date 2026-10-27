@@ -21,6 +21,9 @@ public:
     /// Formats weekly study progress vs goal as "Xh Ym / Zh" (e.g. "4h 20m / 6h", "7h 10m / 6h").
     static QString formatGoalText(int weekMinutes, int goalMinutes);
 
+    /// Formats reminder lead time with singular/plural wording (e.g. 1440 -> "1 day", 120 -> "2 hours", 90 -> "90 minutes").
+    static QString formatLeadTime(int minutes);
+
     /// Formats interview rate percentage with 1 decimal digit (e.g. "66.7%"), or "–" (en-dash) if nullopt.
     static QString formatInterviewRate(const std::optional<double>& rate);
 

@@ -105,7 +105,7 @@ CalendarPage::CalendarPage(JobPrep::Data::InterviewRepository& interviews,
 
     connect(&m_settings, &JobPrep::Services::SettingsService::firstDayOfWeekChanged, this,
             [this](int day) {
-                m_monthView->setFirstDayOfWeek(day);
+                m_monthView->setFirstDayOfWeek(static_cast<int>(JobPrep::Services::SettingsService::toDayOfWeek(day)));
                 refreshMarkersAndAgenda();
             });
     connect(&m_settings, &JobPrep::Services::SettingsService::calendarLayerInterviewsChanged,
@@ -205,7 +205,7 @@ void CalendarPage::setupSplitter(QVBoxLayout* layout) {
 
     m_monthView = new Widgets::MonthView(m_theme, m_todayProvider, m_splitter);
     m_monthView->setObjectName(u"CalendarMonthView"_s);
-    m_monthView->setFirstDayOfWeek(m_settings.firstDayOfWeek());
+    m_monthView->setFirstDayOfWeek(static_cast<int>(JobPrep::Services::SettingsService::toDayOfWeek(m_settings.firstDayOfWeek())));
     m_splitter->addWidget(m_monthView);
 
     auto* panel = new QWidget(m_splitter);

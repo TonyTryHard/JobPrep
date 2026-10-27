@@ -54,12 +54,14 @@ int main(int argc, char* argv[]) {
         ctx.settings().setSampleDataPrompted(true);
     }
 
+    // Check system tray availability once for both MainWindow and ReminderCoordinator
+    const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable();
+
     // Create and show main window
-    JobPrep::Ui::MainWindow mainWindow(ctx);
+    JobPrep::Ui::MainWindow mainWindow(ctx, trayAvailable);
     mainWindow.show();
 
     // Start reminders via coordinator (owned locally, destroyed before window)
-    const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable();
     JobPrep::Ui::ReminderCoordinator reminderCoordinator(
         ctx.interviews(),
         ctx.applications(),

@@ -25,6 +25,7 @@ set(PAGE_TESTS
     tst_PageCalendar
     tst_PageStudy
     tst_PageHome
+    tst_PageSettings
 )
 
 foreach(test_name IN LISTS PAGE_TESTS)
