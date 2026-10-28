@@ -1,6 +1,8 @@
 #include "services/RestoreService.h"
 
 #include <algorithm>
+#include <chrono>
+#include <QCoreApplication>
 #include <QDate>
 #include <QDir>
 #include <QFile>
@@ -49,14 +51,19 @@ public:
     RestoreWorker(QString dbPath,
                   QString backupPath,
                   QString safetyDir,
-                  RestoreService::Clock clock)
+                  RestoreService::Clock clock,
+                  std::function<void()> delayHook = {})
         : m_dbPath(std::move(dbPath)),
           m_backupPath(std::move(backupPath)),
           m_safetyDir(std::move(safetyDir)),
-          m_clock(std::move(clock)) {}
+          m_clock(std::move(clock)),
+          m_delayHook(std::move(delayHook)) {}
 
 public slots:
     void process() {
+        if (m_delayHook) {
+            m_delayHook();
+        }
         RestoreResult result;
         auto workerDb = Data::Database::createWorkerConnection(m_dbPath);
         if (!workerDb) {
@@ -79,6 +86,7 @@ private:
     QString m_backupPath;
     QString m_safetyDir;
     RestoreService::Clock m_clock;
+    std::function<void()> m_delayHook;
 };
 
 }  // namespace
@@ -87,7 +95,41 @@ RestoreService::RestoreService(QObject* parent) : QObject(parent) {
     qRegisterMetaType<JobPrep::Services::RestoreResult>();
 }
 
-RestoreService::~RestoreService() = default;
+RestoreService::~RestoreService() {
+    waitForRestore(5000);
+}
+
+bool RestoreService::isRestoring() const {
+    return m_activeThread != nullptr && m_activeThread->isRunning();
+}
+
+bool RestoreService::waitForRestore(unsigned long timeoutMs) {
+    if (!m_activeThread) {
+        return true;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    while (m_activeThread && m_activeThread->isRunning()) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        if (m_activeThread) {
+            m_activeThread->wait(20);
+        }
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        if (elapsed >= static_cast<long long>(timeoutMs)) {
+            break;
+        }
+    }
+    const bool ok = !m_activeThread || !m_activeThread->isRunning();
+    if (m_activeReminderService) {
+        m_activeReminderService->resume();
+        m_activeReminderService = nullptr;
+    }
+    return ok;
+}
+
+void RestoreService::setWorkerDelayHook(std::function<void()> hook) {
+    m_workerDelayHook = std::move(hook);
+}
 
 RestoreResult RestoreService::validateJson(const QByteArray& jsonBytes) {
     if (jsonBytes.isEmpty()) {
@@ -149,7 +191,7 @@ RestoreResult RestoreService::validateJson(const QByteArray& jsonBytes) {
             return {false, RestoreErrorKind::MissingRequiredField, u"Track %1 missing name"_s.arg(id)};
         }
     }
-    res.restoredTracks = tracks.size();
+    res.restoredTracks = static_cast<int>(tracks.size());
 
     // 2. Topics
     const QJsonArray topics = root[u"topics"_s].toArray();
@@ -194,7 +236,7 @@ RestoreResult RestoreService::validateJson(const QByteArray& jsonBytes) {
             return {false, RestoreErrorKind::InvalidDateFormat, u"Topic %1 has invalid timestamps"_s.arg(id)};
         }
     }
-    res.restoredTopics = topics.size();
+    res.restoredTopics = static_cast<int>(topics.size());
 
     // 3. Subtasks
     const QJsonArray subtasks = root[u"subtasks"_s].toArray();
@@ -212,7 +254,7 @@ RestoreResult RestoreService::validateJson(const QByteArray& jsonBytes) {
                     u"Subtask %1 references non-existent topic %2"_s.arg(id).arg(topicId)};
         }
     }
-    res.restoredSubtasks = subtasks.size();
+    res.restoredSubtasks = static_cast<int>(subtasks.size());
 
     // 4. Study Sessions
     const QJsonArray sessions = root[u"sessions"_s].toArray();
@@ -241,7 +283,7 @@ RestoreResult RestoreService::validateJson(const QByteArray& jsonBytes) {
             return {false, RestoreErrorKind::MissingRequiredField, u"Session %1 minutes must be positive"_s.arg(id)};
         }
     }
-    res.restoredSessions = sessions.size();
+    res.restoredSessions = static_cast<int>(sessions.size());
 
     // 5. Applications
     const QJsonArray apps = root[u"applications"_s].toArray();
@@ -287,7 +329,7 @@ RestoreResult RestoreService::validateJson(const QByteArray& jsonBytes) {
             return {false, RestoreErrorKind::InvalidDateFormat, u"Application %1 invalid timestamps"_s.arg(id)};
         }
     }
-    res.restoredApplications = apps.size();
+    res.restoredApplications = static_cast<int>(apps.size());
 
     // 6. Status History
     const QJsonArray history = root[u"statusHistory"_s].toArray();
@@ -322,7 +364,7 @@ RestoreResult RestoreService::validateJson(const QByteArray& jsonBytes) {
             return {false, RestoreErrorKind::InvalidDateFormat, u"StatusHistory %1 invalid changed_at"_s.arg(id)};
         }
     }
-    res.restoredStatusHistory = history.size();
+    res.restoredStatusHistory = static_cast<int>(history.size());
 
     // 7. Interviews
     const QJsonArray interviews = root[u"interviews"_s].toArray();
@@ -359,7 +401,7 @@ RestoreResult RestoreService::validateJson(const QByteArray& jsonBytes) {
             return {false, RestoreErrorKind::InvalidEnumValue, u"Interview %1 invalid outcome: %2"_s.arg(id).arg(outcomeStr)};
         }
     }
-    res.restoredInterviews = interviews.size();
+    res.restoredInterviews = static_cast<int>(interviews.size());
 
     res.success = true;
     res.errorKind = RestoreErrorKind::None;
@@ -375,7 +417,7 @@ void RestoreService::pruneSafetyBackups(const QString& dir, int keepCount) {
     QFileInfoList list = d.entryInfoList(nameFilters, QDir::Files, QDir::Name);
 
     if (list.size() > keepCount) {
-        const int toRemove = list.size() - keepCount;
+        const int toRemove = static_cast<int>(list.size()) - keepCount;
         for (int i = 0; i < toRemove; ++i) {
             QFile::remove(list.at(i).absoluteFilePath());
         }
@@ -644,16 +686,20 @@ void RestoreService::restoreAsync(const QString& databasePath,
     if (reminderService) {
         reminderService->pause();
     }
+    m_activeReminderService = reminderService;
 
     auto* thread = new QThread(this);
-    auto* worker = new RestoreWorker(databasePath, backupFilePath, safetyBackupDir, clock);
+    m_activeThread = thread;
+    auto* worker = new RestoreWorker(databasePath, backupFilePath, safetyBackupDir, clock, m_workerDelayHook);
     worker->moveToThread(thread);
 
     connect(thread, &QThread::started, worker, &RestoreWorker::process);
-    connect(worker, &RestoreWorker::completed, this, [this, thread, worker, reminderService](const RestoreResult& res) {
-        if (reminderService) {
-            reminderService->resume();
+    connect(worker, &RestoreWorker::completed, this, [this, thread, worker](const RestoreResult& res) {
+        if (m_activeReminderService) {
+            m_activeReminderService->resume();
+            m_activeReminderService = nullptr;
         }
+        m_activeThread = nullptr;
         if (res.success) {
             emit dataReplaced();
         }

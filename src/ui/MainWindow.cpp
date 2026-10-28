@@ -116,6 +116,7 @@ void MainWindow::flushStateAndEdits() {
 }
 
 void MainWindow::prepareForShutdown() {
+    m_ctx.restoreService().waitForRestore(5000);
     flushStateAndEdits();
 }
 

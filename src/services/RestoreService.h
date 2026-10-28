@@ -4,7 +4,9 @@
 #include <memory>
 #include <QDateTime>
 #include <QObject>
+#include <QPointer>
 #include <QString>
+#include <QThread>
 #include "domain/Structs.h"
 
 namespace JobPrep::Data {
@@ -100,9 +102,25 @@ public:
                       ReminderService* reminderService = nullptr,
                       Clock clock = {});
 
+    /// Returns true if an asynchronous restore is currently in progress.
+    bool isRestoring() const;
+
+    /// Blocks up to timeoutMs waiting for an active restore worker thread to finish.
+    /// Resumes the reminder service if it was paused.
+    /// Returns true if no restore is running or the restore finished within the timeout.
+    bool waitForRestore(unsigned long timeoutMs = 5000);
+
+    /// Test hook: injected delay/callback invoked inside the worker process method.
+    void setWorkerDelayHook(std::function<void()> hook);
+
 signals:
     void dataReplaced();
     void finished(const JobPrep::Services::RestoreResult& result);
+
+private:
+    QPointer<QThread> m_activeThread;
+    ReminderService* m_activeReminderService{nullptr};
+    std::function<void()> m_workerDelayHook;
 };
 
 }  // namespace JobPrep::Services

@@ -1511,8 +1511,8 @@ void tst_PageSettings::testDataLoadSampleDataTwiceNoDuplicates() {
     QCOMPARE(rawPresenter->confirmCalls, 0);
     QCOMPARE(rawPresenter->infoCalls, 1);
 
-    const int trackCount = ctx.tracks().all().size();
-    const int topicCount = ctx.topics().all().size();
+    const auto trackCount = ctx.tracks().all().size();
+    const auto topicCount = ctx.topics().all().size();
     QVERIFY(trackCount > 0);
     QVERIFY(topicCount > 0);
 

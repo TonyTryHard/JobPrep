@@ -257,7 +257,16 @@ void DataToolsController::backupJson(QWidget* parent) {
     }
 }
 
+bool DataToolsController::isRestoring() const {
+    return m_restoreService.isRestoring();
+}
+
 void DataToolsController::restoreJson(QWidget* parent) {
+    if (isRestoring()) {
+        m_presenter->showError(parent, tr("Restore in Progress"),
+                               tr("A database restore is already in progress."));
+        return;
+    }
     const QString filter = tr("JSON Backup Files (*.json);;All Files (*)");
     const QString path =
         m_fileChooser->getOpenFileName(parent, tr("Restore Database from Backup"), QString(), filter);

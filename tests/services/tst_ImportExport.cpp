@@ -67,11 +67,13 @@ private slots:
     // JSON backup tests (C4, SPEC §10)
     void testJsonBackupStructureAndHeader();
     void testJsonBackupEveryColumnPresent();
+    void testBackupCoversEveryColumn();
     void testJsonBackupAtomicWriteAndReadOnlyError();
 
     // Restore tests (C1-C3, C6, C7)
     void testRestoreEqualityHandBuiltDataset();
     void testRestoreEqualitySeedDataset();
+    void testRoundTripEveryColumnNonDefault();
     void testRestoreInvalidFormatLeavesDbUntouched();
     void testRestoreInvalidVersionLeavesDbUntouched();
     void testRestoreTruncatedJsonLeavesDbUntouched();
@@ -85,6 +87,7 @@ private slots:
     void testRestoreRemindersPausedDuringRestore();
     void testRestoreIdAllocationAfterRestore();
     void testRestoreAsyncEventLoopAlive();
+    void testQuitOrDestructionDuringRestoreWorker();
     void testRestorePerformanceSanity();
     void testRestoreCoalescedRefresh();
     void testRestoreStudyPanelWithVanishedTopic();
@@ -399,6 +402,45 @@ void tst_ImportExport::testJsonBackupEveryColumnPresent() {
     QVERIFY(interviewObj.contains(u"outcome"_s));
 }
 
+void tst_ImportExport::testBackupCoversEveryColumn() {
+    TestDatabase testDb(u"tst_json_all_cols_schema"_s);
+    QVERIFY(testDb.open(u":memory:"_s));
+
+    populateHandBuiltDataset(testDb.db());
+
+    const QByteArray jsonBytes = ExportService::generateBackupJson(testDb.db());
+    const QJsonObject root = QJsonDocument::fromJson(jsonBytes).object();
+
+    const QMap<QString, QString> tableToJsonKey = {
+        {u"tracks"_s, u"tracks"_s},
+        {u"topics"_s, u"topics"_s},
+        {u"subtasks"_s, u"subtasks"_s},
+        {u"study_sessions"_s, u"sessions"_s},
+        {u"applications"_s, u"applications"_s},
+        {u"status_history"_s, u"statusHistory"_s},
+        {u"interviews"_s, u"interviews"_s}
+    };
+
+    for (auto it = tableToJsonKey.begin(); it != tableToJsonKey.end(); ++it) {
+        const QString& tableName = it.key();
+        const QString& jsonKey = it.value();
+
+        QVERIFY2(root.contains(jsonKey), qPrintable(u"Root missing table key: %1"_s.arg(jsonKey)));
+        const QJsonArray arr = root[jsonKey].toArray();
+        QVERIFY2(!arr.isEmpty(), qPrintable(u"Array empty for table %1"_s.arg(tableName)));
+        const QJsonObject rowObj = arr.first().toObject();
+
+        QSqlQuery q(testDb.db().connection());
+        QVERIFY(q.exec(u"PRAGMA table_info(%1);"_s.arg(tableName)));
+        while (q.next()) {
+            const QString colName = q.value(1).toString();
+            QVERIFY2(rowObj.contains(colName),
+                     qPrintable(u"Table '%1' column '%2' is missing from exported JSON in key '%3'"_s
+                                    .arg(tableName, colName, jsonKey)));
+        }
+    }
+}
+
 void tst_ImportExport::testJsonBackupAtomicWriteAndReadOnlyError() {
     ExportService svc;
     TestDatabase testDb(u"tst_json_atomic"_s);
@@ -633,6 +675,79 @@ void tst_ImportExport::testRestoreEqualitySeedDataset() {
     const auto dumpAfter = dumpDatabase(testDb.db());
     QString diff;
     QVERIFY2(compareDumps(dumpBefore, dumpAfter, &diff), qPrintable(diff));
+}
+
+void tst_ImportExport::testRoundTripEveryColumnNonDefault() {
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString dbPath = tempDir.filePath(u"non_default.sqlite"_s);
+    const QString backupPath = tempDir.filePath(u"backup_non_default.json"_s);
+    const QString safetyDir = tempDir.filePath(u"safety"_s);
+    QDir().mkpath(safetyDir);
+
+    {
+        TestDatabase testDb(u"tst_non_default_initial"_s);
+        QVERIFY(testDb.open(dbPath));
+
+        QSqlQuery q(testDb.db().connection());
+        q.exec(u"PRAGMA defer_foreign_keys=ON;"_s);
+        QVERIFY(q.exec(u"INSERT INTO tracks (id, name, color, icon, position) VALUES (10, 'Full Track', '#ABCDEF', 'code-icon', 3);"_s));
+        QVERIFY(q.exec(u"INSERT INTO topics (id, track_id, title, status, priority, target_date, notes, resources, tags, position, created_at, updated_at) "
+                       u"VALUES (20, 10, 'Full Topic', 'in_progress', 'high', '2026-11-20', 'Notes with \"quotes\" & \nnewlines\nand Ukrainian (Питання та 🚀)', '[{\"title\":\"Doc\",\"url\":\"https://example.com\"}]', 'tagA,tagB', 5, '2026-10-25T11:22:33', '2026-10-26T12:34:56');"_s));
+        QVERIFY(q.exec(u"INSERT INTO subtasks (id, topic_id, text, done, position) VALUES (30, 20, 'Subtask with non-default text', 1, 2);"_s));
+        QVERIFY(q.exec(u"INSERT INTO study_sessions (id, topic_id, session_date, minutes, note) VALUES (40, NULL, '2026-10-27', 95, 'Session note without topic (NULL FK)');"_s));
+        QVERIFY(q.exec(u"INSERT INTO applications (id, company, position, url, source, resume_version, location, work_mode, salary_min, salary_max, currency, status, applied_date, next_action, next_action_date, contact_name, contact_email, notes, created_at, updated_at) "
+                       u"VALUES (50, 'NonDefault Corp', 'Principal Architect', 'https://nondefault.com', 'Referral Network', 'v3.5', 'Kyiv Hybrid', 'hybrid', 15000, 25000, 'EUR', 'technical', '2026-10-15', 'Prepare presentation', '2026-11-02', 'Olena recruiter', 'olena@nondefault.com', 'Multi-line\nnotes with \",;\" symbols', '2026-10-15T09:10:11', '2026-10-26T18:19:20');"_s));
+        QVERIFY(q.exec(u"INSERT INTO status_history (id, application_id, from_status, to_status, changed_at, note) "
+                       u"VALUES (60, 50, 'applied', 'technical', '2026-10-20T14:15:16', 'Moved to technical assessment stage');"_s));
+        QVERIFY(q.exec(u"INSERT INTO interviews (id, application_id, start_at, duration_min, type, place, interviewer, notes, outcome) "
+                       u"VALUES (70, 50, '2026-11-05T15:30:00', 90, 'system_design', 'On-site Office 401', 'Lead Architect & VP', 'Bring whiteboard markers; review architecture', 'passed');"_s));
+    }
+
+    // Export to JSON
+    {
+        TestDatabase testDb(u"tst_non_default_export"_s);
+        QVERIFY(testDb.open(dbPath));
+        ExportService exporter;
+        const auto res = exporter.exportBackupJson(testDb.db(), backupPath);
+        QVERIFY(res.success);
+    }
+
+    // Dump before wipe
+    QList<TableDump> dumpBefore;
+    {
+        TestDatabase testDb(u"tst_non_default_before"_s);
+        QVERIFY(testDb.open(dbPath));
+        dumpBefore = dumpDatabase(testDb.db());
+    }
+
+    // Wipe database
+    {
+        TestDatabase testDb(u"tst_non_default_wipe"_s);
+        QVERIFY(testDb.open(dbPath));
+        wipeDatabase(testDb.db());
+        const auto dumpWiped = dumpDatabase(testDb.db());
+        for (const auto& table : dumpWiped) {
+            QCOMPARE(table.rows.size(), 0);
+        }
+    }
+
+    // Restore from backup
+    {
+        TestDatabase testDb(u"tst_non_default_restore"_s);
+        QVERIFY(testDb.open(dbPath));
+        const auto res = RestoreService::restoreFromFile(testDb.db(), backupPath, safetyDir);
+        QVERIFY(res.success);
+    }
+
+    // Dump after restore and assert equality
+    {
+        TestDatabase testDb(u"tst_non_default_after"_s);
+        QVERIFY(testDb.open(dbPath));
+        const auto dumpAfter = dumpDatabase(testDb.db());
+        QString diff;
+        QVERIFY2(compareDumps(dumpBefore, dumpAfter, &diff), qPrintable(diff));
+    }
 }
 
 void tst_ImportExport::testRestoreInvalidFormatLeavesDbUntouched() {
@@ -878,6 +993,66 @@ void tst_ImportExport::testRestoreAsyncEventLoopAlive() {
 
     QVERIFY(asyncResult.success);
     QVERIFY2(tickCount > 0, "Event loop did not tick during async restore!");
+}
+
+void tst_ImportExport::testQuitOrDestructionDuringRestoreWorker() {
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString dbPath = tempDir.filePath(u"quit_test.sqlite"_s);
+    const QString backupPath = tempDir.filePath(u"backup.json"_s);
+    const QString safetyDir = tempDir.filePath(u"safety"_s);
+    QDir().mkpath(safetyDir);
+
+    {
+        TestDatabase testDb(u"tst_quit_prep"_s);
+        QVERIFY(testDb.open(dbPath));
+        populateHandBuiltDataset(testDb.db());
+        ExportService exporter;
+        QVERIFY(exporter.exportBackupJson(testDb.db(), backupPath).success);
+    }
+
+    TestDatabase remDb(u"tst_quit_rem"_s);
+    QVERIFY(remDb.open(u":memory:"_s));
+    JobPrep::Data::InterviewRepository interviews(remDb.db());
+    JobPrep::Data::ApplicationRepository apps(remDb.db());
+    JobPrep::Data::ReminderLogRepository reminderLog(remDb.db());
+    class DummyNotifier : public JobPrep::Services::INotifier {
+    public:
+        bool notify(const JobPrep::Services::Notification&) override { return true; }
+    } notifier;
+    JobPrep::Services::ReminderService reminders(interviews, apps, reminderLog, notifier);
+    QVERIFY(!reminders.isPaused());
+
+    // 1. Explicit wait test: worker holds for 100ms, waitForRestore waits and finishes cleanly
+    {
+        RestoreService restoreService;
+        restoreService.setWorkerDelayHook([] {
+            QThread::msleep(100);
+        });
+
+        restoreService.restoreAsync(dbPath, backupPath, safetyDir, &reminders);
+        QVERIFY(restoreService.isRestoring());
+        QVERIFY(reminders.isPaused());
+
+        const bool finished = restoreService.waitForRestore(3000);
+        QVERIFY(finished);
+        QVERIFY(!restoreService.isRestoring());
+        QVERIFY(!reminders.isPaused());
+    }
+
+    // 2. Destruction test: RestoreService destroyed while worker thread is active
+    {
+        RestoreService restoreService;
+        restoreService.setWorkerDelayHook([] {
+            QThread::msleep(80);
+        });
+        restoreService.restoreAsync(dbPath, backupPath, safetyDir, &reminders);
+        QVERIFY(restoreService.isRestoring());
+        QVERIFY(reminders.isPaused());
+        // Destructor of restoreService executes waitForRestore(5000), cleanly waiting without crash
+    }
+    // Verify reminder service is safely resumed upon destruction
+    QVERIFY(!reminders.isPaused());
 }
 
 void tst_ImportExport::testRestorePerformanceSanity() {

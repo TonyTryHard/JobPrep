@@ -222,8 +222,8 @@ QByteArray ExportService::foldIcsLine(const QString& line) {
     }
 
     QByteArray result;
-    int lineOctets = 0;
-    int i = 0;
+    qsizetype lineOctets = 0;
+    qsizetype i = 0;
     while (i < line.size()) {
         QString chStr;
         if (line[i].isHighSurrogate() && i + 1 < line.size() && line[i + 1].isLowSurrogate()) {

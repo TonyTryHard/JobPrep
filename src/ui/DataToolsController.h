@@ -95,6 +95,7 @@ public:
     void setReminderService(Services::ReminderService* reminderService);
 
     // Operations (C8)
+    bool isRestoring() const;
     void exportCsv(QWidget* parent = nullptr);
     void exportIcs(QWidget* parent = nullptr);
     void backupJson(QWidget* parent = nullptr);
