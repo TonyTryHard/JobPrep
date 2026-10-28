@@ -669,7 +669,7 @@ void tst_PageJobs::testInterviewTabDisabledUntilSaved() {
     QVERIFY(!addBtn->isEnabled());
     QVERIFY(addBtn->toolTip().contains(u"Save"_s));
 
-    const int before = m_jobsCtx->interviews().all().size();
+    const qsizetype before = m_jobsCtx->interviews().all().size();
     addBtn->click();
     QCOMPARE(m_jobsCtx->interviews().all().size(), before);
     QCOMPARE(m_jobsCtx->applications().count(), 0);

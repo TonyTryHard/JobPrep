@@ -63,7 +63,7 @@ void tst_SeedService::cleanup() {
 
 int tst_SeedService::topicCountForTrack(const QString& trackName) {
     const auto id = m_tracks->idByName(trackName);
-    return id.has_value() ? m_topics->byTrack(*id).size() : 0;
+    return id.has_value() ? static_cast<int>(m_topics->byTrack(*id).size()) : 0;
 }
 
 void tst_SeedService::loadsTracksTopicsAndSubtasks() {
@@ -114,7 +114,7 @@ void tst_SeedService::countsMatchSeedFile() {
     for (const QJsonValue& trackValue : trackArray) {
         const QJsonObject trackObject = trackValue.toObject();
         const QJsonArray topicArray = trackObject.value(u"topics"_s).toArray();
-        expectedTopics += topicArray.size();
+        expectedTopics += static_cast<int>(topicArray.size());
 
         const auto trackId = m_tracks->idByName(trackObject.value(u"name"_s).toString());
         QVERIFY(trackId.has_value());
@@ -124,7 +124,7 @@ void tst_SeedService::countsMatchSeedFile() {
         for (const QJsonValue& topicValue : topicArray) {
             const QJsonObject topicObject = topicValue.toObject();
             const auto subtaskArray = topicObject.value(u"subtasks"_s).toArray();
-            expectedSubtasks += subtaskArray.size();
+            expectedSubtasks += static_cast<int>(subtaskArray.size());
 
             const QString title = topicObject.value(u"title"_s).toString();
             const auto found = std::find_if(stored.cbegin(), stored.cend(),

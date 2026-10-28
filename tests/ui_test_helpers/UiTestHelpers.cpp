@@ -134,7 +134,7 @@ bool sendKeySequence(QWidget* window, const QKeySequence& sequence) {
     if (sequence.isEmpty()) return false;
 
     for (int i = 0; i < sequence.count(); ++i) {
-        const QKeyCombination comb = sequence[i];
+        const QKeyCombination comb = sequence[static_cast<uint>(i)];
         if (!sendKeyClick(window, comb.key(), comb.keyboardModifiers())) {
             return false;
         }

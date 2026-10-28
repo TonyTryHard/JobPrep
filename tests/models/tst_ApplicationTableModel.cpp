@@ -169,11 +169,11 @@ void tst_ApplicationTableModel::testFallsBackToNextActionTextAndDate() {
     QCOMPARE(model.rowCount(), cases.size());
     // `all()` is ordered by updated_at desc, so rows are found by company name.
     const auto nextStepOf = [&model](const QString& company) {
-        for (int row = 0; row < model.rowCount(); ++row) {
+        for (int r = 0; r < model.rowCount(); ++r) {
             const QModelIndex name =
-                model.index(row, JobPrep::Models::ApplicationTableModel::CompanyColumn);
+                model.index(r, JobPrep::Models::ApplicationTableModel::CompanyColumn);
             if (name.data(Qt::DisplayRole).toString() != company) continue;
-            return model.index(row, JobPrep::Models::ApplicationTableModel::NextStepColumn)
+            return model.index(r, JobPrep::Models::ApplicationTableModel::NextStepColumn)
                 .data(Qt::DisplayRole)
                 .toString();
         }
