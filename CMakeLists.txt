@@ -155,6 +155,8 @@ add_library(jobprep_core STATIC
     src/ui/FormatHelper.cpp
     src/ui/DashboardController.h
     src/ui/DashboardController.cpp
+    src/ui/DataToolsController.h
+    src/ui/DataToolsController.cpp
     src/ui/widgets/EmptyState.h
     src/ui/widgets/EmptyState.cpp
     src/ui/widgets/ChipBar.h

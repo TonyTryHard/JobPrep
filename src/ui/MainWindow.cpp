@@ -20,6 +20,7 @@
 #include "services/INotifier.h"
 #include "services/SettingsService.h"
 #include "ui/DashboardController.h"
+#include "ui/DataToolsController.h"
 #include "ui/FormatHelper.h"
 #include "ui/PageBase.h"
 #include "ui/Sidebar.h"
@@ -116,6 +117,12 @@ void MainWindow::flushStateAndEdits() {
 
 void MainWindow::prepareForShutdown() {
     flushStateAndEdits();
+}
+
+void MainWindow::setReminderService(Services::ReminderService* service) {
+    if (m_dataToolsController) {
+        m_dataToolsController->setReminderService(service);
+    }
 }
 
 void MainWindow::quitApplication() {
@@ -220,7 +227,15 @@ void MainWindow::setupUi() {
         m_ctx.agendaService(), m_ctx.settings(), m_ctx.themeManager(), m_pageStack);
     m_pages.append(m_calendarPage);
     m_calendarIndex = static_cast<int>(m_pages.size()) - 1;
-    m_settingsPage = new Pages::SettingsPage(m_ctx.settings(), m_ctx.themeManager(), m_trayAvailable, m_pageStack);
+    m_dataToolsController = std::make_unique<DataToolsController>(
+        m_ctx.database(), m_ctx.exportService(), m_ctx.restoreService(), m_ctx.seedService(),
+        m_ctx.tracks(), m_ctx.topics(), m_ctx.sessions(), m_ctx.applications(), m_ctx.interviews(),
+        nullptr, this);
+    m_dataToolsController->setFlushCallback([this] { flushStateAndEdits(); });
+    m_dataToolsController->setIsEmptyCallback([this] { return m_ctx.isDataEmpty(); });
+
+    m_settingsPage = new Pages::SettingsPage(m_ctx.settings(), m_ctx.themeManager(), m_trayAvailable,
+                                             m_pageStack, m_dataToolsController.get());
     m_pages.append(m_settingsPage);
     m_settingsIndex = static_cast<int>(m_pages.size()) - 1;
 

@@ -71,6 +71,7 @@ int main(int argc, char* argv[]) {
         trayAvailable
     );
     reminderCoordinator.start();
+    mainWindow.setReminderService(&reminderCoordinator.service());
 
     return app.exec();
 }

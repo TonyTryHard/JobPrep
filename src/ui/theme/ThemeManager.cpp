@@ -75,7 +75,11 @@ bool ThemeManager::detectSystemDark() const {
 
 void ThemeManager::applyTheme() {
     if (QApplication::style()->objectName().toLower() != u"fusion"_s) {
-        QApplication::setStyle(QStyleFactory::create(u"Fusion"_s));
+        auto* style = QStyleFactory::create(u"Fusion"_s);
+        if (style) {
+            style->setObjectName(u"fusion"_s);
+            QApplication::setStyle(style);
+        }
     }
 
     const ColorTokens tokens = currentTokens();

@@ -4,12 +4,17 @@
 
 class QCheckBox;
 class QComboBox;
+class QFrame;
 class QListWidget;
 class QPushButton;
 class QSpinBox;
 
 namespace JobPrep::Services {
 class SettingsService;
+}
+
+namespace JobPrep::Ui {
+class DataToolsController;
 }
 
 namespace JobPrep::Ui::Theme {
@@ -20,7 +25,7 @@ namespace JobPrep::Ui::Pages {
 
 class GoalSpinBox;
 
-/// Application settings page with theme, study goal, and preference controls.
+/// Application settings page with theme, study goal, preferences, and data tools.
 class SettingsPage : public PageBase {
     Q_OBJECT
 
@@ -28,12 +33,17 @@ public:
     explicit SettingsPage(Services::SettingsService& settings,
                           Theme::ThemeManager& themeMgr,
                           bool trayAvailable = false,
-                          QWidget* parent = nullptr);
+                          QWidget* parent = nullptr,
+                          DataToolsController* dataTools = nullptr);
     ~SettingsPage() override = default;
 
     /// Updates system tray availability and updates close-to-tray checkbox accordingly.
     void setTrayAvailable(bool available);
     bool isTrayAvailable() const { return m_trayAvailable; }
+
+    /// Injects or updates the data tools controller for export, backup and restore actions.
+    void setDataToolsController(DataToolsController* controller);
+    DataToolsController* dataToolsController() const { return m_dataTools; }
 
     // Test accessors
     QComboBox* themeCombo() const { return m_themeCombo; }
@@ -48,6 +58,15 @@ public:
     QPushButton* removeLeadButton() const { return m_removeLeadBtn; }
     QPushButton* resetLeadButton() const { return m_resetLeadBtn; }
 
+    // Data tools accessors (C8)
+    QFrame* dataCard() const { return m_dataCard; }
+    QPushButton* exportCsvButton() const { return m_exportCsvBtn; }
+    QPushButton* exportIcsButton() const { return m_exportIcsBtn; }
+    QPushButton* backupJsonButton() const { return m_backupJsonBtn; }
+    QPushButton* restoreJsonButton() const { return m_restoreJsonBtn; }
+    QPushButton* loadSampleButton() const { return m_loadSampleBtn; }
+    QPushButton* openFolderButton() const { return m_openFolderBtn; }
+
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
@@ -61,6 +80,7 @@ private:
     Theme::ThemeManager& m_themeMgr;
     bool m_trayAvailable{false};
     bool m_syncingTheme{false};
+    DataToolsController* m_dataTools{nullptr};
 
     QComboBox* m_themeCombo{nullptr};
     QComboBox* m_accentCombo{nullptr};
@@ -74,6 +94,15 @@ private:
     QPushButton* m_addLeadBtn{nullptr};
     QPushButton* m_removeLeadBtn{nullptr};
     QPushButton* m_resetLeadBtn{nullptr};
+
+    // Data section controls (C8)
+    QFrame* m_dataCard{nullptr};
+    QPushButton* m_exportCsvBtn{nullptr};
+    QPushButton* m_exportIcsBtn{nullptr};
+    QPushButton* m_backupJsonBtn{nullptr};
+    QPushButton* m_restoreJsonBtn{nullptr};
+    QPushButton* m_loadSampleBtn{nullptr};
+    QPushButton* m_openFolderBtn{nullptr};
 };
 
 }  // namespace JobPrep::Ui::Pages

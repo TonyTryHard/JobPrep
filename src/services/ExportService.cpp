@@ -93,6 +93,81 @@ bool ExportService::exportToFile(const QList<ExportRow>& rows,
     return true;
 }
 
+ExportResult ExportService::exportApplicationsCsv(const QList<Domain::JobApplication>& apps,
+                                                 const QString& filePath) const {
+    QList<ExportRow> rows;
+    rows.reserve(apps.size());
+    for (const auto& app : apps) {
+        ExportRow r;
+        r.company = app.company;
+        r.position = app.position;
+        r.statusLabel = Domain::EnumStrings::toString(app.status);
+        r.applied = app.appliedDate.has_value() ? app.appliedDate->toString(Qt::ISODate) : QString();
+        r.nextStepText = app.nextAction;
+        r.salaryText = app.salaryMin.has_value() && app.salaryMax.has_value()
+                           ? u"%1 - %2 %3"_s.arg(*app.salaryMin).arg(*app.salaryMax).arg(app.currency)
+                           : (app.salaryMin.has_value() ? u"%1 %2"_s.arg(*app.salaryMin).arg(app.currency) : QString());
+        r.source = app.source;
+        r.updated = app.updatedAt.toString(Qt::ISODate);
+        r.url = app.url;
+        r.resumeVersion = app.resumeVersion;
+        r.location = app.location;
+        r.workModeLabel = Domain::EnumStrings::toString(app.workMode);
+        r.salaryMin = app.salaryMin.has_value() ? QString::number(*app.salaryMin) : QString();
+        r.salaryMax = app.salaryMax.has_value() ? QString::number(*app.salaryMax) : QString();
+        r.currency = app.currency;
+        r.nextAction = app.nextAction;
+        r.nextActionDate = app.nextActionDate.has_value() ? app.nextActionDate->toString(Qt::ISODate) : QString();
+        r.contactName = app.contactName;
+        r.contactEmail = app.contactEmail;
+        r.notes = app.notes;
+        r.createdAt = app.createdAt.toString(Qt::ISODate);
+        r.updatedAt = app.updatedAt.toString(Qt::ISODate);
+        rows.append(r);
+    }
+
+    QString error;
+    if (!exportToFile(rows, headers(), filePath, &error)) {
+        return {false, ExportErrorKind::CannotOpenFile, error};
+    }
+    return {true, ExportErrorKind::None, {}};
+}
+
+ExportResult ExportService::exportApplicationsCsv(Data::Database& db,
+                                                 const QString& filePath) const {
+    QSqlQuery q(db.connection());
+    if (!q.exec(u"SELECT id, company, position, url, source, resume_version, location, work_mode, salary_min, salary_max, currency, status, applied_date, next_action, next_action_date, contact_name, contact_email, notes, created_at, updated_at FROM applications ORDER BY id ASC;"_s)) {
+        return {false, ExportErrorKind::DatabaseError, q.lastError().text()};
+    }
+
+    QList<Domain::JobApplication> apps;
+    while (q.next()) {
+        Domain::JobApplication a;
+        a.id = q.value(0).toInt();
+        a.company = q.value(1).toString();
+        a.position = q.value(2).toString();
+        a.url = q.value(3).toString();
+        a.source = q.value(4).toString();
+        a.resumeVersion = q.value(5).toString();
+        a.location = q.value(6).toString();
+        a.workMode = Domain::EnumStrings::workModeFromString(q.value(7).toString()).value_or(Domain::WorkMode::Remote);
+        if (!q.value(8).isNull()) a.salaryMin = q.value(8).toInt();
+        if (!q.value(9).isNull()) a.salaryMax = q.value(9).toInt();
+        a.currency = q.value(10).toString();
+        a.status = Domain::EnumStrings::applicationStatusFromString(q.value(11).toString()).value_or(Domain::ApplicationStatus::Applied);
+        if (!q.value(12).isNull() && !q.value(12).toString().isEmpty()) a.appliedDate = QDate::fromString(q.value(12).toString(), Qt::ISODate);
+        a.nextAction = q.value(13).toString();
+        if (!q.value(14).isNull() && !q.value(14).toString().isEmpty()) a.nextActionDate = QDate::fromString(q.value(14).toString(), Qt::ISODate);
+        a.contactName = q.value(15).toString();
+        a.contactEmail = q.value(16).toString();
+        a.notes = q.value(17).toString();
+        a.createdAt = QDateTime::fromString(q.value(18).toString(), Qt::ISODate);
+        a.updatedAt = QDateTime::fromString(q.value(19).toString(), Qt::ISODate);
+        apps.append(a);
+    }
+    return exportApplicationsCsv(apps, filePath);
+}
+
 QString ExportService::interviewTypeLabel(Domain::InterviewType type) {
     switch (type) {
         case Domain::InterviewType::Hr:

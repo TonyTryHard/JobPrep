@@ -75,6 +75,14 @@ public:
                       const QString& filePath,
                       QString* error = nullptr) const;
 
+    /// Exports applications from database to a CSV file atomically with UTF-8 BOM.
+    ExportResult exportApplicationsCsv(Data::Database& db,
+                                       const QString& filePath) const;
+
+    /// Exports in-memory application list to a CSV file atomically with UTF-8 BOM.
+    ExportResult exportApplicationsCsv(const QList<Domain::JobApplication>& apps,
+                                       const QString& filePath) const;
+
     // --- ICS Export (SPEC §10, Amendment C5) ---
     /// UI-independent mapping from domain enum to display string for ICS summary.
     static QString interviewTypeLabel(Domain::InterviewType type);

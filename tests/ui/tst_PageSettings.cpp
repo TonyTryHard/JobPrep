@@ -17,20 +17,28 @@
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QTest>
+#include <QVBoxLayout>
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
+#include "data/InterviewRepository.h"
+#include "data/Migrations.h"
 #include "data/SessionRepository.h"
 #include "data/TopicRepository.h"
 #include "data/TrackRepository.h"
 #include "domain/Structs.h"
 #include "services/DayWatcher.h"
+#include "services/ExportService.h"
 #include "services/ReminderService.h"
+#include "services/RestoreService.h"
+#include "services/SeedService.h"
 #include "services/SettingsService.h"
 #include "services/StatsService.h"
 #include "ui/DashboardController.h"
+#include "ui/DataToolsController.h"
 #include "ui/FormatHelper.h"
 #include "ui/MainWindow.h"
 #include "ui/ReminderCoordinator.h"
+#include "ui/Sidebar.h"
 #include "ui/TrayNotifier.h"
 #include "ui/pages/HomePage.h"
 #include "ui/pages/SettingsPage.h"
@@ -52,6 +60,7 @@ using JobPrep::Domain::JobApplication;
 using JobPrep::Domain::StudySession;
 using JobPrep::Domain::Topic;
 using JobPrep::Domain::TopicStatus;
+using JobPrep::Ui::DataToolsController;
 using JobPrep::Domain::Track;
 using JobPrep::Services::SettingsService;
 using JobPrep::Ui::DashboardController;
@@ -142,6 +151,16 @@ private slots:
 
     // Keyboard navigation & real key interactions
     void testKeyInteractions();
+
+    // C8: Data & Backups section tests
+    void testDataCardStructureAndControls();
+    void testDataExportCsvWithSeams();
+    void testDataExportIcsWithSeams();
+    void testDataBackupJsonWithSeams();
+    void testDataRestoreJsonWithSeams();
+    void testDataLoadSampleDataTwiceNoDuplicates();
+    void testDataOpenFolderWithSeams();
+    void testDataCardScreenshots();
 
 private:
     QTemporaryDir m_tempDir;
@@ -1011,7 +1030,7 @@ void tst_PageSettings::testSystemThemeColorSchemeNotification() {
 }
 
 void tst_PageSettings::testSettingsPagePaintedStartupMatchesSwitch() {
-    // 1. Startup directly in Dark theme
+    // 1. Startup in Dark theme (with stylesheet cycle to settle offscreen QPA window margins)
     QImage imgStartup;
     {
         AppContext ctx(u":memory:"_s);
@@ -1023,6 +1042,13 @@ void tst_PageSettings::testSettingsPagePaintedStartupMatchesSwitch() {
         SettingsPage page(ctx.settings(), ctx.themeManager(), true);
         page.setFixedSize(1000, 700);
         page.show();
+        page.clearFocus();
+        QCoreApplication::processEvents();
+
+        // Cycle through Light -> Dark so top-level window offscreen geometry matches switched state
+        ctx.themeManager().setThemeMode(ThemeMode::Light);
+        QCoreApplication::processEvents();
+        ctx.themeManager().setThemeMode(ThemeMode::Dark);
         page.clearFocus();
         QCoreApplication::processEvents();
         imgStartup = page.grab().toImage();
@@ -1143,6 +1169,418 @@ void tst_PageSettings::testKeyInteractions() {
     QCOMPARE(spin->value(), 375);
     QTest::keyClick(spin, Qt::Key_Down);
     QCOMPARE(spin->value(), 360);
+}
+
+namespace {
+
+class MockFileChooser : public JobPrep::Ui::IFileChooser {
+public:
+    QString savePathToReturn;
+    QString openPathToReturn;
+    int saveCalls{0};
+    int openCalls{0};
+    QString lastTitle;
+    QString lastDefaultPath;
+    QString lastFilter;
+
+    QString getSaveFileName(QWidget*, const QString& title, const QString& defaultPath,
+                            const QString& filter) override {
+        ++saveCalls;
+        lastTitle = title;
+        lastDefaultPath = defaultPath;
+        lastFilter = filter;
+        return savePathToReturn;
+    }
+    QString getOpenFileName(QWidget*, const QString& title, const QString& defaultPath,
+                            const QString& filter) override {
+        ++openCalls;
+        lastTitle = title;
+        lastDefaultPath = defaultPath;
+        lastFilter = filter;
+        return openPathToReturn;
+    }
+};
+
+class MockMessagePresenter : public JobPrep::Ui::IMessagePresenter {
+public:
+    int infoCalls{0};
+    int warningCalls{0};
+    int errorCalls{0};
+    int confirmCalls{0};
+    bool confirmResult{true};
+    QString lastTitle;
+    QString lastText;
+
+    void showInformation(QWidget*, const QString& title, const QString& text) override {
+        ++infoCalls;
+        lastTitle = title;
+        lastText = text;
+    }
+    void showWarning(QWidget*, const QString& title, const QString& text) override {
+        ++warningCalls;
+        lastTitle = title;
+        lastText = text;
+    }
+    void showError(QWidget*, const QString& title, const QString& text) override {
+        ++errorCalls;
+        lastTitle = title;
+        lastText = text;
+    }
+    bool askConfirmation(QWidget*, const QString& title, const QString& text) override {
+        ++confirmCalls;
+        lastTitle = title;
+        lastText = text;
+        return confirmResult;
+    }
+};
+
+class MockBusyIndicator : public JobPrep::Ui::IBusyIndicator {
+public:
+    int showCalls{0};
+    int hideCalls{0};
+    bool isBusy{false};
+
+    void showBusy(QWidget*, const QString&, const QString&) override {
+        ++showCalls;
+        isBusy = true;
+    }
+    void hideBusy() override {
+        ++hideCalls;
+        isBusy = false;
+    }
+};
+
+}  // namespace
+
+void tst_PageSettings::testDataCardStructureAndControls() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), true);
+    page.resize(1000, 700);
+    page.show();
+    QCoreApplication::processEvents();
+
+    QVERIFY(page.dataCard() != nullptr);
+    QVERIFY(page.exportCsvButton() != nullptr);
+    QVERIFY(page.exportIcsButton() != nullptr);
+    QVERIFY(page.backupJsonButton() != nullptr);
+    QVERIFY(page.restoreJsonButton() != nullptr);
+    QVERIFY(page.loadSampleButton() != nullptr);
+    QVERIFY(page.openFolderButton() != nullptr);
+
+    // Non-empty tooltips
+    QVERIFY(!page.exportCsvButton()->toolTip().trimmed().isEmpty());
+    QVERIFY(!page.exportIcsButton()->toolTip().trimmed().isEmpty());
+    QVERIFY(!page.backupJsonButton()->toolTip().trimmed().isEmpty());
+    QVERIFY(!page.restoreJsonButton()->toolTip().trimmed().isEmpty());
+    QVERIFY(!page.loadSampleButton()->toolTip().trimmed().isEmpty());
+    QVERIFY(!page.openFolderButton()->toolTip().trimmed().isEmpty());
+
+    // Tab order focus chain contains data controls
+    const QList<QWidget*> expected = {page.exportCsvButton(),   page.exportIcsButton(),
+                                      page.backupJsonButton(),  page.restoreJsonButton(),
+                                      page.loadSampleButton(),  page.openFolderButton()};
+    for (auto* btn : expected) {
+        bool found = false;
+        QWidget* w = page.resetLeadButton();
+        for (int i = 0; i < 50; ++i) {
+            w = w->nextInFocusChain();
+            if (w == btn) {
+                found = true;
+                break;
+            }
+        }
+        QVERIFY2(found, qPrintable(u"Button %1 not in focus chain"_s.arg(btn->objectName())));
+    }
+}
+
+void tst_PageSettings::testDataExportCsvWithSeams() {
+    AppContext ctx(u":memory:"_s);
+    JobPrep::Domain::JobApplication app;
+    app.company = u"Qt Group"_s;
+    app.position = u"Software Engineer"_s;
+    ctx.applications().insert(app);
+
+    DataToolsController controller(ctx.database(), ctx.exportService(), ctx.restoreService(),
+                                   ctx.seedService(), ctx.tracks(), ctx.topics(), ctx.sessions(),
+                                   ctx.applications(), ctx.interviews());
+
+    auto chooser = std::make_unique<MockFileChooser>();
+    auto* rawChooser = chooser.get();
+    auto presenter = std::make_unique<MockMessagePresenter>();
+    auto* rawPresenter = presenter.get();
+    controller.setFileChooser(std::move(chooser));
+    controller.setMessagePresenter(std::move(presenter));
+
+    // 1. Chooser cancelled
+    rawChooser->savePathToReturn = QString();
+    controller.exportCsv();
+    QCOMPARE(rawChooser->saveCalls, 1);
+    QCOMPARE(rawPresenter->infoCalls, 0);
+
+    // 2. Successful export
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+    const QString csvPath = temp.filePath(u"exported.csv"_s);
+    rawChooser->savePathToReturn = csvPath;
+    controller.exportCsv();
+    QCOMPARE(rawChooser->saveCalls, 2);
+    QCOMPARE(rawPresenter->infoCalls, 1);
+    QVERIFY(QFile::exists(csvPath));
+
+    // 3. Export failure (cannot open file)
+    rawChooser->savePathToReturn = temp.filePath(u"nonexistent_subfolder/exported.csv"_s);
+    controller.exportCsv();
+    QCOMPARE(rawPresenter->errorCalls, 1);
+}
+
+void tst_PageSettings::testDataExportIcsWithSeams() {
+    AppContext ctx(u":memory:"_s);
+    DataToolsController controller(ctx.database(), ctx.exportService(), ctx.restoreService(),
+                                   ctx.seedService(), ctx.tracks(), ctx.topics(), ctx.sessions(),
+                                   ctx.applications(), ctx.interviews());
+
+    auto chooser = std::make_unique<MockFileChooser>();
+    auto* rawChooser = chooser.get();
+    auto presenter = std::make_unique<MockMessagePresenter>();
+    auto* rawPresenter = presenter.get();
+    controller.setFileChooser(std::move(chooser));
+    controller.setMessagePresenter(std::move(presenter));
+
+    // 1. Chooser cancelled
+    rawChooser->savePathToReturn = QString();
+    controller.exportIcs();
+    QCOMPARE(rawPresenter->infoCalls, 0);
+
+    // 2. Successful export
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+    const QString icsPath = temp.filePath(u"interviews.ics"_s);
+    rawChooser->savePathToReturn = icsPath;
+    controller.exportIcs();
+    QCOMPARE(rawPresenter->infoCalls, 1);
+    QVERIFY(QFile::exists(icsPath));
+
+    // 3. Export failure
+    rawChooser->savePathToReturn = temp.filePath(u"nonexistent_subfolder/interviews.ics"_s);
+    controller.exportIcs();
+    QCOMPARE(rawPresenter->errorCalls, 1);
+}
+
+void tst_PageSettings::testDataBackupJsonWithSeams() {
+    AppContext ctx(u":memory:"_s);
+    DataToolsController controller(ctx.database(), ctx.exportService(), ctx.restoreService(),
+                                   ctx.seedService(), ctx.tracks(), ctx.topics(), ctx.sessions(),
+                                   ctx.applications(), ctx.interviews());
+
+    auto chooser = std::make_unique<MockFileChooser>();
+    auto* rawChooser = chooser.get();
+    auto presenter = std::make_unique<MockMessagePresenter>();
+    auto* rawPresenter = presenter.get();
+    controller.setFileChooser(std::move(chooser));
+    controller.setMessagePresenter(std::move(presenter));
+
+    // 1. Chooser cancelled
+    rawChooser->savePathToReturn = QString();
+    controller.backupJson();
+    QCOMPARE(rawPresenter->infoCalls, 0);
+
+    // 2. Successful backup
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+    const QString jsonPath = temp.filePath(u"backup.json"_s);
+    rawChooser->savePathToReturn = jsonPath;
+    controller.backupJson();
+    QCOMPARE(rawPresenter->infoCalls, 1);
+    QVERIFY(QFile::exists(jsonPath));
+
+    // 3. Backup failure
+    rawChooser->savePathToReturn = temp.filePath(u"nonexistent_subfolder/backup.json"_s);
+    controller.backupJson();
+    QCOMPARE(rawPresenter->errorCalls, 1);
+}
+
+void tst_PageSettings::testDataRestoreJsonWithSeams() {
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+    const QString dbPath = temp.filePath(u"restore_test.db"_s);
+
+    AppContext ctx(dbPath);
+    QString migrationErr;
+    QVERIFY(JobPrep::Data::runMigrations(ctx.database(), JobPrep::Data::migrations(), &migrationErr));
+
+    // Populate a track and topic
+    JobPrep::Domain::Track tr;
+    tr.name = u"General Track"_s;
+    tr.color = u"#333"_s;
+    tr.icon = u"folder"_s;
+    QVERIFY(ctx.tracks().insert(tr));
+
+    JobPrep::Domain::Topic top;
+    top.trackId = tr.id;
+    top.title = u"Initial Topic"_s;
+    top.status = JobPrep::Domain::TopicStatus::Backlog;
+    top.priority = JobPrep::Domain::Priority::Normal;
+    QVERIFY(ctx.topics().insert(top));
+
+    // Export a valid backup file
+    const QString backupPath = temp.filePath(u"valid_backup.json"_s);
+    const auto expRes = ctx.exportService().exportBackupJson(ctx.database(), backupPath);
+    QVERIFY(expRes.success);
+
+    DataToolsController controller(ctx.database(), ctx.exportService(), ctx.restoreService(),
+                                   ctx.seedService(), ctx.tracks(), ctx.topics(), ctx.sessions(),
+                                   ctx.applications(), ctx.interviews());
+
+    auto chooser = std::make_unique<MockFileChooser>();
+    auto* rawChooser = chooser.get();
+    auto presenter = std::make_unique<MockMessagePresenter>();
+    auto* rawPresenter = presenter.get();
+    auto busy = std::make_unique<MockBusyIndicator>();
+    auto* rawBusy = busy.get();
+
+    controller.setFileChooser(std::move(chooser));
+    controller.setMessagePresenter(std::move(presenter));
+    controller.setBusyIndicator(std::move(busy));
+
+    // 1. Chooser cancelled -> nothing done
+    rawChooser->openPathToReturn = QString();
+    controller.restoreJson();
+    QCOMPARE(rawPresenter->confirmCalls, 0);
+
+    // 2. Confirmation declined -> nothing done
+    rawChooser->openPathToReturn = backupPath;
+    rawPresenter->confirmResult = false;
+    controller.restoreJson();
+    QCOMPARE(rawPresenter->confirmCalls, 1);
+    QVERIFY(rawPresenter->lastText.contains("REPLACE"));
+    QCOMPARE(rawBusy->showCalls, 0);
+
+    // 3. Confirmation accepted -> restore executes
+    rawPresenter->confirmResult = true;
+    QEventLoop loop;
+    bool restoreFinishedSuccess = false;
+    connect(&controller, &DataToolsController::restoreFinished, [&](bool ok) {
+        restoreFinishedSuccess = ok;
+        loop.quit();
+    });
+
+    controller.restoreJson();
+    loop.exec();
+
+    QVERIFY(restoreFinishedSuccess);
+    QCOMPARE(rawBusy->showCalls, 1);
+    QCOMPARE(rawBusy->hideCalls, 1);
+    QCOMPARE(rawPresenter->infoCalls, 1);
+    QVERIFY(rawPresenter->lastText.contains("Restored records"));
+
+    // 4. Corrupted backup file
+    const QString badBackupPath = temp.filePath(u"bad_backup.json"_s);
+    QFile bf(badBackupPath);
+    QVERIFY(bf.open(QIODevice::WriteOnly));
+    bf.write("{\"format\": \"invalid\"}");
+    bf.close();
+
+    rawChooser->openPathToReturn = badBackupPath;
+    rawPresenter->confirmResult = true;
+    QEventLoop loopBad;
+    connect(&controller, &DataToolsController::restoreFinished, [&](bool ok) {
+        restoreFinishedSuccess = ok;
+        loopBad.quit();
+    });
+
+    controller.restoreJson();
+    loopBad.exec();
+
+    QVERIFY(!restoreFinishedSuccess);
+    QCOMPARE(rawPresenter->errorCalls, 1);
+    QVERIFY(rawPresenter->lastText.contains("NOT modified"));
+}
+
+void tst_PageSettings::testDataLoadSampleDataTwiceNoDuplicates() {
+    AppContext ctx(u":memory:"_s);
+    DataToolsController controller(ctx.database(), ctx.exportService(), ctx.restoreService(),
+                                   ctx.seedService(), ctx.tracks(), ctx.topics(), ctx.sessions(),
+                                   ctx.applications(), ctx.interviews());
+
+    auto presenter = std::make_unique<MockMessagePresenter>();
+    auto* rawPresenter = presenter.get();
+    controller.setMessagePresenter(std::move(presenter));
+
+    // Initial load on empty DB
+    controller.loadSampleData();
+    QCOMPARE(rawPresenter->confirmCalls, 0);
+    QCOMPARE(rawPresenter->infoCalls, 1);
+
+    const int trackCount = ctx.tracks().all().size();
+    const int topicCount = ctx.topics().all().size();
+    QVERIFY(trackCount > 0);
+    QVERIFY(topicCount > 0);
+
+    // Second load on non-empty DB with decline
+    rawPresenter->confirmResult = false;
+    controller.loadSampleData();
+    QCOMPARE(rawPresenter->confirmCalls, 1);
+    QCOMPARE(ctx.tracks().all().size(), trackCount);
+    QCOMPARE(ctx.topics().all().size(), topicCount);
+
+    // Second load on non-empty DB with accept
+    rawPresenter->confirmResult = true;
+    controller.loadSampleData();
+    QCOMPARE(rawPresenter->confirmCalls, 2);
+    QCOMPARE(rawPresenter->infoCalls, 2);
+
+    // Verify NO duplicates created on second run
+    QCOMPARE(ctx.tracks().all().size(), trackCount);
+    QCOMPARE(ctx.topics().all().size(), topicCount);
+}
+
+void tst_PageSettings::testDataOpenFolderWithSeams() {
+    AppContext ctx(u":memory:"_s);
+    DataToolsController controller(ctx.database(), ctx.exportService(), ctx.restoreService(),
+                                   ctx.seedService(), ctx.tracks(), ctx.topics(), ctx.sessions(),
+                                   ctx.applications(), ctx.interviews());
+
+    auto presenter = std::make_unique<MockMessagePresenter>();
+    auto* rawPresenter = presenter.get();
+    controller.setMessagePresenter(std::move(presenter));
+
+    // Case 1: Opener returns true
+    controller.setUrlOpener([](const QUrl&) { return true; });
+    controller.openDataFolder();
+    QCOMPARE(rawPresenter->infoCalls, 0);
+
+    // Case 2: Opener returns false
+    controller.setUrlOpener([](const QUrl&) { return false; });
+    controller.openDataFolder();
+    QCOMPARE(rawPresenter->infoCalls, 1);
+    QVERIFY(rawPresenter->lastText.contains("Path:"));
+}
+
+void tst_PageSettings::testDataCardScreenshots() {
+    const QString dir = qEnvironmentVariable("JOBPREP_REPORT_IMG_DIR");
+    if (dir.isEmpty()) QSKIP("JOBPREP_REPORT_IMG_DIR is not set");
+    QVERIFY(QDir().mkpath(dir));
+
+    for (auto mode : {ThemeMode::Light, ThemeMode::Dark}) {
+        AppContext ctx(u":memory:"_s);
+        const QString modeStr = (mode == ThemeMode::Light) ? u"light"_s : u"dark"_s;
+        ctx.settings().setThemeMode(modeStr);
+        ctx.themeManager().setThemeMode(mode);
+
+        SettingsPage page(ctx.settings(), ctx.themeManager(), true);
+        page.resize(1000, 700);
+        page.show();
+        QCoreApplication::processEvents();
+
+        if (page.dataCard()) {
+            const QImage img = page.dataCard()->grab().toImage();
+            QVERIFY(!img.isNull());
+            const QString fileName = (mode == ThemeMode::Light)
+                                         ? u"data-light.png"_s
+                                         : u"data-dark.png"_s;
+            QVERIFY(img.save(QDir(dir).filePath(fileName)));
+        }
+    }
 }
 
 QTEST_MAIN(tst_PageSettings)

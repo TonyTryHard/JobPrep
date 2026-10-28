@@ -16,6 +16,7 @@ class AppContext;
 
 namespace JobPrep::Services {
 struct Notification;
+class ReminderService;
 }
 
 namespace JobPrep::Ui {
@@ -35,6 +36,7 @@ class StudyPage;
 }  // namespace Pages
 
 class DashboardController;
+class DataToolsController;
 
 /// Main application window shell for JobPrep.
 class MainWindow : public QMainWindow {
@@ -46,6 +48,7 @@ public:
 
     Sidebar* sidebar() const { return m_sidebar; }
     QStackedWidget* pageStack() const { return m_pageStack; }
+    DataToolsController* dataToolsController() const { return m_dataToolsController.get(); }
 
     /// Sets system tray availability learned once at startup (SPEC §8, B3).
     void setTrayAvailable(bool available);
@@ -64,6 +67,9 @@ public:
 
     /// Unified shutdown path: flushes page edits and saves geometry/state (C0.1).
     void prepareForShutdown();
+
+    /// Injects the active ReminderService for coordination during database restore.
+    void setReminderService(Services::ReminderService* service);
 
     /// Registers a callback to display messages in the system tray.
     void setTrayMessageCallback(std::function<void(const QString& title, const QString& message)> callback);
@@ -127,6 +133,7 @@ private:
     QStackedWidget* m_pageStack{nullptr};
     QList<PageBase*> m_pages;
     std::unique_ptr<DashboardController> m_dashboardController;
+    std::unique_ptr<DataToolsController> m_dataToolsController;
     Pages::HomePage* m_homePage{nullptr};
     int m_homeIndex{-1};
     /// The header search and the "+ New" menu are bound to this page, hence the index.

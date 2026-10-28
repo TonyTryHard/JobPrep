@@ -17,6 +17,7 @@ namespace JobPrep::Services {
 class AgendaService;
 class DayWatcher;
 class ExportService;
+class RestoreService;
 class SeedService;
 class SettingsService;
 class StatsService;
@@ -53,6 +54,7 @@ public:
     Services::StatsService& statsService() const;
     Services::DayWatcher& dayWatcher() const;
     Services::ExportService& exportService() const;
+    Services::RestoreService& restoreService() const;
     Services::SeedService& seedService() const;
     Services::SettingsService& settings() const;
     Ui::Theme::ThemeManager& themeManager() const;
@@ -74,6 +76,7 @@ private:
     std::unique_ptr<Services::DayWatcher> m_dayWatcher;
     std::unique_ptr<Services::SeedService> m_seedService;
     std::unique_ptr<Services::ExportService> m_exportService;
+    std::unique_ptr<Services::RestoreService> m_restoreService;
     std::unique_ptr<Services::SettingsService> m_settings;
     std::unique_ptr<Ui::Theme::ThemeManager> m_themeManager;
 };

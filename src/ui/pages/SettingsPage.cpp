@@ -5,6 +5,7 @@
 #include <QComboBox>
 #include <QFormLayout>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -16,6 +17,7 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 #include "services/SettingsService.h"
+#include "ui/DataToolsController.h"
 #include "ui/FormatHelper.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
@@ -129,13 +131,19 @@ QSpinBox* SettingsPage::studyGoalSpinBox() const {
 SettingsPage::SettingsPage(Services::SettingsService& settings,
                            Theme::ThemeManager& themeMgr,
                            bool trayAvailable,
-                           QWidget* parent)
+                           QWidget* parent,
+                           DataToolsController* dataTools)
     : PageBase(tr("Settings"), parent),
       m_settings(settings),
       m_themeMgr(themeMgr),
-      m_trayAvailable(trayAvailable) {
+      m_trayAvailable(trayAvailable),
+      m_dataTools(dataTools) {
     setupUi();
     loadSettings();
+}
+
+void SettingsPage::setDataToolsController(DataToolsController* controller) {
+    m_dataTools = controller;
 }
 
 void SettingsPage::setTrayAvailable(bool available) {
@@ -299,6 +307,75 @@ void SettingsPage::setupUi() {
     prefsLayout->addLayout(leadControlRow);
     containerLayout->addWidget(prefsCard);
 
+    // --- Data & Backups Card (C8) ---
+    m_dataCard = new QFrame(container);
+    m_dataCard->setObjectName(u"SettingsDataCard"_s);
+    m_dataCard->setProperty("card", true);
+    auto* dataLayout = new QVBoxLayout(m_dataCard);
+    dataLayout->setContentsMargins(24, 24, 24, 24);
+    dataLayout->setSpacing(16);
+
+    auto* dataTitle = new QLabel(tr("Data & Backups"), m_dataCard);
+    dataTitle->setStyleSheet(u"font-size: 12pt; font-weight: 600;"_s);
+    dataLayout->addWidget(dataTitle);
+
+    auto* dataDesc = new QLabel(
+        tr("Export applications and interviews, create full JSON backups, or load sample preparation tracks."),
+        m_dataCard);
+    dataDesc->setWordWrap(true);
+    dataLayout->addWidget(dataDesc);
+
+    auto* buttonsGrid = new QGridLayout();
+    buttonsGrid->setSpacing(12);
+
+    m_exportCsvBtn = new QPushButton(tr("Export Applications (CSV)"), m_dataCard);
+    m_exportCsvBtn->setObjectName(u"SettingsExportCsvBtn"_s);
+    m_exportCsvBtn->setToolTip(tr("Export job applications as a CSV spreadsheet"));
+    m_exportCsvBtn->setAutoDefault(true);
+    m_exportCsvBtn->installEventFilter(this);
+    buttonsGrid->addWidget(m_exportCsvBtn, 0, 0);
+
+    m_exportIcsBtn = new QPushButton(tr("Export Interviews (ICS)"), m_dataCard);
+    m_exportIcsBtn->setObjectName(u"SettingsExportIcsBtn"_s);
+    m_exportIcsBtn->setToolTip(tr("Export upcoming and past interviews as an iCalendar file"));
+    m_exportIcsBtn->setAutoDefault(true);
+    m_exportIcsBtn->installEventFilter(this);
+    buttonsGrid->addWidget(m_exportIcsBtn, 0, 1);
+
+    m_backupJsonBtn = new QPushButton(tr("Backup Database (JSON)"), m_dataCard);
+    m_backupJsonBtn->setObjectName(u"SettingsBackupJsonBtn"_s);
+    m_backupJsonBtn->setToolTip(
+        tr("Create a complete JSON backup of all tracks, topics, applications, and interviews"));
+    m_backupJsonBtn->setAutoDefault(true);
+    m_backupJsonBtn->installEventFilter(this);
+    buttonsGrid->addWidget(m_backupJsonBtn, 1, 0);
+
+    m_restoreJsonBtn = new QPushButton(tr("Restore Database..."), m_dataCard);
+    m_restoreJsonBtn->setObjectName(u"SettingsRestoreJsonBtn"_s);
+    m_restoreJsonBtn->setToolTip(
+        tr("Restore database from a JSON backup file (replaces current data)"));
+    m_restoreJsonBtn->setAutoDefault(true);
+    m_restoreJsonBtn->installEventFilter(this);
+    buttonsGrid->addWidget(m_restoreJsonBtn, 1, 1);
+
+    m_loadSampleBtn = new QPushButton(tr("Load Sample Data"), m_dataCard);
+    m_loadSampleBtn->setObjectName(u"SettingsLoadSampleBtn"_s);
+    m_loadSampleBtn->setToolTip(tr("Load standard interview preparation tracks and topics"));
+    m_loadSampleBtn->setAutoDefault(true);
+    m_loadSampleBtn->installEventFilter(this);
+    buttonsGrid->addWidget(m_loadSampleBtn, 2, 0);
+
+    m_openFolderBtn = new QPushButton(tr("Open Data Folder"), m_dataCard);
+    m_openFolderBtn->setObjectName(u"SettingsOpenFolderBtn"_s);
+    m_openFolderBtn->setToolTip(
+        tr("Open the local folder containing application data and SQLite database"));
+    m_openFolderBtn->setAutoDefault(true);
+    m_openFolderBtn->installEventFilter(this);
+    buttonsGrid->addWidget(m_openFolderBtn, 2, 1);
+
+    dataLayout->addLayout(buttonsGrid);
+    containerLayout->addWidget(m_dataCard);
+
     containerLayout->addStretch(1);
     scrollArea->setWidget(container);
     mainLayout->addWidget(scrollArea);
@@ -314,6 +391,32 @@ void SettingsPage::setupUi() {
     QWidget::setTabOrder(m_customLeadSpinBox, m_addLeadBtn);
     QWidget::setTabOrder(m_addLeadBtn, m_removeLeadBtn);
     QWidget::setTabOrder(m_removeLeadBtn, m_resetLeadBtn);
+    QWidget::setTabOrder(m_resetLeadBtn, m_exportCsvBtn);
+    QWidget::setTabOrder(m_exportCsvBtn, m_exportIcsBtn);
+    QWidget::setTabOrder(m_exportIcsBtn, m_backupJsonBtn);
+    QWidget::setTabOrder(m_backupJsonBtn, m_restoreJsonBtn);
+    QWidget::setTabOrder(m_restoreJsonBtn, m_loadSampleBtn);
+    QWidget::setTabOrder(m_loadSampleBtn, m_openFolderBtn);
+
+    // Wire Data Section Actions
+    connect(m_exportCsvBtn, &QPushButton::clicked, this, [this] {
+        if (m_dataTools) m_dataTools->exportCsv(this);
+    });
+    connect(m_exportIcsBtn, &QPushButton::clicked, this, [this] {
+        if (m_dataTools) m_dataTools->exportIcs(this);
+    });
+    connect(m_backupJsonBtn, &QPushButton::clicked, this, [this] {
+        if (m_dataTools) m_dataTools->backupJson(this);
+    });
+    connect(m_restoreJsonBtn, &QPushButton::clicked, this, [this] {
+        if (m_dataTools) m_dataTools->restoreJson(this);
+    });
+    connect(m_loadSampleBtn, &QPushButton::clicked, this, [this] {
+        if (m_dataTools) m_dataTools->loadSampleData(this);
+    });
+    connect(m_openFolderBtn, &QPushButton::clicked, this, [this] {
+        if (m_dataTools) m_dataTools->openDataFolder(this);
+    });
 
     // --- Signal Wiring ---
     connect(m_themeCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
