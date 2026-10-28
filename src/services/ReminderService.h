@@ -64,6 +64,12 @@ public:
     /// Starts the periodic 60-second timer and executes the startup pass.
     void start();
 
+    /// Pauses reminders evaluation (e.g. during a database restore).
+    void pause();
+    /// Resumes reminders evaluation.
+    void resume();
+    bool isPaused() const { return m_paused; }
+
     /// Executes an immediate evaluation pass.
     /// When `startupPass` is true, overdue follow-up checks are included.
     void checkNow(bool startupPass = false);
@@ -86,6 +92,7 @@ private:
     Clock m_clock;
     QList<int> m_leadMinutes{1440, 60};
     QTimer* m_timer{nullptr};
+    bool m_paused{false};
 };
 
 }  // namespace JobPrep::Services

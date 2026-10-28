@@ -78,6 +78,7 @@ bool Database::open(const QString& path) {
     // WAL has to be set before any transaction; an in-memory database keeps "memory".
     execute(u"PRAGMA journal_mode=WAL"_s);
     execute(u"PRAGMA foreign_keys=ON"_s);
+    execute(u"PRAGMA busy_timeout=5000"_s);
 
     QVariant foreignKeys;
     if (!readPragma(u"foreign_keys"_s, &foreignKeys) || foreignKeys.toInt() != 1) {
@@ -110,6 +111,16 @@ void Database::close() {
 
 bool Database::isOpen() const {
     return m_open;
+}
+
+std::unique_ptr<Database> Database::createWorkerConnection(const QString& path) {
+    const QString connName =
+        u"jobprep-worker-%1"_s.arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+    auto db = std::make_unique<Database>(connName);
+    if (!db->open(path)) {
+        return nullptr;
+    }
+    return db;
 }
 
 QSqlDatabase Database::connection() const {

@@ -27,6 +27,10 @@ public:
     void close();
     bool isOpen() const;
 
+    /// Creates a dedicated connection for a worker thread with a unique UUID connection name,
+    /// WAL mode, foreign keys enabled, and a 5000 ms busy timeout.
+    static std::unique_ptr<Database> createWorkerConnection(const QString& path);
+
     /// Short-lived handle to the connection; callers must not keep it alive.
     QSqlDatabase connection() const;
     QString connectionName() const;

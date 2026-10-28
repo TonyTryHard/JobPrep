@@ -336,6 +336,8 @@ bool TopicDetailPanel::loadFrom(int topicId) {
                 loadEditors(*topic);
                 return true;
             }
+            clearTopic();
+            return false;
         }
         return true;
     }

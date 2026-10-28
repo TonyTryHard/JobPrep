@@ -81,7 +81,23 @@ void ReminderService::start() {
     }
 }
 
+void ReminderService::pause() {
+    m_paused = true;
+    if (m_timer && m_timer->isActive()) {
+        m_timer->stop();
+    }
+}
+
+void ReminderService::resume() {
+    m_paused = false;
+    if (m_timer && !m_timer->isActive()) {
+        m_timer->start();
+    }
+}
+
 void ReminderService::checkNow(bool startupPass) {
+    if (m_paused) return;
+
     const QDateTime now = m_clock ? m_clock() : QDateTime::currentDateTime();
 
     // 1. Collect upcoming interviews up to the maximum lead window

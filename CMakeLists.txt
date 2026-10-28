@@ -109,6 +109,8 @@ add_library(jobprep_core STATIC
     src/services/SeedService.cpp
     src/services/ExportService.h
     src/services/ExportService.cpp
+    src/services/RestoreService.h
+    src/services/RestoreService.cpp
 
     # Models
     src/models/ApplicationTableModel.h

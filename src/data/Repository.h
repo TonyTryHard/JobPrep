@@ -14,6 +14,9 @@ public:
     explicit Repository(QObject* parent = nullptr);
     ~Repository() override = default;
 
+    /// Emits `changed()` externally (e.g. following a full database restore).
+    void notifyChanged() { emit changed(); }
+
 signals:
     void changed();
 
