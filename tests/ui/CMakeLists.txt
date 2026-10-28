@@ -34,7 +34,7 @@ foreach(test_name IN LISTS PAGE_TESTS)
     jobprep_apply_warnings(${test_name})
     add_test(NAME ${test_name} COMMAND ${test_name})
     set_tests_properties(${test_name} PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JOBPREP_REPORT_IMG_DIR=${CMAKE_SOURCE_DIR}/docs/reports/img"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
         LABELS "ui"
     )
 endforeach()

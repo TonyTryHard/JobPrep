@@ -124,6 +124,7 @@ private slots:
     void testNewEntryPointsOpenOneDialog();
     void testPageSwitchShortcutsRealKeyEvents();
     void testPreferencesShortcutRealKeyEvents();
+    void testWindowMaximumSizeAndMaximize();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -314,6 +315,27 @@ void tst_UiSmoke::testPreferencesShortcutRealKeyEvents() {
     QVERIFY(JobPrep::UiTest::sendKeySequence(m_window.get(), QKeySequence(Qt::CTRL | Qt::Key_Comma)));
     QCOMPARE(m_window->pageStack()->currentIndex(), 4);
     QVERIFY(qobject_cast<SettingsPage*>(m_window->pageStack()->currentWidget()) != nullptr);
+}
+
+void tst_UiSmoke::testWindowMaximumSizeAndMaximize() {
+    QVERIFY(m_window != nullptr);
+    QVERIFY(m_window->isVisible());
+
+    // Check maximumSize across all pages (C0.7: no maximum width/height reaches top window)
+    for (int i = 0; i < m_window->pageStack()->count(); ++i) {
+        m_window->sidebar()->setCurrentPage(i);
+        emit m_window->sidebar()->pageSelected(i);
+        QCoreApplication::processEvents();
+        QCOMPARE(m_window->maximumSize(), QSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX));
+    }
+
+    const QRect prevGeo = m_window->geometry();
+    m_window->showMaximized();
+    QVERIFY(m_window->isMaximized());
+
+    m_window->showNormal();
+    QVERIFY(!m_window->isMaximized());
+    QCOMPARE(m_window->geometry(), prevGeo);
 }
 
 void tst_UiSmoke::testZeroWarnings() {

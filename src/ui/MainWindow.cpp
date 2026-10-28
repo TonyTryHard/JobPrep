@@ -1,5 +1,6 @@
 #include "ui/MainWindow.h"
 #include <QCloseEvent>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
@@ -8,6 +9,7 @@
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QStatusBar>
+#include <QSystemTrayIcon>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -85,8 +87,19 @@ void MainWindow::setTrayMessageCallback(std::function<void(const QString& title,
     m_trayMessageCallback = std::move(callback);
 }
 
+void MainWindow::setLiveTrayCheck(std::function<bool()> check) {
+    m_liveTrayCheck = std::move(check);
+}
+
+bool MainWindow::isTrayAvailableLive() const {
+    if (m_liveTrayCheck) {
+        return m_liveTrayCheck();
+    }
+    return m_trayAvailable;
+}
+
 void MainWindow::updateQuitOnLastWindowClosed() {
-    const bool keepRunningInTray = m_trayAvailable && m_ctx.settings().closeToTray();
+    const bool keepRunningInTray = isTrayAvailableLive() && m_ctx.settings().closeToTray();
     qApp->setQuitOnLastWindowClosed(!keepRunningInTray);
 }
 
@@ -101,15 +114,26 @@ void MainWindow::flushStateAndEdits() {
     }
 }
 
+void MainWindow::prepareForShutdown() {
+    flushStateAndEdits();
+}
+
 void MainWindow::quitApplication() {
     m_isQuitting = true;
-    flushStateAndEdits();
+    prepareForShutdown();
     qApp->quit();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
-    if (!m_isQuitting && m_trayAvailable && m_ctx.settings().closeToTray()) {
+    if (qGuiApp && qGuiApp->isSavingSession()) {
+        prepareForShutdown();
+        QMainWindow::closeEvent(event);
+        return;
+    }
+
+    if (!m_isQuitting && isTrayAvailableLive() && m_ctx.settings().closeToTray()) {
         event->ignore();
+        flushStateAndEdits();
         hide();
         if (!m_ctx.settings().trayHintShown()) {
             if (m_trayMessageCallback) {
@@ -117,13 +141,13 @@ void MainWindow::closeEvent(QCloseEvent* event) {
                     tr("JobPrep"),
                     tr("JobPrep keeps running in the tray; use the tray menu to quit")
                 );
+                m_ctx.settings().setTrayHintShown(true);
             }
-            m_ctx.settings().setTrayHintShown(true);
         }
         return;
     }
 
-    flushStateAndEdits();
+    prepareForShutdown();
     QMainWindow::closeEvent(event);
 }
 
@@ -375,10 +399,11 @@ Theme::ThemeManager& MainWindow::themeManager() const {
 }
 
 void MainWindow::bringToFront() {
+    if (isHidden() || !isVisible()) {
+        show();
+    }
     if (isMinimized()) {
         showNormal();
-    } else if (isHidden() || !isVisible()) {
-        show();
     }
     raise();
     activateWindow();

@@ -42,28 +42,82 @@ public:
 
     int valueFromText(const QString& text) const override {
         const QString clean = text.trimmed();
-        const QRegularExpression re(
-            uR"(^(\d+)\s*(?:h|hours?|:)?\s*(\d+)?\s*(?:m|min|minutes?)?$)"_s,
-            QRegularExpression::CaseInsensitiveOption);
-        const auto match = re.match(clean);
-        if (match.hasMatch()) {
-            const int first = match.captured(1).toInt();
-            const QString secondStr = match.captured(2);
-            if (!secondStr.isEmpty()) {
-                const int second = secondStr.toInt();
-                return std::clamp(first * 60 + second, minimum(), maximum());
-            }
-            if (clean.contains(u'h', Qt::CaseInsensitive)) {
-                return std::clamp(first * 60, minimum(), maximum());
-            }
-            return std::clamp(first, minimum(), maximum());
+        if (clean.isEmpty()) {
+            return value();
         }
+
+        // 1. Explicit minutes: e.g. "450 min", "90 min"
+        static const QRegularExpression minRe(
+            uR"(^(\d+(?:[.,]\d+)?)\s*(?:min|mins|minutes?)$)"_s,
+            QRegularExpression::CaseInsensitiveOption);
+        auto match = minRe.match(clean);
+        if (match.hasMatch()) {
+            QString numStr = match.captured(1);
+            numStr.replace(u',', u'.');
+            bool ok = false;
+            const double mins = numStr.toDouble(&ok);
+            if (ok) {
+                const int rounded = static_cast<int>(std::round(mins / 15.0)) * 15;
+                return std::clamp(rounded, minimum(), maximum());
+            }
+        }
+
+        // 2. Colon or semicolon: e.g. "7:30", "7;30"
+        static const QRegularExpression colonSemiRe(
+            uR"(^(\d+)\s*[:;]\s*(\d+)\s*(?:m|min|mins|minutes?)?$)"_s,
+            QRegularExpression::CaseInsensitiveOption);
+        match = colonSemiRe.match(clean);
+        if (match.hasMatch()) {
+            const int h = match.captured(1).toInt();
+            const int mins = match.captured(2).toInt();
+            const int total = h * 60 + mins;
+            const int rounded = static_cast<int>(std::round(static_cast<double>(total) / 15.0)) * 15;
+            return std::clamp(rounded, minimum(), maximum());
+        }
+
+        // 3. Hours and minutes: e.g. "7 h 30 min", "7h 30", "7 h 30"
+        static const QRegularExpression hMinRe(
+            uR"(^(\d+)\s*h\s*(\d+)\s*(?:m|min|mins|minutes?)?$)"_s,
+            QRegularExpression::CaseInsensitiveOption);
+        match = hMinRe.match(clean);
+        if (match.hasMatch()) {
+            const int h = match.captured(1).toInt();
+            const int mins = match.captured(2).toInt();
+            const int total = h * 60 + mins;
+            const int rounded = static_cast<int>(std::round(static_cast<double>(total) / 15.0)) * 15;
+            return std::clamp(rounded, minimum(), maximum());
+        }
+
+        // 4. Bare hours (with optional 'h'), integer or decimal fraction:
+        // e.g. "8", "8 h", "8h", "7.5", "7,5", "7.30", "0.5", "45", "99 h"
+        static const QRegularExpression hoursRe(
+            uR"(^(\d+(?:[.,]\d+)?)\s*(?:h|hrs?|hours?)?$)"_s,
+            QRegularExpression::CaseInsensitiveOption);
+        match = hoursRe.match(clean);
+        if (match.hasMatch()) {
+            QString numStr = match.captured(1);
+            numStr.replace(u',', u'.');
+            bool ok = false;
+            const double h = numStr.toDouble(&ok);
+            if (ok) {
+                const double rawMinutes = h * 60.0;
+                const int rounded = static_cast<int>(std::round(rawMinutes / 15.0)) * 15;
+                return std::clamp(rounded, minimum(), maximum());
+            }
+        }
+
         return value();
     }
 
     QValidator::State validate(QString& text, int& pos) const override {
         Q_UNUSED(pos);
-        if (text.trimmed().isEmpty()) return QValidator::Intermediate;
+        const QString clean = text.trimmed();
+        if (clean.isEmpty()) return QValidator::Intermediate;
+        if (clean.endsWith(u':') || clean.endsWith(u';') ||
+            clean.endsWith(u'.') || clean.endsWith(u',') ||
+            clean.endsWith(u"mi", Qt::CaseInsensitive)) {
+            return QValidator::Intermediate;
+        }
         return QValidator::Acceptable;
     }
 };
@@ -170,7 +224,8 @@ void SettingsPage::setupUi() {
     // B1: Weekly study goal spinbox (60-2400 min, step 15)
     m_studyGoalSpinBox = new GoalSpinBox(prefsCard);
     m_studyGoalSpinBox->setObjectName(u"SettingsStudyGoalSpinBox"_s);
-    m_studyGoalSpinBox->setToolTip(tr("Weekly study goal in hours and minutes (steps of 15 min)"));
+    m_studyGoalSpinBox->setToolTip(
+        tr("Weekly study goal in hours and minutes (e.g. 8, 7.5, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)"));
     prefsForm->addRow(tr("Weekly study goal:"), m_studyGoalSpinBox);
 
     // B4: First day of week combo (Monday = 1, Sunday = 7)

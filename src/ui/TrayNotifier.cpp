@@ -27,6 +27,7 @@ TrayNotifier::TrayNotifier(MainWindow& window,
 }
 
 TrayNotifier::~TrayNotifier() {
+    m_window.setLiveTrayCheck({});
     m_window.setTrayMessageCallback({});
 }
 
@@ -42,12 +43,19 @@ void TrayNotifier::setupTray() {
 
     m_trayIcon.setContextMenu(m_trayMenu);
 
+    m_window.setLiveTrayCheck([this]() {
+        return m_trayIcon.isVisible() && QSystemTrayIcon::isSystemTrayAvailable();
+    });
+
     m_window.setTrayMessageCallback([this](const QString& title, const QString& message) {
-        m_trayIcon.showMessage(title, message, QSystemTrayIcon::Information, 5000);
+        // Warning maps to normal urgency in freedesktop/GNOME notification specs, avoiding low-urgency silent drop.
+        m_trayIcon.showMessage(title, message, QSystemTrayIcon::Warning, 5000);
     });
 
     connect(&m_trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
-        if (reason == QSystemTrayIcon::Trigger) {
+        if (reason == QSystemTrayIcon::Trigger ||
+            reason == QSystemTrayIcon::DoubleClick ||
+            reason == QSystemTrayIcon::MiddleClick) {
             m_window.bringToFront();
         }
     });

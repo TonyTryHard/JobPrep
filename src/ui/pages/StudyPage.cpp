@@ -196,7 +196,7 @@ void StudyPage::setupToolbar(QVBoxLayout* layout) {
     m_searchEdit->setMaximumWidth(320);
     m_searchEdit->addAction(Theme::IconProvider::icon(u"search"_s, m_theme.currentTokens().textMuted),
                             QLineEdit::LeadingPosition);
-    barLayout->addWidget(m_searchEdit, 0);
+    barLayout->addWidget(m_searchEdit, 0, Qt::AlignVCenter);
 
     auto* addTopicBtn = new QPushButton(tr("+ Topic"), bar);
     addTopicBtn->setObjectName(u"StudyAddTopicBtn"_s);

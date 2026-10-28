@@ -117,7 +117,7 @@ void JobsPage::setupToolbar(QVBoxLayout* layout) {
     m_searchEdit->setPlaceholderText(tr("Search company, position, notes"));
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setMaximumWidth(320);
-    barLayout->addWidget(m_searchEdit, 0);
+    barLayout->addWidget(m_searchEdit, 0, Qt::AlignVCenter);
 
     m_chips = new Widgets::ChipBar(bar);
     m_chips->setObjectName(u"JobsStatusChips"_s);

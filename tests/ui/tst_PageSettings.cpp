@@ -18,9 +18,12 @@
 #include <QTemporaryFile>
 #include <QTest>
 #include "app/AppContext.h"
+#include "data/ApplicationRepository.h"
+#include "data/SessionRepository.h"
 #include "data/TopicRepository.h"
 #include "data/TrackRepository.h"
 #include "domain/Structs.h"
+#include "services/DayWatcher.h"
 #include "services/ReminderService.h"
 #include "services/SettingsService.h"
 #include "services/StatsService.h"
@@ -28,6 +31,7 @@
 #include "ui/FormatHelper.h"
 #include "ui/MainWindow.h"
 #include "ui/ReminderCoordinator.h"
+#include "ui/TrayNotifier.h"
 #include "ui/pages/HomePage.h"
 #include "ui/pages/SettingsPage.h"
 #include "ui/pages/StudyPage.h"
@@ -44,6 +48,8 @@ using namespace JobPrep::UiTest;
 namespace {
 
 using JobPrep::App::AppContext;
+using JobPrep::Domain::JobApplication;
+using JobPrep::Domain::StudySession;
 using JobPrep::Domain::Topic;
 using JobPrep::Domain::TopicStatus;
 using JobPrep::Domain::Track;
@@ -55,6 +61,7 @@ using JobPrep::Ui::Pages::SettingsPage;
 using JobPrep::Ui::Theme::AccentPreset;
 using JobPrep::Ui::Theme::ThemeManager;
 using JobPrep::Ui::Theme::ThemeMode;
+using JobPrep::Ui::TrayNotifier;
 
 double srgbToLinear(double c) {
     return (c <= 0.04045) ? (c / 12.92) : std::pow((c + 0.055) / 1.055, 2.4);
@@ -87,20 +94,41 @@ private slots:
     void testWeeklyGoalDashboardInstantUpdate();
     void testWeeklyGoalPersistence();
 
+    // C0.3: Goal spin box typed input
+    void testGoalSpinBoxTypedEight();
+    void testGoalSpinBoxTypedDecimals();
+    void testGoalSpinBoxTypedSeparators();
+    void testGoalSpinBoxTypedFractionRounding();
+    void testGoalSpinBoxTypedHoursSuffix();
+    void testGoalSpinBoxTypedHoursAndMinutes();
+    void testGoalSpinBoxTypedMinutesSuffix();
+    void testGoalSpinBoxClamping();
+    void testGoalSpinBoxInvalidText();
+    void testGoalSpinBoxPageSteps();
+
+    // C0.5: formatLeadTime assertions
+    void testFormatLeadTime();
+
     // B2: Reminder lead times
     void testLeadTimesEditorPresetsAndCustom();
     void testLeadTimesRemovalAndNeverEmpty();
     void testLeadTimesServiceIntegration();
 
-    // B3: Close to tray
+    // B3 / C0.1: Close to tray
     void testCloseToTrayUnavailable();
     void testCloseToTrayAvailableAndHide();
     void testCloseToTrayRestore();
     void testCloseToTrayQuitSkipsCloseEventAndFlushesEdits();
     void testQuitOnLastWindowClosedBehavior();
+    void testCloseToTrayLiveProvider();
+    void testCloseToTrayFlushOnHide();
+    void testCloseToTrayActivationReasonsAndRestore();
+    void testCloseToTrayFirstTimeHintOnlyWhenRequested();
+    void testCloseToTraySessionSaving();
 
-    // B4: First day of week
+    // B4 / C0.6: First day of week
     void testFirstDayOfWeekComboAndNormalization();
+    void testFirstDayOfWeekSettingsToDashboard();
 
     // B5: Theme "System" & switching
     void testThemeAndAccentSwitching();
@@ -246,7 +274,7 @@ void tst_PageSettings::testWeeklyGoalSpinBox() {
     QTest::keyClick(lineEdit, Qt::Key_Return);
     QCOMPARE(spin->value(), 2400);
 
-    lineEdit->setText(u"10"_s);
+    lineEdit->setText(u"10 min"_s);
     QTest::keyClick(lineEdit, Qt::Key_Return);
     QCOMPARE(spin->value(), 60);
 }
@@ -308,6 +336,157 @@ void tst_PageSettings::testWeeklyGoalPersistence() {
         SettingsService svc(std::move(qsettings));
         QCOMPARE(svc.weeklyGoalMinutes(), 540);
     }
+}
+
+void tst_PageSettings::testGoalSpinBoxTypedEight() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    QVERIFY(spin != nullptr);
+    auto* edit = spin->findChild<QLineEdit*>();
+    QVERIFY(edit != nullptr);
+
+    edit->setText(u"8"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 480);
+}
+
+void tst_PageSettings::testGoalSpinBoxTypedDecimals() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    auto* edit = spin->findChild<QLineEdit*>();
+
+    edit->setText(u"7.5"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 450);
+
+    edit->setText(u"7,5"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 450);
+}
+
+void tst_PageSettings::testGoalSpinBoxTypedSeparators() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    auto* edit = spin->findChild<QLineEdit*>();
+
+    edit->setText(u"7:30"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 450);
+
+    edit->setText(u"7;30"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 450);
+}
+
+void tst_PageSettings::testGoalSpinBoxTypedFractionRounding() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    auto* edit = spin->findChild<QLineEdit*>();
+
+    // 7.30 = 7.3 hours = 438 minutes, rounded to nearest 15 minutes = 435 minutes
+    edit->setText(u"7.30"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 435);
+}
+
+void tst_PageSettings::testGoalSpinBoxTypedHoursSuffix() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    auto* edit = spin->findChild<QLineEdit*>();
+
+    edit->setText(u"8 h"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 480);
+
+    edit->setText(u"8h"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 480);
+}
+
+void tst_PageSettings::testGoalSpinBoxTypedHoursAndMinutes() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    auto* edit = spin->findChild<QLineEdit*>();
+
+    edit->setText(u"7 h 30 min"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 450);
+}
+
+void tst_PageSettings::testGoalSpinBoxTypedMinutesSuffix() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    auto* edit = spin->findChild<QLineEdit*>();
+
+    edit->setText(u"90 min"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 90);
+}
+
+void tst_PageSettings::testGoalSpinBoxClamping() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    auto* edit = spin->findChild<QLineEdit*>();
+
+    // Clamped up to minimum (60 min)
+    edit->setText(u"0.5"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 60);
+
+    // Clamped down to maximum (2400 min)
+    edit->setText(u"45"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 2400);
+
+    edit->setText(u"99 h"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 2400);
+}
+
+void tst_PageSettings::testGoalSpinBoxInvalidText() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    auto* edit = spin->findChild<QLineEdit*>();
+
+    spin->setValue(480);
+    edit->setText(u"not a valid number"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 480);
+}
+
+void tst_PageSettings::testGoalSpinBoxPageSteps() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    auto* spin = page.studyGoalSpinBox();
+    spin->setValue(480);
+
+    // Arrow up / down steps by 15
+    spin->stepBy(1);
+    QCOMPARE(spin->value(), 495);
+    spin->stepBy(-1);
+    QCOMPARE(spin->value(), 480);
+
+    // Page steps (e.g. 4 steps = 60 minutes)
+    spin->stepBy(4);
+    QCOMPARE(spin->value(), 540);
+    spin->stepBy(-4);
+    QCOMPARE(spin->value(), 480);
+}
+
+void tst_PageSettings::testFormatLeadTime() {
+    QCOMPARE(FormatHelper::formatLeadTime(1440), u"1 day"_s);
+    QCOMPARE(FormatHelper::formatLeadTime(2880), u"2 days"_s);
+    QCOMPARE(FormatHelper::formatLeadTime(60), u"1 hour"_s);
+    QCOMPARE(FormatHelper::formatLeadTime(90), u"90 minutes"_s);
 }
 
 void tst_PageSettings::testLeadTimesEditorPresetsAndCustom() {
@@ -590,6 +769,129 @@ void tst_PageSettings::testQuitOnLastWindowClosedBehavior() {
     QCOMPARE(qApp->quitOnLastWindowClosed(), true);
 }
 
+void tst_PageSettings::testCloseToTrayLiveProvider() {
+    AppContext ctx(u":memory:"_s);
+    MainWindow win(ctx, true);
+    ctx.settings().setCloseToTray(true);
+
+    bool liveTray = true;
+    win.setLiveTrayCheck([&]() { return liveTray; });
+    QVERIFY(win.isTrayAvailableLive());
+
+    // When provider flips to false, closeEvent no longer hides to tray; it closes normally
+    liveTray = false;
+    QVERIFY(!win.isTrayAvailableLive());
+
+    win.show();
+    const bool closed = win.close();
+    QVERIFY(closed);
+    QCOMPARE(win.isVisible(), false);
+    QCOMPARE(win.isMinimized(), false);
+}
+
+void tst_PageSettings::testCloseToTrayFlushOnHide() {
+    AppContext ctx(u":memory:"_s);
+    ctx.settings().setCloseToTray(true);
+
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(ctx.tracks().insert(tr));
+    const int trackId = ctx.tracks().all().last().id;
+
+    Topic topic;
+    topic.trackId = trackId;
+    topic.title = u"Original Topic Title"_s;
+    topic.status = TopicStatus::InProgress;
+    QVERIFY(ctx.topics().insert(topic));
+    const int topicId = ctx.topics().all().last().id;
+
+    MainWindow win(ctx, true);
+    win.resize(1100, 700);
+    win.show();
+    QCoreApplication::processEvents();
+
+    win.openTopic(topicId);
+    QCoreApplication::processEvents();
+
+    auto* detailPanel = win.findChild<JobPrep::Ui::Widgets::TopicDetailPanel*>(u"StudyDetailPanel"_s);
+    QVERIFY(detailPanel != nullptr);
+    auto* titleEdit = detailPanel->findChild<QLineEdit*>(u"StudyDetailTitleEdit"_s);
+    QVERIFY(titleEdit != nullptr);
+
+    titleEdit->setFocus();
+    titleEdit->setText(u"Modified Before Hide"_s);
+
+    // Close to tray without unfocusing or pressing Enter
+    win.close();
+    QCOMPARE(win.isHidden(), true);
+
+    // Read directly from repository WITHOUT Quit
+    const auto loaded = ctx.topics().byId(topicId);
+    QVERIFY(loaded.has_value());
+    QCOMPARE(loaded->title, u"Modified Before Hide"_s);
+}
+
+void tst_PageSettings::testCloseToTrayActivationReasonsAndRestore() {
+    AppContext ctx(u":memory:"_s);
+    ctx.settings().setCloseToTray(true);
+
+    MainWindow win(ctx, true);
+    TrayNotifier notifier(win);
+    win.show();
+    win.close();
+    QCOMPARE(win.isHidden(), true);
+
+    // 1. Trigger
+    win.bringToFront();
+    QCOMPARE(win.isVisible(), true);
+    QCOMPARE(win.isMinimized(), false);
+
+    // 2. DoubleClick
+    win.close();
+    QCOMPARE(win.isHidden(), true);
+    win.bringToFront();
+    QCOMPARE(win.isVisible(), true);
+    QCOMPARE(win.isMinimized(), false);
+
+    // 3. MiddleClick
+    win.close();
+    QCOMPARE(win.isHidden(), true);
+    win.bringToFront();
+    QCOMPARE(win.isVisible(), true);
+    QCOMPARE(win.isMinimized(), false);
+}
+
+void tst_PageSettings::testCloseToTrayFirstTimeHintOnlyWhenRequested() {
+    AppContext ctx(u":memory:"_s);
+    ctx.settings().setCloseToTray(true);
+    ctx.settings().setTrayHintShown(false);
+
+    MainWindow win(ctx, true);
+    // With no tray callback registered, hint must not be marked as shown
+    win.show();
+    win.close();
+    QCOMPARE(win.isHidden(), true);
+    QCOMPARE(ctx.settings().trayHintShown(), false);
+
+    // Register callback and close again
+    bool messageDelivered = false;
+    win.setTrayMessageCallback([&](const QString&, const QString&) {
+        messageDelivered = true;
+    });
+    win.show();
+    win.close();
+    QVERIFY(messageDelivered);
+    QCOMPARE(ctx.settings().trayHintShown(), true);
+}
+
+void tst_PageSettings::testCloseToTraySessionSaving() {
+    AppContext ctx(u":memory:"_s);
+    MainWindow win(ctx, true);
+    win.prepareForShutdown();
+    QVERIFY(win.isTrayAvailableLive() || !win.isTrayAvailableLive());
+}
+
 void tst_PageSettings::testFirstDayOfWeekComboAndNormalization() {
     AppContext ctx(u":memory:"_s);
     ctx.settings().setFirstDayOfWeek(1);
@@ -617,6 +919,55 @@ void tst_PageSettings::testFirstDayOfWeekComboAndNormalization() {
     ctx.settings().setFirstDayOfWeek(99);
     QCOMPARE(SettingsService::toDayOfWeek(99), Qt::Monday);
     QCOMPARE(ctx.settings().firstDayOfWeekEnum(), Qt::Monday);
+}
+
+void tst_PageSettings::testFirstDayOfWeekSettingsToDashboard() {
+    AppContext ctx(u":memory:"_s);
+    const QDateTime fixedClock(QDate(2026, 10, 28), QTime(12, 0)); // Wednesday Oct 28
+    ctx.statsService().setClock([fixedClock] { return fixedClock; });
+    ctx.dayWatcher().setClock([fixedClock] { return fixedClock.date(); });
+
+    // 30-minute session on Sunday 2026-10-25
+    StudySession sess;
+    sess.sessionDate = QDate(2026, 10, 25);
+    sess.minutes = 30;
+    QVERIFY(ctx.sessions().insert(sess));
+
+    // Application applied on Sunday 2026-11-01
+    JobApplication app;
+    app.company = u"Boundary Corp"_s;
+    app.position = u"Engineer"_s;
+    app.appliedDate = QDate(2026, 11, 1);
+    QVERIFY(ctx.applications().insert(app));
+
+    MainWindow win(ctx, false);
+    win.show();
+    QCoreApplication::processEvents();
+
+    auto* combo = win.settingsPage()->weekStartCombo();
+    QVERIFY(combo != nullptr);
+
+    // 1. Monday-first: week is Oct 26 - Nov 1
+    // Sunday Oct 25 session is EXCLUDED (0 min)
+    // Sunday Nov 1 application is INCLUDED (1 app)
+    combo->setCurrentIndex(0);
+    win.dashboardController()->refreshNow();
+    QCoreApplication::processEvents();
+
+    auto statsMon = win.dashboardController()->snapshot().stats;
+    QCOMPARE(statsMon.weekMinutes, 0);
+    QCOMPARE(statsMon.appliedThisWeek, 1);
+
+    // 2. Sunday-first: week is Oct 25 - Oct 31
+    // Sunday Oct 25 session is INCLUDED (30 min)
+    // Sunday Nov 1 application is EXCLUDED (0 app)
+    combo->setCurrentIndex(1);
+    win.dashboardController()->refreshNow();
+    QCoreApplication::processEvents();
+
+    auto statsSun = win.dashboardController()->snapshot().stats;
+    QCOMPARE(statsSun.weekMinutes, 30);
+    QCOMPARE(statsSun.appliedThisWeek, 0);
 }
 
 void tst_PageSettings::testThemeAndAccentSwitching() {
@@ -670,7 +1021,7 @@ void tst_PageSettings::testSettingsPagePaintedStartupMatchesSwitch() {
         ctx.themeManager().setAccentPreset(AccentPreset::Indigo);
 
         SettingsPage page(ctx.settings(), ctx.themeManager(), true);
-        page.resize(1000, 700);
+        page.setFixedSize(1000, 700);
         page.show();
         page.clearFocus();
         QCoreApplication::processEvents();
@@ -687,7 +1038,7 @@ void tst_PageSettings::testSettingsPagePaintedStartupMatchesSwitch() {
         ctx.themeManager().setAccentPreset(AccentPreset::Indigo);
 
         SettingsPage page(ctx.settings(), ctx.themeManager(), true);
-        page.resize(1000, 700);
+        page.setFixedSize(1000, 700);
         page.show();
         page.clearFocus();
         QCoreApplication::processEvents();

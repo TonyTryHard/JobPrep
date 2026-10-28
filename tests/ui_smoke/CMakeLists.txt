@@ -12,7 +12,7 @@ jobprep_apply_warnings(ui_smoke)
 
 add_test(NAME ui_smoke COMMAND ui_smoke)
 set_tests_properties(ui_smoke PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JOBPREP_REPORT_IMG_DIR=${CMAKE_SOURCE_DIR}/docs/reports/img"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "ui"
 )
 

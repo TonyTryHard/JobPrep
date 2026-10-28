@@ -52,10 +52,18 @@ public:
     /// Returns whether the system tray is available.
     bool isTrayAvailable() const { return m_trayAvailable; }
 
+    /// Sets a live callback to check whether system tray is active and ready (C0.1).
+    void setLiveTrayCheck(std::function<bool()> check);
+    /// Live check for tray availability and visibility.
+    bool isTrayAvailableLive() const;
+
     /// Shuts down the application running the same path as window close (B3).
     void quitApplication();
     /// Returns whether application shutdown is currently in progress.
     bool isQuitting() const { return m_isQuitting; }
+
+    /// Unified shutdown path: flushes page edits and saves geometry/state (C0.1).
+    void prepareForShutdown();
 
     /// Registers a callback to display messages in the system tray.
     void setTrayMessageCallback(std::function<void(const QString& title, const QString& message)> callback);
@@ -133,6 +141,7 @@ private:
 
     bool m_trayAvailable{false};
     bool m_isQuitting{false};
+    std::function<bool()> m_liveTrayCheck;
     std::function<void(const QString& title, const QString& message)> m_trayMessageCallback;
 
     void flushStateAndEdits();
