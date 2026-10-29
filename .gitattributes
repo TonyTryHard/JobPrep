@@ -1,5 +1,5 @@
-# Auto detect text files and normalize line endings
-* text=auto
+# Auto detect text files and normalize line endings; enforce LF in working trees
+* text=auto eol=lf
 
 # Enforce LF on Linux/Unix scripts and sources
 *.sh text eol=lf
