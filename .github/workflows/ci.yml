@@ -140,6 +140,7 @@ jobs:
         env:
           CMAKE_BUILD_PARALLEL_LEVEL: 2
           QT_QPA_PLATFORM: offscreen
+          JOBPREP_KEEP_GOING: 1
         run: ./scripts/check.sh
 
       - name: Run quality gate (Windows)
@@ -147,6 +148,7 @@ jobs:
         env:
           CMAKE_BUILD_PARALLEL_LEVEL: 2
           QT_QPA_PLATFORM: offscreen
+          JOBPREP_KEEP_GOING: 1
         shell: pwsh
         run: ./scripts/check.ps1
 
@@ -155,6 +157,7 @@ jobs:
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: test-logs-${{ matrix.os }}
+          if-no-files-found: ignore
           path: |
             build/*/Testing/Temporary/LastTest.log
             build/*/Testing/Temporary/*.log

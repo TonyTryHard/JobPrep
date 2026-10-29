@@ -10,7 +10,11 @@ cmake --preset dev-windows
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "==> Building JobPrep with dev-windows preset..." -ForegroundColor Cyan
-cmake --build --preset dev-windows
+if ($env:JOBPREP_KEEP_GOING -eq "1") {
+    cmake --build --preset dev-windows -- -k 0
+} else {
+    cmake --build --preset dev-windows
+}
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "==> Running tests with dev-windows preset..." -ForegroundColor Cyan
