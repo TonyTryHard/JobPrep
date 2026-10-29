@@ -219,6 +219,7 @@ void Sidebar::updateToggleIcon() {
     const QIcon icon = Theme::IconProvider::icon(iconName, tokens.textMuted);
     m_toggleBtn->setIcon(icon);
     m_toggleBtn->setToolTip(m_collapsed ? tr("Expand sidebar") : tr("Collapse sidebar"));
+    m_toggleBtn->setAccessibleName(m_collapsed ? tr("Expand sidebar") : tr("Collapse sidebar"));
 }
 
 }  // namespace JobPrep::Ui

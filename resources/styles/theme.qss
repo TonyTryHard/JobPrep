@@ -138,6 +138,10 @@ QPushButton:disabled {
     border-color: @border;
 }
 
+QPushButton:focus {
+    border: 1px solid @accent;
+}
+
 /* Primary Button */
 QPushButton[primary="true"] {
     background-color: @accent;
@@ -366,6 +370,12 @@ QPushButton[chip="true"]:checked {
     border: 1px solid @accent;
     color: @accent;
     font-weight: 600;
+}
+
+QPushButton[chip="true"]:focus,
+QPushButton[calendarLayer="true"]:focus {
+    border: 1px solid @accent;
+    background-color: @surface;
 }
 
 /* Study board columns (M4 B2) */
