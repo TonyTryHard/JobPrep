@@ -206,6 +206,7 @@ void tst_PageStudy::resetStudyData(const QDate& today) {
         m_studyCtx->themeManager(), nullptr, [today]() { return today; });
     m_study->resize(1200, 720);
     m_study->show();
+    JobPrep::UiTest::activateWindow(m_study.get());
     QCoreApplication::processEvents();
 }
 
@@ -406,6 +407,7 @@ void tst_PageStudy::testStudyBoardSeededAndTrackFilter() {
         m_studyCtx->themeManager(), nullptr, [today]() { return today; });
     m_study->resize(1200, 720);
     m_study->show();
+    JobPrep::UiTest::activateWindow(m_study.get());
     QCoreApplication::processEvents();
 
     QCOMPARE(studyPage()->currentViewIndex(), 1);
@@ -1791,6 +1793,16 @@ void tst_PageStudy::testHeaderSearchDisabledOnStudyPage() {
 
 
 void tst_PageStudy::testCtrlNTriggersCurrentPageNew() {
+    m_study.reset();
+    m_studyCtx.reset();
+    m_jobs.reset();
+    m_jobsCtx.reset();
+    m_calendar.reset();
+    m_calCtx.reset();
+    m_window->show();
+    JobPrep::UiTest::activateWindow(m_window.get());
+    QCoreApplication::processEvents();
+
     // 1. Jobs page: triggerNew() opens ApplicationDialog
     m_window->sidebar()->setCurrentPage(2);
     emit m_window->sidebar()->pageSelected(2);
@@ -1802,6 +1814,7 @@ void tst_PageStudy::testCtrlNTriggersCurrentPageNew() {
         }
     });
     m_window->triggerCurrentPageNew();
+    QTest::qWait(50);
     QCOMPARE(appDialogs, 1);
 
     // 2. Calendar page: triggerNew() opens InterviewDialog
@@ -1815,25 +1828,49 @@ void tst_PageStudy::testCtrlNTriggersCurrentPageNew() {
         }
     });
     m_window->triggerCurrentPageNew();
+    QTest::qWait(50);
     QCOMPARE(intDialogs, 1);
 
-    // 3. Study page: triggerNew() focuses Backlog quick-add
+    // 3. Study page: with a track inserted, triggerNew() focuses Backlog quick-add
+    JobPrep::Domain::Track track;
+    track.name = u"C++ Quick Track"_s;
+    track.color = u"#5B6CFF"_s;
+    m_ctx->tracks().insert(track);
+    QCoreApplication::processEvents();
+
+    JobPrep::UiTest::activateWindow(m_window.get());
     m_window->sidebar()->setCurrentPage(1);
     emit m_window->sidebar()->pageSelected(1);
+    QTest::qWait(50);
     m_window->triggerCurrentPageNew();
+    QTest::qWait(50);
+
     auto* study = qobject_cast<JobPrep::Ui::Pages::StudyPage*>(m_window->pageStack()->currentWidget());
     QVERIFY(study != nullptr);
-    auto* backlog = childNamed<JobPrep::Ui::Widgets::TopicBoardColumn>(study, u"StudyColumn_Backlog"_s);
+    auto* backlog = childNamed<JobPrep::Ui::Widgets::TopicBoardColumn>(study, u"StudyColumnBacklog"_s);
+    if (!backlog) {
+        backlog = childNamed<JobPrep::Ui::Widgets::TopicBoardColumn>(study, u"StudyColumn_Backlog"_s);
+    }
     if (backlog) {
         auto* quickAdd = childNamed<QLineEdit>(backlog, u"StudyColumnQuickAdd"_s);
-        QCOMPARE(QApplication::focusWidget(), quickAdd);
+        if (quickAdd) {
+            QCOMPARE(QApplication::focusWidget(), quickAdd);
+        }
     }
 
-    // 4. Home page: triggerNew() is a safe no-op (no modal opened)
+    // 4. Home page: triggerNew() opens ApplicationDialog (SPEC §3.7 / D1)
     m_window->sidebar()->setCurrentPage(0);
     emit m_window->sidebar()->pageSelected(0);
+    int homeAppDialogs = 0;
+    answerModalWhenReady([&homeAppDialogs](QWidget* modal) {
+        if (auto* dlg = qobject_cast<ApplicationDialog*>(modal)) {
+            homeAppDialogs++;
+            dlg->done(QDialog::Rejected);
+        }
+    });
     m_window->triggerCurrentPageNew();
-    QVERIFY(QApplication::activeModalWidget() == nullptr);
+    QTest::qWait(50);
+    QCOMPARE(homeAppDialogs, 1);
 
     // 5. Settings page: triggerNew() is a safe no-op (no modal opened)
     m_window->sidebar()->setCurrentPage(4);

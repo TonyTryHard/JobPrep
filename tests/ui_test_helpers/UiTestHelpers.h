@@ -64,6 +64,15 @@ void answerModalWhenReady(Action action) {
             timer->stop();
             timer->deleteLater();
             action(modal);
+            return;
+        }
+        for (QWidget* w : QApplication::topLevelWidgets()) {
+            if (w->isModal() && w->isVisible()) {
+                timer->stop();
+                timer->deleteLater();
+                action(w);
+                return;
+            }
         }
     });
     timer->start();

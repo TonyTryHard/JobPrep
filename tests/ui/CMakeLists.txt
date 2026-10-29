@@ -26,6 +26,8 @@ set(PAGE_TESTS
     tst_PageStudy
     tst_PageHome
     tst_PageSettings
+    tst_Shortcuts
+    tst_EmptyStatesAndFocus
 )
 
 foreach(test_name IN LISTS PAGE_TESTS)

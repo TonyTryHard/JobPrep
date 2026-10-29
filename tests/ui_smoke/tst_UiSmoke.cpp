@@ -6,7 +6,9 @@
 #include <QFile>
 #include <QImage>
 #include <QLabel>
+#include <QLayout>
 #include <QLineEdit>
+#include <QLoggingCategory>
 #include <QListView>
 #include <QListWidget>
 #include <QMenu>
@@ -125,6 +127,7 @@ private slots:
     void testPageSwitchShortcutsRealKeyEvents();
     void testPreferencesShortcutRealKeyEvents();
     void testWindowMaximumSizeAndMaximize();
+    void testWindowLoggingCategory();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -336,6 +339,10 @@ void tst_UiSmoke::testWindowMaximumSizeAndMaximize() {
     m_window->showNormal();
     QVERIFY(!m_window->isMaximized());
     QCOMPARE(m_window->geometry(), prevGeo);
+}
+
+void tst_UiSmoke::testWindowLoggingCategory() {
+    QVERIFY(!JobPrep::Ui::lcWindow().isDebugEnabled());
 }
 
 void tst_UiSmoke::testZeroWarnings() {

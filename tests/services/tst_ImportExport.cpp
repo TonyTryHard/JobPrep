@@ -9,6 +9,7 @@
 #include <QPointer>
 #include <QSqlQuery>
 #include <QSqlRecord>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QTest>
@@ -83,6 +84,7 @@ private slots:
     void testRestoreDuplicateIdLeavesDbUntouched();
     void testRestoreOversizedFileLeavesDbUntouched();
     void testRestoreSafetyBackupCreatedPrunedAndAbortsWhenReadOnly();
+    void testRestoreSafetyBackupProductionPathWithCustomXdgDataHome();
     void testRestoreRemindersSentWiped();
     void testRestoreRemindersPausedDuringRestore();
     void testRestoreIdAllocationAfterRestore();
@@ -875,6 +877,38 @@ void tst_ImportExport::testRestoreSafetyBackupCreatedPrunedAndAbortsWhenReadOnly
     QVERIFY2(compareDumps(dumpBefore, dumpAfter, &diff), qPrintable(diff));
 
     QFile::setPermissions(roDir, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+}
+
+void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHome() {
+    const QString origOrg = QCoreApplication::organizationName();
+    const QString origApp = QCoreApplication::applicationName();
+    QCoreApplication::setOrganizationName(u"JobPrep"_s);
+    QCoreApplication::setApplicationName(u"JobPrep"_s);
+    QStandardPaths::setTestModeEnabled(false);
+
+    const QString customXdg = u"/tmp/jp-c07"_s;
+    QDir(customXdg).removeRecursively();
+    QDir().mkpath(customXdg);
+    qputenv("XDG_DATA_HOME", customXdg.toLocal8Bit());
+
+    const QString prodSafetyDir =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + u"/backups"_s;
+
+    TestDatabase testDb(u"tst_prod_path"_s);
+    QVERIFY(testDb.open(u":memory:"_s));
+    populateHandBuiltDataset(testDb.db());
+    const QByteArray validJson = ExportService::generateBackupJson(testDb.db());
+
+    const auto res = RestoreService::restoreDatabase(testDb.db(), validJson, prodSafetyDir);
+    QVERIFY(res.success);
+    QVERIFY(!res.safetyBackupPath.isEmpty());
+    QVERIFY(QFile::exists(res.safetyBackupPath));
+    QVERIFY(res.safetyBackupPath.startsWith(customXdg));
+
+    qunsetenv("XDG_DATA_HOME");
+    QStandardPaths::setTestModeEnabled(true);
+    QCoreApplication::setOrganizationName(origOrg);
+    QCoreApplication::setApplicationName(origApp);
 }
 
 void tst_ImportExport::testRestoreRemindersSentWiped() {
