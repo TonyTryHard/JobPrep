@@ -44,13 +44,13 @@ QList<QSqlRecord> TestDatabase::records(const QString& sql) const {
 }
 
 bool TestDatabase::hasTable(QStringView name) const {
-    return scalar(u"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='"_s + name +
-                  u"'"_s) == 1;
+    return scalar(u"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='"_s +
+                  name.toString() + u"'"_s) == 1;
 }
 
 bool TestDatabase::hasIndex(QStringView name) const {
-    return scalar(u"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='"_s + name +
-                  u"'"_s) == 1;
+    return scalar(u"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='"_s +
+                  name.toString() + u"'"_s) == 1;
 }
 
 bool TestDatabase::exec(const QString& sql) const {
