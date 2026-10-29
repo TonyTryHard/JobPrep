@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QShortcut>
 #include <QSpinBox>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -79,15 +80,26 @@ void SessionDialog::setupUi() {
 
     m_cancelBtn = new QPushButton(tr("Cancel"), this);
     m_cancelBtn->setObjectName(u"SessionCancelBtn"_s);
+    m_cancelBtn->setToolTip(tr("Discard changes (Esc)"));
     buttonLayout->addWidget(m_cancelBtn);
 
     m_saveBtn = new QPushButton(tr("Log session"), this);
     m_saveBtn->setObjectName(u"SessionSaveBtn"_s);
     m_saveBtn->setProperty("primary", true);
     m_saveBtn->setDefault(true);
+    m_saveBtn->setToolTip(tr("Log session (Ctrl+S)"));
     buttonLayout->addWidget(m_saveBtn);
 
     mainLayout->addLayout(buttonLayout);
+
+    auto* saveShortcut = new QShortcut(QKeySequence::Save, this);
+    connect(saveShortcut, &QShortcut::activated, this, &SessionDialog::onSave);
+
+    QWidget::setTabOrder(m_dateEdit, m_minutesSpin);
+    QWidget::setTabOrder(m_minutesSpin, m_topicCombo);
+    QWidget::setTabOrder(m_topicCombo, m_noteEdit);
+    QWidget::setTabOrder(m_noteEdit, m_saveBtn);
+    QWidget::setTabOrder(m_saveBtn, m_cancelBtn);
 
     connect(m_dateEdit, &QDateEdit::dateChanged, this, &SessionDialog::onFormChanged);
     connect(m_minutesSpin, &QSpinBox::valueChanged, this, &SessionDialog::onFormChanged);

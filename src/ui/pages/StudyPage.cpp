@@ -1,6 +1,7 @@
 #include "ui/pages/StudyPage.h"
 
 #include <algorithm>
+#include <QApplication>
 #include <QButtonGroup>
 #include <QHeaderView>
 #include <QHBoxLayout>
@@ -194,6 +195,7 @@ void StudyPage::setupToolbar(QVBoxLayout* layout) {
     m_searchEdit->setPlaceholderText(tr("Search topics (Ctrl+F)"));
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setMaximumWidth(320);
+    m_searchEdit->installEventFilter(this);
     m_searchEdit->addAction(Theme::IconProvider::icon(u"search"_s, m_theme.currentTokens().textMuted),
                             QLineEdit::LeadingPosition);
     barLayout->addWidget(m_searchEdit, 0, Qt::AlignVCenter);
@@ -372,6 +374,13 @@ void StudyPage::hideEvent(QHideEvent* event) {
 }
 
 bool StudyPage::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == m_searchEdit && event->type() == QEvent::KeyPress) {
+        auto* key = static_cast<QKeyEvent*>(event);
+        if (key->key() == Qt::Key_Escape && !m_searchEdit->text().isEmpty()) {
+            m_searchEdit->clear();
+            return true;
+        }
+    }
     if (watched == m_tableView && event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
         if (keyEvent->key() == Qt::Key_Delete) {
@@ -398,8 +407,12 @@ void StudyPage::newTopic() {
     if (m_settings.studyViewMode() == u"list"_s) {
         setViewMode(u"board"_s);
     }
-    if (m_stack->currentIndex() != 1) m_stack->setCurrentIndex(1);
+    if (m_stack->currentIndex() != 1) {
+        m_stack->setCurrentIndex(1);
+        m_stack->currentWidget()->show();
+    }
     if (!m_columns.isEmpty()) {
+        m_columns.first()->show();
         m_columns.first()->focusQuickAdd();
         m_boardScroll->ensureWidgetVisible(m_columns.first());
     }

@@ -10,6 +10,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTextEdit>
@@ -163,13 +164,30 @@ void InterviewDialog::setupUi() {
     m_saveBtn->setProperty("primary", true);
     m_saveBtn->setDefault(true);
     m_saveBtn->setAutoDefault(true);
-    m_saveBtn->setToolTip(tr("Save the interview (Enter)"));
+    m_saveBtn->setToolTip(tr("Save the interview (Ctrl+S)"));
     if (m_mode == Edit) {
         m_deleteBtn = buttons->addButton(tr("&Delete"), QDialogButtonBox::DestructiveRole);
         m_deleteBtn->setObjectName(u"DialogDeleteBtn"_s);
         m_deleteBtn->setToolTip(tr("Delete this interview"));
     }
     layout->addWidget(buttons);
+
+    auto* saveShortcut = new QShortcut(QKeySequence::Save, this);
+    connect(saveShortcut, &QShortcut::activated, this, &InterviewDialog::onSave);
+
+    QWidget::setTabOrder(m_appCombo, m_dateEdit);
+    QWidget::setTabOrder(m_dateEdit, m_timeEdit);
+    QWidget::setTabOrder(m_timeEdit, m_durationSpin);
+    QWidget::setTabOrder(m_durationSpin, m_typeCombo);
+    QWidget::setTabOrder(m_typeCombo, m_outcomeCombo);
+    QWidget::setTabOrder(m_outcomeCombo, m_placeEdit);
+    QWidget::setTabOrder(m_placeEdit, m_interviewerEdit);
+    QWidget::setTabOrder(m_interviewerEdit, m_notesEdit);
+    QWidget::setTabOrder(m_notesEdit, m_saveBtn);
+    QWidget::setTabOrder(m_saveBtn, buttons->button(QDialogButtonBox::Cancel));
+    if (m_deleteBtn) {
+        QWidget::setTabOrder(buttons->button(QDialogButtonBox::Cancel), m_deleteBtn);
+    }
 
     populateApplications();
 

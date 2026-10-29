@@ -42,10 +42,12 @@ public:
     ~HomePage() override = default;
 
     void onActivated() override;
+    void triggerNew() override;
 
 signals:
     void addApplicationRequested();
     void addTopicRequested();
+    void newInterviewRequested();
     void interviewActivated(int id);
     void applicationActivated(int id);
     void topicActivated(int id);
@@ -76,13 +78,13 @@ private:
     Models::AgendaListModel* m_todayModel{nullptr};
     Delegates::AgendaItemDelegate* m_todayDelegate{nullptr};
     QListView* m_todayView{nullptr};
-    QLabel* m_todayEmptyLabel{nullptr};
+    Widgets::EmptyState* m_todayEmptyState{nullptr};
 
     // Upcoming interviews list
     Models::AgendaListModel* m_upcomingModel{nullptr};
     Delegates::AgendaItemDelegate* m_upcomingDelegate{nullptr};
     QListView* m_upcomingView{nullptr};
-    QLabel* m_upcomingEmptyLabel{nullptr};
+    Widgets::EmptyState* m_upcomingEmptyState{nullptr};
 
     // Study progress card
     Widgets::ProgressRing* m_progressRings{nullptr};

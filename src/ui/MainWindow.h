@@ -3,10 +3,12 @@
 #include <functional>
 #include <QMainWindow>
 #include <QList>
+#include <QLoggingCategory>
 
 class QLabel;
 class QLineEdit;
 class QMenu;
+class QShortcut;
 class QStackedWidget;
 class QToolButton;
 
@@ -20,6 +22,7 @@ class ReminderService;
 }
 
 namespace JobPrep::Ui {
+Q_DECLARE_LOGGING_CATEGORY(lcWindow)
 class Sidebar;
 class PageBase;
 
@@ -106,8 +109,13 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
+    void logWindowState(const QString& trigger);
     void setupUi();
     QMenu* setupNewMenu(QWidget* parent);
     void setupShortcuts();
@@ -130,6 +138,7 @@ private:
     QLineEdit* m_searchEdit{nullptr};
     QAction* m_searchAction{nullptr};
     QToolButton* m_newBtn{nullptr};
+    QShortcut* m_newShortcut{nullptr};
     QStackedWidget* m_pageStack{nullptr};
     QList<PageBase*> m_pages;
     std::unique_ptr<DashboardController> m_dashboardController;
@@ -153,6 +162,7 @@ private:
 
     void flushStateAndEdits();
     void updateQuitOnLastWindowClosed();
+    bool m_screenConnected{false};
 
     QLabel* m_statusStreakLabel{nullptr};
     QLabel* m_statusProcessesLabel{nullptr};

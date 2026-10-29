@@ -7,6 +7,7 @@
 #include <QMessageBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QShortcut>
 #include <QVBoxLayout>
 #include "data/ApplicationRepository.h"
 #include "data/DbFormat.h"
@@ -83,9 +84,16 @@ void FollowUpDialog::setupUi() {
     m_saveBtn->setProperty("primary", true);
     m_saveBtn->setDefault(true);
     m_saveBtn->setAutoDefault(true);
-    m_saveBtn->setToolTip(tr("Schedule the follow-up (Enter)"));
+    m_saveBtn->setToolTip(tr("Schedule the follow-up (Ctrl+S)"));
     buttons->button(QDialogButtonBox::Cancel)->setToolTip(tr("Cancel (Esc)"));
     layout->addWidget(buttons);
+
+    auto* saveShortcut = new QShortcut(QKeySequence::Save, this);
+    connect(saveShortcut, &QShortcut::activated, this, &FollowUpDialog::accept);
+
+    QWidget::setTabOrder(m_appCombo, m_actionEdit);
+    QWidget::setTabOrder(m_actionEdit, m_saveBtn);
+    QWidget::setTabOrder(m_saveBtn, buttons->button(QDialogButtonBox::Cancel));
 
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(m_saveBtn, &QPushButton::clicked, this, &FollowUpDialog::accept);

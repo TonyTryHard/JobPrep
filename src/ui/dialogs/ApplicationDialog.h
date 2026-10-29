@@ -11,6 +11,7 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QSpinBox;
+class QStackedWidget;
 class QTabWidget;
 class QTableWidget;
 class QTextEdit;
@@ -18,6 +19,10 @@ class QTextEdit;
 namespace JobPrep::Data {
 class ApplicationRepository;
 class InterviewRepository;
+}
+
+namespace JobPrep::Ui::Widgets {
+class EmptyState;
 }
 
 namespace JobPrep::Ui::Dialogs {
@@ -117,7 +122,11 @@ private:
     QWidget* m_interviewsPage{nullptr};
     QWidget* m_timelinePage{nullptr};
     QLabel* m_interviewsHint{nullptr};
+    QStackedWidget* m_interviewsStack{nullptr};
+    Widgets::EmptyState* m_interviewsEmptyState{nullptr};
     QTableWidget* m_interviewsTable{nullptr};
+    QStackedWidget* m_timelineStack{nullptr};
+    Widgets::EmptyState* m_timelineEmptyState{nullptr};
     QTableWidget* m_timelineTable{nullptr};
     QPushButton* m_saveBtn{nullptr};
     QPushButton* m_addInterviewBtn{nullptr};

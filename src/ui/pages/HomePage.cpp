@@ -41,6 +41,10 @@ void HomePage::onActivated() {
     m_controller.requestRefresh();
 }
 
+void HomePage::triggerNew() {
+    emit addApplicationRequested();
+}
+
 QFrame* HomePage::createCard(const QString& title, QWidget* content) {
     auto* card = new QFrame(this);
     card->setProperty("card", true);
@@ -130,15 +134,17 @@ void HomePage::setupUi() {
     m_todayView->setFocusPolicy(Qt::StrongFocus);
     m_todayView->setMinimumHeight(QFontMetrics(font()).height() * 7);
 
-    m_todayEmptyLabel = new QLabel(tr("Nothing planned for today"), todayContainer);
-    m_todayEmptyLabel->setAlignment(Qt::AlignCenter);
-    m_todayEmptyLabel->setMinimumHeight(QFontMetrics(font()).height() * 4);
+    m_todayEmptyState = new Widgets::EmptyState(
+        u"calendar"_s, tr("Nothing planned for today"),
+        tr("Log a study session or follow up on an application."),
+        QString(), todayContainer);
+    m_todayEmptyState->setObjectName(u"TodayEmptyState"_s);
 
     connect(m_todayView, &QListView::activated, this, &HomePage::onTodayItemActivated);
     connect(m_todayView, &QListView::doubleClicked, this, &HomePage::onTodayItemActivated);
 
     todayLayout->addWidget(m_todayView);
-    todayLayout->addWidget(m_todayEmptyLabel);
+    todayLayout->addWidget(m_todayEmptyState);
 
     auto* todayCard = createCard(tr("Today"), todayContainer);
     leftCol->addWidget(todayCard, 1);
@@ -160,15 +166,19 @@ void HomePage::setupUi() {
     m_upcomingView->setFocusPolicy(Qt::StrongFocus);
     m_upcomingView->setMinimumHeight(QFontMetrics(font()).height() * 6);
 
-    m_upcomingEmptyLabel = new QLabel(tr("No upcoming interviews"), upcomingContainer);
-    m_upcomingEmptyLabel->setAlignment(Qt::AlignCenter);
-    m_upcomingEmptyLabel->setMinimumHeight(QFontMetrics(font()).height() * 4);
+    m_upcomingEmptyState = new Widgets::EmptyState(
+        u"calendar"_s, tr("No upcoming interviews"),
+        tr("Schedule your next interview stage or screening."),
+        tr("+ Schedule interview"), upcomingContainer);
+    m_upcomingEmptyState->setObjectName(u"UpcomingEmptyState"_s);
 
     connect(m_upcomingView, &QListView::activated, this, &HomePage::onUpcomingItemActivated);
     connect(m_upcomingView, &QListView::doubleClicked, this, &HomePage::onUpcomingItemActivated);
+    connect(m_upcomingEmptyState, &Widgets::EmptyState::actionClicked, this,
+            &HomePage::newInterviewRequested);
 
     upcomingLayout->addWidget(m_upcomingView);
-    upcomingLayout->addWidget(m_upcomingEmptyLabel);
+    upcomingLayout->addWidget(m_upcomingEmptyState);
 
     auto* upcomingCard = createCard(tr("Upcoming interviews"), upcomingContainer);
     leftCol->addWidget(upcomingCard, 1);
@@ -248,13 +258,13 @@ void HomePage::applySnapshot(const DashboardSnapshot& snapshot) {
     m_todayModel->setItems(snapshot.todayItems);
     const bool hasToday = !snapshot.todayItems.isEmpty();
     m_todayView->setVisible(hasToday);
-    m_todayEmptyLabel->setVisible(!hasToday);
+    m_todayEmptyState->setVisible(!hasToday);
 
     // Upcoming interviews
     m_upcomingModel->setItems(snapshot.upcomingInterviews);
     const bool hasUpcoming = !snapshot.upcomingInterviews.isEmpty();
     m_upcomingView->setVisible(hasUpcoming);
-    m_upcomingEmptyLabel->setVisible(!hasUpcoming);
+    m_upcomingEmptyState->setVisible(!hasUpcoming);
 
     // Study progress
     m_progressRings->setTracks(snapshot.stats.trackProgress);

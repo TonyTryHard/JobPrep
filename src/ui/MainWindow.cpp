@@ -1,11 +1,15 @@
 #include "ui/MainWindow.h"
+#include <QApplication>
 #include <QCloseEvent>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLoggingCategory>
 #include <QMenu>
+#include <QResizeEvent>
+#include <QScreen>
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -13,6 +17,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QWindow>
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
 #include "data/InterviewRepository.h"
@@ -37,6 +42,8 @@
 using namespace Qt::StringLiterals;
 
 namespace JobPrep::Ui {
+
+Q_LOGGING_CATEGORY(lcWindow, "jobprep.window", QtInfoMsg)
 
 MainWindow::MainWindow(App::AppContext& ctx, bool trayAvailable, QWidget* parent)
     : QMainWindow(parent), m_ctx(ctx), m_trayAvailable(trayAvailable) {
@@ -159,6 +166,60 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     QMainWindow::closeEvent(event);
 }
 
+void MainWindow::showEvent(QShowEvent* event) {
+    QMainWindow::showEvent(event);
+    if (windowHandle() && !m_screenConnected) {
+        m_screenConnected = true;
+        connect(windowHandle(), &QWindow::screenChanged, this, [this](QScreen*) {
+            logWindowState(u"screenChanged"_s);
+        });
+    }
+    logWindowState(u"show"_s);
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event) {
+    QMainWindow::resizeEvent(event);
+    logWindowState(u"resize"_s);
+}
+
+void MainWindow::changeEvent(QEvent* event) {
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::WindowStateChange) {
+        logWindowState(u"windowStateChange"_s);
+    }
+}
+
+void MainWindow::logWindowState(const QString& trigger) {
+    if (!lcWindow().isDebugEnabled()) return;
+    QScreen* scr = screen();
+    const QRect avail = scr ? scr->availableGeometry() : QRect();
+    const qreal dpr = scr ? scr->devicePixelRatio() : 1.0;
+    qCDebug(lcWindow,
+            "[%s] state=0x%x geom=(%d,%d %dx%d) frame=(%d,%d %dx%d) min=(%dx%d) max=(%dx%d) "
+            "minHint=(%dx%d) sizeHint=(%dx%d) screenAvail=(%d,%d %dx%d) dpr=%f",
+            qPrintable(trigger),
+            static_cast<uint>(windowState()),
+            geometry().x(), geometry().y(), geometry().width(), geometry().height(),
+            frameGeometry().x(), frameGeometry().y(), frameGeometry().width(), frameGeometry().height(),
+            minimumSize().width(), minimumSize().height(),
+            maximumSize().width(), maximumSize().height(),
+            minimumSizeHint().width(), minimumSizeHint().height(),
+            sizeHint().width(), sizeHint().height(),
+            avail.x(), avail.y(), avail.width(), avail.height(),
+            dpr);
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == m_searchEdit && event->type() == QEvent::KeyPress) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_Escape && !m_searchEdit->text().isEmpty()) {
+            m_searchEdit->clear();
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
 void MainWindow::setupUi() {
     auto* centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
@@ -192,6 +253,7 @@ void MainWindow::setupUi() {
     m_searchEdit->setObjectName(u"HeaderSearchEdit"_s);
     m_searchEdit->setPlaceholderText(tr("Search... (Ctrl+F)"));
     m_searchEdit->setClearButtonEnabled(true);
+    m_searchEdit->installEventFilter(this);
     headerLayout->addWidget(m_searchEdit, 0, Qt::AlignVCenter);
 
     // A menu, not a bare button: each entry point can arrive in a later milestone and
@@ -203,7 +265,7 @@ void MainWindow::setupUi() {
     m_newBtn->setCursor(Qt::PointingHandCursor);
     m_newBtn->setPopupMode(QToolButton::InstantPopup);
     m_newBtn->setMenu(setupNewMenu(header));
-    m_newBtn->setToolTip(tr("Add something new"));
+    m_newBtn->setToolTip(tr("+ New (Ctrl+N)"));
     headerLayout->addWidget(m_newBtn, 0, Qt::AlignVCenter);
 
     rightLayout->addWidget(header);
@@ -281,31 +343,31 @@ void MainWindow::setupShortcuts() {
     for (int i = 0; i < 4; ++i) {
         auto* shortcut = new QShortcut(QKeySequence(Qt::CTRL | (Qt::Key_1 + i)), this);
         connect(shortcut, &QShortcut::activated, this, [this, i]() {
-            m_sidebar->setCurrentPage(i);
-            updateHeader(i);
+            if (QApplication::activeModalWidget()) return;
+            goToPage(i);
         });
     }
 
     auto* prefsShortcut = new QShortcut(QKeySequence::Preferences, this);
     connect(prefsShortcut, &QShortcut::activated, this, [this]() {
-        m_sidebar->setCurrentPage(4);
-        updateHeader(4);
+        if (QApplication::activeModalWidget()) return;
+        goToPage(4);
     });
 
     // On Linux/X11, QKeySequence::Preferences maps to Qt::Key_Settings rather than
     // Ctrl+,, but SPEC §3.7 explicitly specifies Ctrl+, for settings.
     auto* ctrlCommaShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Comma), this);
     connect(ctrlCommaShortcut, &QShortcut::activated, this, [this]() {
-        m_sidebar->setCurrentPage(4);
-        updateHeader(4);
+        if (QApplication::activeModalWidget()) return;
+        goToPage(4);
     });
 
     // Shortcuts live here only, never on a widget, so none of them is ambiguous.
     auto* findShortcut = new QShortcut(QKeySequence::Find, this);
     connect(findShortcut, &QShortcut::activated, this, &MainWindow::focusCurrentPageSearch);
 
-    auto* newShortcut = new QShortcut(QKeySequence::New, this);
-    connect(newShortcut, &QShortcut::activated, this, &MainWindow::triggerCurrentPageNew);
+    m_newShortcut = new QShortcut(QKeySequence::New, this);
+    connect(m_newShortcut, &QShortcut::activated, this, &MainWindow::triggerCurrentPageNew);
 }
 
 QMenu* MainWindow::setupNewMenu(QWidget* parent) {
@@ -338,12 +400,14 @@ void MainWindow::goToPage(int pageIndex) {
 }
 
 void MainWindow::focusCurrentPageSearch() {
+    if (QApplication::activeModalWidget()) return;
     auto* page = m_pages.value(m_pageStack->currentIndex(), nullptr);
     if (!page) return;
     page->focusSearch();
 }
 
 void MainWindow::triggerCurrentPageNew() {
+    if (QApplication::activeModalWidget()) return;
     auto* page = m_pages.value(m_pageStack->currentIndex(), nullptr);
     if (!page) return;
     page->triggerNew();
@@ -458,6 +522,8 @@ void MainWindow::setupConnections() {
                 &MainWindow::newApplicationFromHeader);
         connect(m_homePage, &Pages::HomePage::addTopicRequested, this,
                 &MainWindow::newTopicFromHeader);
+        connect(m_homePage, &Pages::HomePage::newInterviewRequested, this,
+                &MainWindow::newInterviewFromHeader);
         connect(m_homePage, &Pages::HomePage::interviewActivated, this,
                 &MainWindow::openInterview);
         connect(m_homePage, &Pages::HomePage::applicationActivated, this,
@@ -505,6 +571,10 @@ void MainWindow::updateHeader(int pageIndex) {
     } else {
         m_searchEdit->setEnabled(true);
         m_searchEdit->setToolTip(QString());
+    }
+
+    if (m_newShortcut) {
+        m_newShortcut->setEnabled(pageIndex != m_settingsIndex);
     }
 }
 

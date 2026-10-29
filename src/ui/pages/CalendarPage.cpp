@@ -140,6 +140,7 @@ void CalendarPage::setupToolbar(QVBoxLayout* layout) {
     m_prevBtn->setObjectName(u"CalendarPrevBtn"_s);
     m_prevBtn->setIcon(JobPrep::Ui::Theme::IconProvider::icon(u"chevron-left"_s,
                                                               m_theme.currentTokens().textMuted));
+    m_prevBtn->setAccessibleName(tr("Previous month"));
     m_prevBtn->setToolTip(tr("Previous month (Page Up)"));
     m_prevBtn->setCursor(Qt::PointingHandCursor);
     m_prevBtn->setText(tr("Previous month"));
@@ -148,6 +149,7 @@ void CalendarPage::setupToolbar(QVBoxLayout* layout) {
     m_nextBtn->setObjectName(u"CalendarNextBtn"_s);
     m_nextBtn->setIcon(JobPrep::Ui::Theme::IconProvider::icon(u"chevron-right"_s,
                                                               m_theme.currentTokens().textMuted));
+    m_nextBtn->setAccessibleName(tr("Next month"));
     m_nextBtn->setToolTip(tr("Next month (Page Down)"));
     m_nextBtn->setCursor(Qt::PointingHandCursor);
     m_nextBtn->setText(tr("Next month"));
@@ -251,7 +253,7 @@ void CalendarPage::setupAgendaPanel(QWidget* panel) {
     auto* addInterviewBtn = new QPushButton(tr("+ Interview"), panel);
     addInterviewBtn->setObjectName(u"CalendarAddInterviewBtn"_s);
     addInterviewBtn->setProperty("primary", true);
-    addInterviewBtn->setToolTip(tr("Schedule an interview on the selected day (double-click a day)"));
+    addInterviewBtn->setToolTip(tr("+ Interview (Ctrl+N)"));
     addInterviewBtn->setCursor(Qt::PointingHandCursor);
 
     auto* addFollowUpBtn = new QPushButton(tr("+ Follow-up"), panel);
@@ -284,17 +286,18 @@ void CalendarPage::setupAgendaPanel(QWidget* panel) {
         new JobPrep::Ui::Delegates::AgendaItemDelegate(m_theme, m_agendaView));
     m_agendaStack->addWidget(m_agendaView);
 
-    auto* emptyState = new Widgets::EmptyState(
+    m_agendaEmptyState = new Widgets::EmptyState(
         u"calendar"_s, tr("Nothing Planned"),
         tr("Use + Interview or + Follow-up to schedule something here."),
         tr("+ Interview"), m_agendaStack);
-    m_agendaStack->addWidget(emptyState);
+    m_agendaEmptyState->setObjectName(u"CalendarAgendaEmptyState"_s);
+    m_agendaStack->addWidget(m_agendaEmptyState);
 
     panelLayout->addWidget(m_agendaStack, 1);
 
     connect(addInterviewBtn, &QPushButton::clicked, this, [this]() { newInterview(); });
     connect(addFollowUpBtn, &QPushButton::clicked, this, &CalendarPage::addFollowUp);
-    connect(emptyState, &Widgets::EmptyState::actionClicked, this, [this]() { newInterview(); });
+    connect(m_agendaEmptyState, &Widgets::EmptyState::actionClicked, this, [this]() { newInterview(); });
     connect(m_agendaView, &QListView::clicked, this, &CalendarPage::openItem);
     connect(m_agendaView, &QListView::activated, this, &CalendarPage::openItem);
 }
@@ -362,6 +365,23 @@ void CalendarPage::reloadMarkers() {
 void CalendarPage::reloadAgenda() {
     if (!m_agendaModel || !m_monthView) return;
     const QDate day = selectedDay();
+    if (!day.isValid()) {
+        m_agendaTitleLabel->setText(tr("Agenda"));
+        if (m_agendaEmptyState) {
+            m_agendaEmptyState->setTitle(tr("No Day Selected"));
+            m_agendaEmptyState->setDescription(tr("Select a date to view or schedule events."));
+            m_agendaEmptyState->setActionText(QString());
+        }
+        m_agendaStack->setCurrentWidget(m_agendaEmptyState);
+        return;
+    }
+
+    if (m_agendaEmptyState) {
+        m_agendaEmptyState->setTitle(tr("Nothing Planned"));
+        m_agendaEmptyState->setDescription(tr("Use + Interview or + Follow-up to schedule something here."));
+        m_agendaEmptyState->setActionText(tr("+ Interview"));
+    }
+
     m_agendaModel->setItems(agendaItems(day, day));
 
     const QDate today = m_todayProvider();

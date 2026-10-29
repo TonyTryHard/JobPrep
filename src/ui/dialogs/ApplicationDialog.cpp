@@ -12,8 +12,10 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QStackedWidget>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTextEdit>
@@ -24,6 +26,7 @@
 #include "domain/EnumStrings.h"
 #include "ui/dialogs/InterviewDialog.h"
 #include "ui/theme/StatusStyle.h"
+#include "ui/widgets/EmptyState.h"
 
 using namespace Qt::StringLiterals;
 
@@ -90,14 +93,20 @@ void ApplicationDialog::setupUi() {
     layout->addWidget(m_messageLabel);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
+    buttons->button(QDialogButtonBox::Cancel)->setToolTip(tr("Discard changes (Esc)"));
     m_saveBtn = buttons->addButton(tr("Save"), QDialogButtonBox::AcceptRole);
     m_saveBtn->setObjectName(u"DialogSaveBtn"_s);
     m_saveBtn->setProperty("primary", true);
+    m_saveBtn->setToolTip(tr("Save changes (Ctrl+S)"));
     layout->addWidget(buttons);
 
+    auto* saveShortcut = new QShortcut(QKeySequence::Save, this);
+    connect(saveShortcut, &QShortcut::activated, this, &ApplicationDialog::onSave);
     connect(buttons, &QDialogButtonBox::accepted, this, &ApplicationDialog::onSave);
     connect(buttons, &QDialogButtonBox::rejected, this, &ApplicationDialog::reject);
     connect(m_tabs, &QTabWidget::currentChanged, this, &ApplicationDialog::onTabChanged);
+
+    QWidget::setTabOrder(m_saveBtn, buttons->button(QDialogButtonBox::Cancel));
 }
 
 void ApplicationDialog::setupOverviewTab() {
@@ -127,6 +136,9 @@ void ApplicationDialog::setupOverviewTab() {
     m_sourceCombo = new QComboBox(page);
     m_sourceCombo->setObjectName(u"FieldSourceCombo"_s);
     m_sourceCombo->setEditable(true);
+    if (m_sourceCombo->lineEdit()) {
+        m_sourceCombo->lineEdit()->setObjectName(u"FieldSourceEdit"_s);
+    }
     m_sourceCombo->addItem(QString(), QString());
     m_sourceCombo->setCurrentIndex(0);
     form->addRow(tr("Source"), m_sourceCombo);
@@ -156,6 +168,7 @@ void ApplicationDialog::setupOverviewTab() {
     form->addRow(tr("Currency"), m_currencyEdit);
 
     m_appliedDateEnabled = new QCheckBox(tr("Set"), page);
+    m_appliedDateEnabled->setObjectName(u"FieldAppliedDateCheck"_s);
     m_appliedDateEdit = new QDateEdit(page);
     m_appliedDateEdit->setObjectName(u"FieldAppliedDate"_s);
     m_appliedDateEdit->setCalendarPopup(true);
@@ -175,6 +188,7 @@ void ApplicationDialog::setupOverviewTab() {
     form->addRow(tr("Next action"), m_nextActionEdit);
 
     m_nextActionDateEnabled = new QCheckBox(tr("Set"), page);
+    m_nextActionDateEnabled->setObjectName(u"FieldNextActionDateCheck"_s);
     m_nextActionDateEdit = new QDateEdit(page);
     m_nextActionDateEdit->setObjectName(u"FieldNextActionDate"_s);
     m_nextActionDateEdit->setCalendarPopup(true);
@@ -232,6 +246,24 @@ void ApplicationDialog::setupOverviewTab() {
 
     connect(m_appliedDateEnabled, &QCheckBox::toggled, m_appliedDateEdit, &QDateEdit::setEnabled);
     connect(m_nextActionDateEnabled, &QCheckBox::toggled, m_nextActionDateEdit, &QDateEdit::setEnabled);
+
+    QWidget::setTabOrder(m_companyEdit, m_positionEdit);
+    QWidget::setTabOrder(m_positionEdit, m_statusCombo);
+    QWidget::setTabOrder(m_statusCombo, m_sourceCombo);
+    QWidget::setTabOrder(m_sourceCombo, m_workModeCombo);
+    QWidget::setTabOrder(m_workModeCombo, m_salaryMinSpin);
+    QWidget::setTabOrder(m_salaryMinSpin, m_salaryMaxSpin);
+    QWidget::setTabOrder(m_salaryMaxSpin, m_currencyEdit);
+    QWidget::setTabOrder(m_currencyEdit, m_appliedDateEnabled);
+    QWidget::setTabOrder(m_appliedDateEnabled, m_appliedDateEdit);
+    QWidget::setTabOrder(m_appliedDateEdit, m_nextActionEdit);
+    QWidget::setTabOrder(m_nextActionEdit, m_nextActionDateEnabled);
+    QWidget::setTabOrder(m_nextActionDateEnabled, m_nextActionDateEdit);
+    QWidget::setTabOrder(m_nextActionDateEdit, m_urlEdit);
+    QWidget::setTabOrder(m_urlEdit, m_resumeVersionEdit);
+    QWidget::setTabOrder(m_resumeVersionEdit, m_locationEdit);
+    QWidget::setTabOrder(m_locationEdit, m_contactNameEdit);
+    QWidget::setTabOrder(m_contactNameEdit, m_contactEmailEdit);
 }
 
 void ApplicationDialog::setupNotesTab() {
@@ -268,7 +300,20 @@ void ApplicationDialog::setupInterviewsTab() {
     m_interviewsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_interviewsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_interviewsTable->setSelectionMode(QAbstractItemView::SingleSelection);
-    layout->addWidget(m_interviewsTable, 1);
+
+    m_interviewsStack = new QStackedWidget(page);
+    m_interviewsStack->setObjectName(u"InterviewsStack"_s);
+    m_interviewsStack->addWidget(m_interviewsTable);
+
+    m_interviewsEmptyState = new Widgets::EmptyState(
+        u"calendar"_s, tr("No interviews scheduled yet"),
+        tr("Keep notes and outcomes for every interview stage."),
+        tr("+ Interview"), m_interviewsStack);
+    m_interviewsEmptyState->setObjectName(u"InterviewsEmptyState"_s);
+    connect(m_interviewsEmptyState, &Widgets::EmptyState::actionClicked, this, &ApplicationDialog::onAddInterview);
+    m_interviewsStack->addWidget(m_interviewsEmptyState);
+
+    layout->addWidget(m_interviewsStack, 1);
 
     auto* buttons = new QHBoxLayout();
     buttons->setContentsMargins(0, 0, 0, 0);
@@ -294,6 +339,10 @@ void ApplicationDialog::setupInterviewsTab() {
             &ApplicationDialog::onInterviewSelectionChanged);
     connect(m_interviewsTable, &QTableWidget::cellDoubleClicked, this,
             [this](int, int) { onEditInterview(); });
+
+    QWidget::setTabOrder(m_interviewsTable, m_addInterviewBtn);
+    QWidget::setTabOrder(m_addInterviewBtn, m_editInterviewBtn);
+    QWidget::setTabOrder(m_editInterviewBtn, m_deleteInterviewBtn);
 }
 
 void ApplicationDialog::setupTimelineTab() {
@@ -301,6 +350,7 @@ void ApplicationDialog::setupTimelineTab() {
     auto* page = m_timelinePage;
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
+
     m_timelineTable = new QTableWidget(page);
     m_timelineTable->setObjectName(u"TimelineTable"_s);
     m_timelineTable->setColumnCount(3);
@@ -309,7 +359,20 @@ void ApplicationDialog::setupTimelineTab() {
     m_timelineTable->verticalHeader()->setVisible(false);
     m_timelineTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_timelineTable->setSelectionMode(QAbstractItemView::NoSelection);
-    layout->addWidget(m_timelineTable);
+
+    m_timelineStack = new QStackedWidget(page);
+    m_timelineStack->setObjectName(u"TimelineStack"_s);
+    m_timelineStack->addWidget(m_timelineTable);
+
+    m_timelineEmptyState = new Widgets::EmptyState(
+        u"status"_s, tr("No status changes recorded"),
+        tr("Status transitions will appear here as you update the application."),
+        QString(), m_timelineStack);
+    m_timelineEmptyState->setObjectName(u"TimelineEmptyState"_s);
+    m_timelineStack->addWidget(m_timelineEmptyState);
+    m_timelineStack->setCurrentWidget(m_timelineEmptyState);
+
+    layout->addWidget(m_timelineStack, 1);
     m_tabs->addTab(page, tr("Timeline"));
 }
 
@@ -395,6 +458,17 @@ void ApplicationDialog::reloadReadOnlyTabs() {
             m_timelineTable->setItem(row, 2, new QTableWidgetItem(
                 Theme::StatusStyle::label(change.toStatus)));
         }
+        if (m_timelineStack) {
+            m_timelineStack->setCurrentWidget(history.empty() ? static_cast<QWidget*>(m_timelineEmptyState)
+                                                              : static_cast<QWidget*>(m_timelineTable));
+        }
+    } else {
+        if (m_interviewsStack) {
+            m_interviewsStack->setCurrentWidget(m_interviewsEmptyState);
+        }
+        if (m_timelineStack) {
+            m_timelineStack->setCurrentWidget(m_timelineEmptyState);
+        }
     }
 
     updateInterviewButtons();
@@ -402,7 +476,12 @@ void ApplicationDialog::reloadReadOnlyTabs() {
 
 void ApplicationDialog::reloadInterviewsTable() {
     m_interviewsTable->setRowCount(0);
-    if (m_app.id == 0) return;
+    if (m_app.id == 0) {
+        if (m_interviewsStack) {
+            m_interviewsStack->setCurrentWidget(m_interviewsEmptyState);
+        }
+        return;
+    }
 
     const auto interviews = m_interviews.byApplication(m_app.id);
     m_interviewsTable->setRowCount(static_cast<int>(interviews.size()));
@@ -420,6 +499,10 @@ void ApplicationDialog::reloadInterviewsTable() {
             tr("%1 min").arg(interview.durationMin)));
         m_interviewsTable->setItem(row, 3, new QTableWidgetItem(
             Theme::StatusStyle::label(interview.outcome)));
+    }
+    if (m_interviewsStack) {
+        m_interviewsStack->setCurrentWidget(interviews.empty() ? static_cast<QWidget*>(m_interviewsEmptyState)
+                                                               : static_cast<QWidget*>(m_interviewsTable));
     }
 }
 

@@ -35,6 +35,7 @@ class ThemeManager;
 }
 
 namespace JobPrep::Ui::Widgets {
+class EmptyState;
 class MonthView;
 }
 
@@ -118,6 +119,7 @@ private:
     QStackedWidget* m_agendaStack{nullptr};
     QLabel* m_agendaTitleLabel{nullptr};
     QListView* m_agendaView{nullptr};
+    Widgets::EmptyState* m_agendaEmptyState{nullptr};
     Models::AgendaListModel* m_agendaModel{nullptr};
 };
 
