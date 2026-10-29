@@ -117,6 +117,7 @@ void JobsPage::setupToolbar(QVBoxLayout* layout) {
     m_searchEdit->setPlaceholderText(tr("Search company, position, notes"));
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setMaximumWidth(320);
+    m_searchEdit->installEventFilter(this);
     barLayout->addWidget(m_searchEdit, 0, Qt::AlignVCenter);
 
     m_chips = new Widgets::ChipBar(bar);
@@ -184,8 +185,6 @@ void JobsPage::setupTable(QVBoxLayout* layout) {
                                      new Ui::Delegates::StatusBadgeDelegate(m_view));
 
     m_stack = new QStackedWidget(this);
-    m_stack->addWidget(new QWidget(this));
-    m_stack->addWidget(m_view);
     layout->addWidget(m_stack, 1);
 
     connect(m_view, &QTableView::customContextMenuRequested, this,
@@ -210,13 +209,17 @@ void JobsPage::setupEmptyStates() {
         u"jobs"_s, tr("No Applications Yet"),
         tr("Track job openings, manage interview stages, and follow up with recruiters."),
         tr("+ Add application"), m_stack);
+    noDataState->setObjectName(u"JobsNoDataState"_s);
     connect(noDataState, &Widgets::EmptyState::actionClicked, this, &JobsPage::newApplication);
-    m_stack->addWidget(noDataState);
+    m_stack->insertWidget(kViewNoData, noDataState);
+
+    m_stack->insertWidget(kViewTable, m_view);
 
     auto* noMatchesState = new Widgets::EmptyState(
         u"search"_s, tr("No Matches"),
         tr("No application matches the current search and status filter."),
         tr("Clear filters"), m_stack);
+    noMatchesState->setObjectName(u"JobsNoMatchesState"_s);
     connect(noMatchesState, &Widgets::EmptyState::actionClicked, this, [this]() {
         const QSignalBlocker blocker(m_searchEdit);
         m_searchEdit->clear();
@@ -225,7 +228,7 @@ void JobsPage::setupEmptyStates() {
         m_proxy->setFilterChip(Models::ApplicationFilterProxy::All);
         refreshViewState();
     });
-    m_stack->addWidget(noMatchesState);
+    m_stack->insertWidget(kViewNoMatches, noMatchesState);
 }
 
 void JobsPage::setupContextMenu() {
@@ -273,6 +276,13 @@ void JobsPage::setupContextMenu() {
 }
 
 bool JobsPage::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == m_searchEdit && event->type() == QEvent::KeyPress) {
+        auto* key = static_cast<QKeyEvent*>(event);
+        if (key->key() == Qt::Key_Escape && !m_searchEdit->text().isEmpty()) {
+            m_searchEdit->clear();
+            return true;
+        }
+    }
     if (watched == m_view && event->type() == QEvent::KeyPress) {
         auto* key = static_cast<QKeyEvent*>(event);
         const auto id = selectedId();

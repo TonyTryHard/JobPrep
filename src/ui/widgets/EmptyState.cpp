@@ -49,12 +49,14 @@ void EmptyState::setupUi() {
     btnLayout->setAlignment(Qt::AlignCenter);
 
     m_actionBtn = new QPushButton(this);
+    m_actionBtn->setObjectName(u"EmptyStateActionBtn"_s);
     m_actionBtn->setProperty("primary", true);
     m_actionBtn->setVisible(false);
     connect(m_actionBtn, &QPushButton::clicked, this, &EmptyState::actionClicked);
     btnLayout->addWidget(m_actionBtn);
 
     m_secondaryActionBtn = new QPushButton(this);
+    m_secondaryActionBtn->setObjectName(u"EmptyStateSecondaryActionBtn"_s);
     m_secondaryActionBtn->setVisible(false);
     connect(m_secondaryActionBtn, &QPushButton::clicked, this, &EmptyState::secondaryActionClicked);
     btnLayout->addWidget(m_secondaryActionBtn);

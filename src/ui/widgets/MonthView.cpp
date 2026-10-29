@@ -72,7 +72,13 @@ void MonthView::setVisibleMonth(QDate month) {
 }
 
 void MonthView::selectDate(QDate day) {
-    if (!day.isValid()) return;
+    if (!day.isValid()) {
+        const bool dayChanged = m_selectedDay.isValid();
+        m_selectedDay = QDate();
+        update();
+        if (dayChanged) emit selectionChanged(m_selectedDay);
+        return;
+    }
     const QDate targetMonth(day.year(), day.month(), 1);
     bool monthMoved = false;
     if (targetMonth != m_visibleMonth) {

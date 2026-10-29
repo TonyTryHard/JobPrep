@@ -13,6 +13,7 @@
 #include <QPainterPath>
 #include <QPixmap>
 #include <QPushButton>
+#include <QShortcut>
 #include <QVBoxLayout>
 #include "data/TopicRepository.h"
 #include "data/TrackRepository.h"
@@ -175,22 +176,33 @@ void TrackDialog::setupUi() {
     m_saveBtn->setObjectName(u"TrackSaveBtn"_s);
     m_saveBtn->setProperty("primary", true);
     m_saveBtn->setDefault(true);
+    m_saveBtn->setToolTip(tr("Save track (Ctrl+S)"));
     bottomLayout->addWidget(m_saveBtn);
 
     m_closeBtn = new QPushButton(tr("Close"), this);
     m_closeBtn->setObjectName(u"TrackCloseBtn"_s);
+    m_closeBtn->setToolTip(tr("Close dialog (Esc)"));
     bottomLayout->addWidget(m_closeBtn);
 
     mainLayout->addLayout(bottomLayout);
 
+    auto* saveShortcut = new QShortcut(QKeySequence::Save, this);
+    connect(saveShortcut, &QShortcut::activated, this, &TrackDialog::onSaveClicked);
+
+    QWidget::setTabOrder(m_trackList, m_newBtn);
+    QWidget::setTabOrder(m_newBtn, m_deleteBtn);
+    QWidget::setTabOrder(m_deleteBtn, m_nameEdit);
     if (!m_swatchButtons.isEmpty()) {
         QWidget::setTabOrder(m_nameEdit, m_swatchButtons.first());
         for (int i = 0; i < m_swatchButtons.size() - 1; ++i) {
             QWidget::setTabOrder(m_swatchButtons[i], m_swatchButtons[i + 1]);
         }
         QWidget::setTabOrder(m_swatchButtons.last(), m_customSwatchBtn);
-        QWidget::setTabOrder(m_customSwatchBtn, m_deleteBtn);
+        QWidget::setTabOrder(m_customSwatchBtn, m_saveBtn);
+    } else {
+        QWidget::setTabOrder(m_nameEdit, m_saveBtn);
     }
+    QWidget::setTabOrder(m_saveBtn, m_closeBtn);
 
     connect(m_trackList, &QListWidget::currentRowChanged, this, &TrackDialog::onTrackSelectionChanged);
     connect(m_newBtn, &QPushButton::clicked, this, &TrackDialog::onNewTrackClicked);
