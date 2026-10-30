@@ -6,6 +6,8 @@
 #include "TestDatabase.h"
 #include "data/ApplicationRepository.h"
 #include "data/InterviewRepository.h"
+#include "data/TopicRepository.h"
+#include "data/TrackRepository.h"
 
 using namespace Qt::StringLiterals;
 using JobPrep::Data::ApplicationRepository;
@@ -43,6 +45,7 @@ private slots:
     void appliedCountInRangeInclusiveAndEmpty();
     void funnelStageCountsMatchesRanksAndHistory();
     void byNextActionDateUpToQueries();
+    void repositoryCreatedAtAndUpdatedAtAreCurrent();
 
 private:
     int addApplication(const QString& company, ApplicationStatus status = ApplicationStatus::Applied);
@@ -587,6 +590,58 @@ void tst_ApplicationRepository::byNextActionDateUpToQueries() {
     QCOMPARE(res.size(), 2);
     QCOMPARE(res[0].company, u"Past1"_s);
     QCOMPARE(res[1].company, u"OnUpTo"_s);
+}
+
+void tst_ApplicationRepository::repositoryCreatedAtAndUpdatedAtAreCurrent() {
+    const QDateTime before = QDateTime::currentDateTime();
+
+    // 1. Application insert
+    JobApplication app;
+    app.company = u"RealTime Inc"_s;
+    app.position = u"C++ Engineer"_s;
+    app.status = ApplicationStatus::Applied;
+    QVERIFY(m_apps->insert(app));
+
+    const auto storedApp = m_apps->byId(app.id);
+    QVERIFY(storedApp.has_value());
+    // Assert not Unix epoch (1970) and within a few seconds of now
+    QVERIFY(storedApp->createdAt.date().year() >= 2026);
+    QVERIFY(storedApp->updatedAt.date().year() >= 2026);
+    QVERIFY(storedApp->createdAt >= before.addSecs(-5));
+    QVERIFY(storedApp->createdAt <= QDateTime::currentDateTime().addSecs(5));
+    QVERIFY(storedApp->updatedAt >= before.addSecs(-5));
+    QVERIFY(storedApp->updatedAt <= QDateTime::currentDateTime().addSecs(5));
+
+    // 2. Topic insert
+    JobPrep::Data::TrackRepository trackRepo(m_db->db());
+    JobPrep::Data::TopicRepository topicRepo(m_db->db());
+    JobPrep::Domain::Track track;
+    track.name = u"General"_s;
+    track.color = u"#336699"_s;
+    QVERIFY(trackRepo.insert(track));
+
+    JobPrep::Domain::Topic topic;
+    topic.trackId = track.id;
+    topic.title = u"Modern C++ Concurrency"_s;
+    QVERIFY(topicRepo.insert(topic));
+
+    const auto storedTopic = topicRepo.byId(topic.id);
+    QVERIFY(storedTopic.has_value());
+    QVERIFY(storedTopic->createdAt.date().year() >= 2026);
+    QVERIFY(storedTopic->updatedAt.date().year() >= 2026);
+    QVERIFY(storedTopic->createdAt >= before.addSecs(-5));
+    QVERIFY(storedTopic->createdAt <= QDateTime::currentDateTime().addSecs(5));
+    QVERIFY(storedTopic->updatedAt >= before.addSecs(-5));
+    QVERIFY(storedTopic->updatedAt <= QDateTime::currentDateTime().addSecs(5));
+
+    // 3. Status change history row
+    QVERIFY(m_apps->setStatus(app.id, ApplicationStatus::HrScreen, u"Passed resume review"_s));
+    const auto history = m_apps->statusHistory(app.id);
+    QVERIFY(!history.isEmpty());
+    const auto latestChange = history.last();
+    QVERIFY(latestChange.changedAt.date().year() >= 2026);
+    QVERIFY(latestChange.changedAt >= before.addSecs(-5));
+    QVERIFY(latestChange.changedAt <= QDateTime::currentDateTime().addSecs(5));
 }
 
 QTEST_GUILESS_MAIN(tst_ApplicationRepository)

@@ -6,7 +6,7 @@ namespace JobPrep::Data::DbFormat {
 
 QDateTime now() {
     QDateTime current = QDateTime::currentDateTime();
-    current.setMSecsSinceEpoch(0);
+    current.setSecsSinceEpoch(current.toSecsSinceEpoch());
     return current;
 }
 
