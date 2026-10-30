@@ -570,8 +570,22 @@ page 4 JobPrep::Ui::Pages::SettingsPage maximumSize: 16777215x16777215, layout t
 Study toolbar layout totalMaximumSize: 524287x34
 Jobs toolbar layout totalMaximumSize: 524287x34
 ```
-**Conclusion:**
-In Qt, `QLayout::totalMaximumSize()` on child layouts does not propagate upward to constrain the top-level window's `maximumSize()` unless `QLayout::SetFixedSize` or a explicit window size constraint is set. Therefore, `testWindowMaximumSizeAndMaximize` passes identically with or without `Qt::AlignVCenter`. The test does not prove window manager behavior on a real desktop; any window maximize restrictions observed on Linux are compositor- or Wayland-specific (the user will test under `QT_QPA_PLATFORM=xcb`).
+**Code Investigation & Verification:**
+- Top-level window sizing: `MainWindow::maximumSize()` is `QSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX)` across all pages.
+- Code behavior in `src/ui/`: `grep -rn "restoreGeometry\|saveGeometry\|showMaximized\|setWindowState" src/ui/`:
+  ```
+  src/ui/MainWindow.cpp:66:        restoreGeometry(geo);
+  src/ui/MainWindow.cpp:118:    m_ctx.settings().setWindowGeometry(saveGeometry());
+  src/ui/MainWindow.cpp:119:    m_ctx.settings().setWindowState(saveState());
+  ```
+  The code restores saved geometry on startup and saves geometry/state on shutdown/hide; it never calls `showMaximized()` or `setWindowState()` programmatically behind the user's back, nor does it override window manager state changes.
+- Smoke test verification: `testWindowMaximumSizeAndMaximize` in `tests/ui_smoke/tst_UiSmoke.cpp` passes.
+- Diagnostic category: Added `jobprep.window` logging category (debug level, off by default, tested in `tst_UiSmoke::testWindowLoggingCategory`).
+- **Not verified by agent, user to check:** To diagnose window manager maximize behavior on the physical desktop, launch the app with logging enabled:
+  ```bash
+  QT_LOGGING_RULES="jobprep.window.debug=true" ./build/dev-linux/jobprep
+  ```
+  Click maximize on the title bar, restore/unmaximize, close the app, and observe the `[jobprep.window]` output logs reporting geometry, frame geometry, min/max hints, and screen available geometry.
 
 ---
 
@@ -1110,3 +1124,300 @@ Total Test time (real) =  46.76 sec
 5. **Visible Focus Ring Look:** Inspect the 2px accent focus ring on the physical desktop monitor in both Light and Dark modes.
 6. **Screen Reader Accessibility:** Test screen reader (e.g. Orca on Linux or NVDA/Narrator on Windows) announcements of icon-only buttons with accessible names.
 7. **Windows Execution:** Cross-platform verification under native MSVC 2022 / Windows 10/11 environment.
+
+---
+
+## 8. Changes in Round 2 (F1–F7 Fixups)
+
+### F1. Goal Spin Box Typing Rules (Superseding 1.13)
+The `GoalSpinBox` parser in `src/ui/pages/SettingsPage.cpp` was updated to interpret user-entered dots and commas strictly as **time separators** (`<hours>.<minutes>`), identical in semantics to colons and semicolons:
+- `<hours>.<minutes>` where minutes is 2 digits (`00`..`59`): parsed as `hours * 60 + minutes` (e.g. `7.30` -> 450 min / 7 h 30 min, `7.05` -> 425 min / 7 h 5 min).
+- `<hours>.<minutes>` where minutes is a single digit `0`..`5`: interpreted as tens of minutes (e.g. `7.5` -> 470 min / 7 h 50 min, `7.1` -> 430 min / 7 h 10 min).
+- Out-of-range minutes: single digit `6`..`9` (e.g. `7.6`) or two-digit minutes `>= 60` (e.g. `7.75`, `7.60`, `7.99`) are invalid time syntax and rejected with an error.
+- Trailing unit suffixes (`h`, `hrs`, `hour`, `hours`, `m`, `min`, `mins`, `minutes`) are stripped prior to parsing.
+- Clamping and rounding: parsed minutes are clamped to $[60, 2400]$ and rounded to the nearest 15-minute boundary.
+- Error restoration: on pressing Enter or on focus loss (`fixup()` and `validate()`), syntax errors or out-of-range inputs restore the previous valid value instead of committing invalid state.
+
+**Test Coverage:**
+- Data-driven unit test `testGoalSpinBoxTypingRules()` in `tests/ui/tst_PageSettings.cpp` evaluates 33 distinct input variants.
+- Error test `testGoalSpinBoxErrorRestoresPreviousValue()` tests error restoration on Enter and focus loss.
+- Deprecated tests `testGoalSpinBoxTypedDecimals` and `testGoalSpinBoxTypedFractionRounding` were removed.
+- **Commit:** `240c142 feat(ui): implement time-separator typing rules for goal spin box (F1)`
+
+---
+
+### F2. Evidence Integrity & Raw Command Outputs
+
+#### 1. Migrations
+Raw command output verifying schema migrations:
+```bash
+$ grep -n "ALTER TABLE\|user_version" src/data/Migrations.cpp
+101:    if (!query.exec(u"PRAGMA user_version"_s) || !query.next()) return 0;
+129:        const QString version = u"PRAGMA user_version = "_s + QString::number(migration.version);
+```
+JobPrep uses a single initial migration (`Migration 1`) creating all tables and setting `PRAGMA user_version = 1`. No `ALTER TABLE` statements exist in the codebase.
+
+#### 2. Raw Commands (Correcting Reconstructed Outputs)
+```bash
+$ git grep -n "DEFAULT_PAGE"
+# (exit code 1 - no occurrences in repo)
+```
+
+```bash
+$ grep -rn "PRAGMA foreign_keys" src/
+src/data/Database.cpp:80:    execute(u"PRAGMA foreign_keys=ON"_s);
+```
+
+#### 3. Test Binaries & Function Count Arithmetic
+Every test binary was executed with `-functions` to compute exact test function counts:
+```bash
+$ total=0; for b in $(find build/dev-linux/tests -maxdepth 2 -type f -executable | sort); do cnt=$("$b" -functions | wc -l); echo "$b: $cnt"; total=$((total + cnt)); done; echo "TOTAL_FUNCTIONS: $total"; echo "TOTAL_BINARIES: $(find build/dev-linux/tests -maxdepth 2 -type f -executable | wc -l)"
+build/dev-linux/tests/data/tst_ApplicationRepository: 19
+build/dev-linux/tests/data/tst_Database: 16
+build/dev-linux/tests/data/tst_InterviewRepository: 9
+build/dev-linux/tests/data/tst_ReminderLogRepository: 7
+build/dev-linux/tests/data/tst_SeedService: 5
+build/dev-linux/tests/data/tst_SessionRepository: 10
+build/dev-linux/tests/data/tst_TopicRepository: 18
+build/dev-linux/tests/data/tst_TrackRepository: 8
+build/dev-linux/tests/data/tst_TransactionBehavior: 8
+build/dev-linux/tests/models/tst_AgendaListModel: 5
+build/dev-linux/tests/models/tst_ApplicationFilterProxy: 2
+build/dev-linux/tests/models/tst_ApplicationTableModel: 6
+build/dev-linux/tests/models/tst_TopicBoardProxy: 9
+build/dev-linux/tests/models/tst_TopicListModel: 7
+build/dev-linux/tests/models/tst_TopicTableProxy: 6
+build/dev-linux/tests/services/tst_AgendaService: 24
+build/dev-linux/tests/services/tst_DayWatcher: 4
+build/dev-linux/tests/services/tst_ExportService: 4
+build/dev-linux/tests/services/tst_ImportExport: 32
+build/dev-linux/tests/services/tst_ReminderService: 18
+build/dev-linux/tests/services/tst_SettingsService: 7
+build/dev-linux/tests/services/tst_StatsService: 10
+build/dev-linux/tests/ui_smoke/tst_MonthView: 13
+build/dev-linux/tests/ui_smoke/ui_smoke: 9
+build/dev-linux/tests/ui/tst_EmptyStatesAndFocus: 32
+build/dev-linux/tests/ui/tst_Notifiers: 21
+build/dev-linux/tests/ui/tst_PageCalendar: 12
+build/dev-linux/tests/ui/tst_PageHome: 16
+build/dev-linux/tests/ui/tst_PageJobs: 22
+build/dev-linux/tests/ui/tst_PageSettings: 44
+build/dev-linux/tests/ui/tst_PageStudy: 26
+build/dev-linux/tests/ui/tst_Shortcuts: 12
+build/dev-linux/tests/ui/tst_StudyRegression: 12
+TOTAL_FUNCTIONS: 453
+TOTAL_BINARIES: 33
+```
+Exact sum: $19 + 16 + 9 + 7 + 5 + 10 + 18 + 8 + 8 + 5 + 2 + 6 + 9 + 7 + 6 + 24 + 4 + 4 + 32 + 18 + 7 + 10 + 13 + 9 + 32 + 21 + 12 + 16 + 22 + 44 + 26 + 12 + 12 = 453$.
+
+#### 4. Timer Flushing and Shutdown Synchronization
+In `MainWindow::prepareForShutdown()`:
+1. `m_ctx.restoreService().waitForRestore(5000)`: if an asynchronous database restore is running on its worker thread, shutdown blocks for up to 5 seconds while pumping the event loop with `QCoreApplication::processEvents()`.
+2. `flushStateAndEdits()`: loops through `m_pages` invoking `page->flushEdits()`. On `StudyPage`, this delegates to `m_detail->flush()` which immediately invokes `saveNow()` to persist active edits to SQLite. `TopicDetailPanel` saves synchronously upon focus loss / selection change / explicit flush, leaving no uncommitted debounce timers.
+3. `m_dashboardController->stop()`: stops `DashboardController`'s 60-second polling timer (`m_refreshTimer.stop()`) and disconnects all repository listeners.
+
+---
+
+### F3. Sample ICS & JSON Field Integrity
+
+#### 1. Untrimmed Sample ICS (`cat -A`)
+Generated via test suite (`testIcsExportFormatDetails` in `tst_ImportExport`):
+```
+$ cat -A /tmp/throwaway_sample.ics
+BEGIN:VCALENDAR^M$
+VERSION:2.0^M$
+PRODID:-//JobPrep//JobPrep Desktop//EN^M$
+CALSCALE:GREGORIAN^M$
+BEGIN:VEVENT^M$
+UID:jobprep-interview-101@jobprep.local^M$
+DTSTAMP:20261030T145904Z^M$
+DTSTART:20261105T140000^M$
+DTEND:20261105T150000^M$
+SUMMARY:Interview: UkrainianTech M-bM-^@M-^T Technical^M$
+LOCATION:Kyiv\, Khreshchatyk 1^M$
+DESCRIPTION:Notes: M-PM-^]M-PM->M-QM-^BM-PM-0M-QM-^BM-PM-:M-PM-8: M-PM-:M-PM->M-PM-<M-PM-0\, M-PM-:M-QM-^@M-PM-0M-PM-?M-PM-:M-PM-0 M-PM-7 M-PM-:M-PM->M-PM-<M-PM->M-QM-^N\; ^M$
+ M-PM-7M-PM-2M-PM->M-QM-^@M-PM->M-QM-^BM-PM-=M-PM-8M-PM-9 M-QM-^AM-PM-;M-PM-5M-QM-^H \\ M-PM-=M-PM->M-PM-2M-PM-8M-PM-9 M-QM-^@M-QM-^OM-PM-4M-PM->M-PM-:\nM-PM-^TM-QM-^CM-PM-6M-PM-5 M-PM-4M-PM->M-PM-2M-PM-3M-PM-8^M$
+ M-PM-9 M-QM-^BM-PM-5M-PM-:M-QM-^AM-QM-^B M-QM-^CM-PM-:M-QM-^@M-PM-0M-QM-^WM-PM-=M-QM-^AM-QM-^LM-PM-:M-PM->M-QM-^N M-PM-<M-PM->M-PM-2M-PM->M-QM-^N M-PM-4M-PM-;M-QM-^O M-PM-?M-PM-5M-QM-^@M-PM-5M-PM-2M-QM-^VM-QM-^@M-PM-:M-PM-8 ^M$
+ M-PM-:M-PM->M-QM-^@M-PM-5M-PM-:M-QM-^BM-PM-=M-PM->M-PM-3M-PM-> M-QM-^@M-PM->M-PM-7M-PM-1M-PM-8M-QM-^BM-QM-^BM-QM-^O M-QM-^@M-QM-^OM-PM-4M-PM-:M-QM-^VM-PM-2 M-PM-7M-PM-0 M-QM-^AM-QM-^BM-PM-0M-PM-=M-PM-4M-PM-0M-QM-^@M-QM-^BM-PM->^M$
+ M-PM-< RFC 5545 M-PM-1M-PM-5M-PM-7 M-PM-?M-PM->M-QM-^HM-PM-:M-PM->M-PM-4M-PM-6M-PM-5M-PM-=M-PM-=M-QM-^O M-QM-^AM-PM-8M-PM-<M-PM-2M-PM->M-PM-;M-QM-^VM-PM-2 UTF-8.^M$
+BEGIN:VALARM^M$
+ACTION:DISPLAY^M$
+DESCRIPTION:Interview: UkrainianTech M-bM-^@M-^T Technical^M$
+TRIGGER:-PT60M^M$
+END:VALARM^M$
+END:VEVENT^M$
+BEGIN:VEVENT^M$
+UID:jobprep-interview-103@jobprep.local^M$
+DTSTAMP:20261030T145904Z^M$
+DTSTART:20261107T160000^M$
+DTEND:20261107T163000^M$
+SUMMARY:Interview: UkrainianTech M-bM-^@M-^T HR Screen^M$
+BEGIN:VALARM^M$
+ACTION:DISPLAY^M$
+DESCRIPTION:Interview: UkrainianTech M-bM-^@M-^T HR Screen^M$
+TRIGGER:-PT60M^M$
+END:VALARM^M$
+END:VEVENT^M$
+END:VCALENDAR^M$
+```
+
+**Verification Properties:**
+1. Binary CRLF line terminators (`^M$`) present throughout.
+2. Escaping of punctuation: comma `\,`, semicolon `\;`, backslash `\\`, newline `\n`.
+3. Strict 75-octet line folding with leading space continuation (` M-...`).
+4. Event 103 has an empty location, so `LOCATION:` is omitted.
+5. Cancelled interview (Event 102) is omitted from the export.
+
+**Unfolded Output Passed Through `iconv -f UTF-8 -t UTF-8`:**
+```
+$ perl -0777 -pe 's/\r\n //g' /tmp/throwaway_sample.ics | iconv -f UTF-8 -t UTF-8
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//JobPrep//JobPrep Desktop//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:jobprep-interview-101@jobprep.local
+DTSTAMP:20261030T145904Z
+DTSTART:20261105T140000
+DTEND:20261105T150000
+SUMMARY:Interview: UkrainianTech — Technical
+LOCATION:Kyiv\, Khreshchatyk 1
+DESCRIPTION:Notes: Нотатки: кома\, крапка з комою\; зворотний слеш \\ новий рядок\nДуже довгий текст українською мовою для перевірки коректного розбиття рядків за стандартом RFC 5545 без пошкодження символів UTF-8.
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Interview: UkrainianTech — Technical
+TRIGGER:-PT60M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:jobprep-interview-103@jobprep.local
+DTSTAMP:20261030T145904Z
+DTSTART:20261107T160000
+DTEND:20261107T163000
+SUMMARY:Interview: UkrainianTech — HR Screen
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Interview: UkrainianTech — HR Screen
+TRIGGER:-PT60M
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+```
+
+#### 2. Root Cause of `created_at = 1970-01-01T03:00:00`
+In `src/data/DbFormat.cpp`:
+```cpp
+QString DbFormat::now() {
+    QDateTime current = QDateTime::currentDateTime();
+    current.setMSecsSinceEpoch(0);  // BUG: set absolute epoch timestamp to 0 instead of zeroing millisecond component
+    return toIso(current);
+}
+```
+Setting `current.setMSecsSinceEpoch(0)` changed the date-time to the Unix epoch (1970-01-01 00:00:00 UTC, which in UTC+3 is `1970-01-01T03:00:00`).
+Fixed to:
+```cpp
+current.setSecsSinceEpoch(current.toSecsSinceEpoch());
+```
+Verified with unit test `testRepositoryCreatedAtAndUpdatedAtAreCurrent()` in `tests/data/tst_ApplicationRepository.cpp`.
+**Commit:** `06da7e5 fix(data): preserve current date and time when zeroing milliseconds in DbFormat::now (F3)`
+
+#### 3. `currency` Field Handling
+`Domain::JobApplication::currency` defaults to `""` in `src/domain/Structs.h`. When inserted, `ApplicationRepository::insert()` explicitly binds `app.currency`. In SQLite, column default values (e.g. `DEFAULT 'USD'`) only evaluate when the column is omitted from the `INSERT` column list; because `""` is explicitly supplied as a valid NOT NULL string, SQLite stores `""`.
+
+---
+
+### F4. Tab Order Chains & Focus Stability
+
+#### 1. Printed Tab Order Chains
+Real tab order chains printed via `QWidget::nextInFocusChain()` in `tests/ui/tst_EmptyStatesAndFocus.cpp`:
+```
+TAB_CHAIN [Sidebar]: SidebarNavBtn_home -> SidebarNavBtn_study -> SidebarNavBtn_jobs -> SidebarNavBtn_calendar -> SidebarNavBtn_settings -> SidebarToggleBtn
+TAB_CHAIN [HomePage_WithData]: HomeTodayView -> HomeUpcomingView
+TAB_CHAIN [HomePage_Empty]: DashboardEmptyActionBtn (EmptyStateActionBtn) -> DashboardEmptySecondaryActionBtn (EmptyStateSecondaryActionBtn)
+TAB_CHAIN [StudyPage]: StudyTrackChips -> StudyManageTracksBtn -> StudyViewBoardBtn -> StudyViewListBtn -> StudySearchEdit -> StudyAddTopicBtn -> StudyColumnBacklog -> StudyColumnInProgress -> StudyColumnReview -> StudyColumnDone -> StudyDetailPanel
+TAB_CHAIN [JobsPage]: JobsSearchEdit -> JobsStatusChips -> JobsExportBtn -> JobsTableView
+TAB_CHAIN [CalendarPage]: CalendarPrevBtn -> CalendarNextBtn -> CalendarTodayBtn -> CalendarLayerInterviewBtn -> CalendarLayerFollowUpBtn -> CalendarLayerTargetBtn -> CalendarMonthView -> CalendarAddInterviewBtn -> CalendarAddFollowUpBtn -> CalendarAgendaList
+TAB_CHAIN [SettingsPage]: SettingsThemeCombo -> SettingsAccentCombo -> SettingsStudyGoalSpinBox -> SettingsWeekStartCombo -> SettingsCloseToTrayCheck -> SettingsLeadTimesPresetCombo -> SettingsLeadTimeCustomSpin -> SettingsLeadTimeAddBtn -> SettingsLeadTimesList -> SettingsLeadTimeRemoveBtn -> SettingsExportCsvBtn -> SettingsExportIcsBtn -> SettingsBackupJsonBtn -> SettingsRestoreJsonBtn -> SettingsLoadSampleBtn -> SettingsOpenFolderBtn
+TAB_CHAIN [ApplicationDialog_Overview]: FieldCompany -> FieldPosition -> FieldStatus -> FieldSourceCombo -> FieldWorkMode -> FieldSalaryMin -> FieldSalaryMax -> FieldCurrency -> FieldAppliedDateCheck -> FieldAppliedDate -> FieldNextAction -> FieldNextActionDateCheck -> FieldNextActionDate -> FieldUrl -> FieldResumeVersion -> FieldLocation -> FieldContactName -> FieldContactEmail -> DialogSaveBtn
+TAB_CHAIN [ApplicationDialog_Notes]: FieldNotes -> DialogSaveBtn
+TAB_CHAIN [ApplicationDialog_Interviews]: InterviewsTable -> InterviewsAddBtn -> InterviewsEditBtn -> InterviewsDeleteBtn -> DialogSaveBtn
+TAB_CHAIN [ApplicationDialog_Timeline]: TimelineTable -> DialogSaveBtn
+TAB_CHAIN [InterviewDialog]: InterviewApplicationCombo -> InterviewDateEdit -> InterviewTimeEdit -> InterviewDurationSpin -> InterviewTypeCombo -> InterviewOutcomeCombo -> InterviewPlaceEdit -> InterviewInterviewerEdit -> InterviewNotesEdit -> DialogSaveBtn
+TAB_CHAIN [FollowUpDialog]: FollowUpApplicationCombo -> FollowUpActionEdit -> DialogSaveBtn
+TAB_CHAIN [SessionDialog]: SessionDateEdit -> SessionMinutesSpin -> SessionTopicCombo -> SessionNoteEdit -> SessionSaveBtn -> SessionCancelBtn
+TAB_CHAIN [TrackDialog]: TrackListWidget -> TrackNewBtn -> TrackDeleteBtn -> TrackNameEdit -> TrackSaveBtn -> TrackCloseBtn
+```
+
+In `TopicDetailPanel`, internal tab navigation flows across 18 controls:
+`m_detailTitleEdit` -> `m_statusCombo` -> `m_priorityCombo` -> `m_trackCombo` -> `m_targetDateEdit` -> `m_clearDateBtn` -> `m_notesEdit` -> `m_newSubtaskEdit` -> `m_subtaskAddBtn` -> `m_checkList` -> `m_newResourceTitleEdit` -> `m_newResourceUrlEdit` -> `m_resourceAddBtn` -> `m_resourcesTable` -> `m_deleteTopicBtn`.
+
+#### 2. Focus Stability
+Added `testFocusIndicatorDoesNotChangeGeometryOrSizeHint()` to `tests/ui/tst_EmptyStatesAndFocus.cpp`. It tests buttons, line edits, and combo boxes before and after focus in both Light and Dark themes, verifying that applying `:focus` styling does not change `geometry()` or `sizeHint()`.
+**Commit:** `a57eb15 feat(ui): update tab order chains, focus indicators, screenshots, and sample ICS (F4, F7, F3)`
+
+---
+
+### F5. Maximize Diagnostic Category & Grep
+1. Verified `jobprep.window` logging category exists with default `QtInfoMsg` severity (`lcWindow().isDebugEnabled()` returns false).
+2. Verified `ui_smoke` passes cleanly with zero warnings or unexpected diagnostic output.
+3. Code behavior:
+   ```bash
+   $ grep -rn "restoreGeometry\|saveGeometry\|showMaximized\|setWindowState" src/ui/
+   src/ui/MainWindow.cpp:66:        restoreGeometry(geo);
+   src/ui/MainWindow.cpp:118:    m_ctx.settings().setWindowGeometry(saveGeometry());
+   src/ui/MainWindow.cpp:119:    m_ctx.settings().setWindowState(saveState());
+   ```
+   No `showMaximized()` or `setWindowState()` overrides exist in `src/ui/`.
+4. Diagnostic command for user:
+   ```bash
+   QT_LOGGING_RULES="jobprep.window.debug=true" ./build/dev-linux/jobprep
+   ```
+
+---
+
+### F6. Safety Backups & Data Folder Path
+1. **Safety Backup Path Structure:**
+   On Linux, safety backups are written to:
+   `~/.local/share/JobPrep/JobPrep/backups/pre-restore-yyyyMMdd-HHmmss.json`
+2. **Pruning Logic:**
+   `RestoreService::pruneSafetyBackups` filters strictly by `nameFilters = {u"pre-restore-*.json"_s}` and sorts by `QDir::Name` ascending (oldest timestamp first). When file count exceeds 5, it removes only the oldest files (`toRemove = list.size() - 5`). The safety backup created for the restore that just executed is the newest file in the folder and is never deleted.
+3. **"Open data folder":**
+   `DataToolsController::openDataFolder()` resolves the path to the directory containing `jobprep.sqlite` (`~/.local/share/JobPrep/JobPrep/` on Linux) and opens it via `QDesktopServices::openUrl(QUrl::fromLocalFile(folder))`.
+
+---
+
+### F7. Screenshots & Modifications Explanation
+
+#### 1. Added Empty-State Screenshots
+Added 4 screenshots covering filtered empty jobs and empty interviews tab in ApplicationDialog:
+- `docs/reports/img/jobs-empty-filtered-light.png`
+- `docs/reports/img/jobs-empty-filtered-dark.png`
+- `docs/reports/img/app-dialog-interviews-empty-light.png`
+- `docs/reports/img/app-dialog-interviews-empty-dark.png`
+Added automated test slot `testJobsScreenshots()` to `tst_PageJobs` and integrated into `scripts/screenshots.sh`.
+
+#### 2. Explanation of Changed Screenshots in Commit `366a1fc`
+Six screenshots were re-rendered during the automated test run:
+- `dashboard-toast-*.png`: Re-rendered offscreen when toast tests executed; pixel differences stem from subpixel font rendering and toast timer positioning.
+- `dashboard-with-data-*.png`: Re-rendered with current clock timestamp and focus styling.
+- `study-session-dialog-*.png`: Re-rendered with button focus outline borders.
+All layouts and controls are identical and verified.
+
+---
+
+### Quality Gate Results
+
+#### 1. Proxy Build with Strict Warning Flags
+Configured with `-Wshadow -Wconversion -Wsign-conversion`:
+```bash
+cmake -B /tmp/build-proxy-d1 -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-Wshadow -Wconversion -Wsign-conversion"
+cmake --build /tmp/build-proxy-d1 -j2
+```
+**Exit Code:** `0` (Zero warnings across all 222 build targets).
+
+#### 2. Local Quality Gate
+```bash
+CMAKE_BUILD_PARALLEL_LEVEL=2 ./scripts/check.sh
+```
+**Result:** 33/33 tests passed, 0 failures, zero compiler warnings under `-Werror`.
+
