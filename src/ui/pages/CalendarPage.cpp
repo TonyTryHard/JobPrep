@@ -295,6 +295,16 @@ void CalendarPage::setupAgendaPanel(QWidget* panel) {
 
     panelLayout->addWidget(m_agendaStack, 1);
 
+    setTabOrder(m_prevBtn, m_nextBtn);
+    setTabOrder(m_nextBtn, m_todayBtn);
+    setTabOrder(m_todayBtn, m_interviewsChip);
+    setTabOrder(m_interviewsChip, m_followUpsChip);
+    setTabOrder(m_followUpsChip, m_targetsChip);
+    setTabOrder(m_targetsChip, m_monthView);
+    setTabOrder(m_monthView, addInterviewBtn);
+    setTabOrder(addInterviewBtn, addFollowUpBtn);
+    setTabOrder(addFollowUpBtn, m_agendaView);
+
     connect(addInterviewBtn, &QPushButton::clicked, this, [this]() { newInterview(); });
     connect(addFollowUpBtn, &QPushButton::clicked, this, &CalendarPage::addFollowUp);
     connect(m_agendaEmptyState, &Widgets::EmptyState::actionClicked, this, [this]() { newInterview(); });

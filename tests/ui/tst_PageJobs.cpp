@@ -135,6 +135,7 @@ private slots:
     void testHeaderNewInterviewFromJobsRoutesToCalendar();
     void testHeaderNewApplicationOnCalendarPage();
     void testJobsContextMenuAddInterviewEndToEnd();
+    void testJobsScreenshots();
 
 private:
     void resetJobsData();
@@ -894,6 +895,61 @@ void tst_PageJobs::testJobsContextMenuAddInterviewEndToEnd() {
     QVERIFY(calendar->hasItemsOn(day));
 }
 
+void tst_PageJobs::testJobsScreenshots() {
+    const QString dir = qEnvironmentVariable("JOBPREP_REPORT_IMG_DIR");
+    if (dir.isEmpty()) QSKIP("JOBPREP_REPORT_IMG_DIR is not set");
+    QVERIFY(QDir().mkpath(dir));
+
+    resetJobsData();
+    addApplication(u"Canonical"_s, u"Software Engineer"_s, ApplicationStatus::Applied, u"Ubuntu Core team"_s);
+    const auto app = m_jobsCtx->applications().all().first();
+
+    const auto saveWidget = [this, dir](QWidget* widget, JobPrep::Ui::Theme::ThemeMode mode, const QString& filename) {
+        m_jobsCtx->themeManager().setThemeMode(mode);
+        QCoreApplication::processEvents();
+        const QImage image = widget->grab().toImage();
+        QVERIFY(!image.isNull());
+        QVERIFY(image.save(QDir(dir).filePath(filename + u".png"_s)));
+    };
+
+    // 1. Jobs filtered-empty ("No matches")
+    auto* searchEdit = childNamed<QLineEdit>(m_jobs.get(), u"JobsSearchEdit"_s);
+    QVERIFY(searchEdit != nullptr);
+    searchEdit->setText(u"NonExistentQueryXYZ"_s);
+    QCoreApplication::processEvents();
+    QCOMPARE(m_jobs->currentViewIndex(), 2); // kViewNoMatches
+
+    saveWidget(m_jobs.get(), JobPrep::Ui::Theme::ThemeMode::Light, u"jobs-empty-filtered-light"_s);
+    saveWidget(m_jobs.get(), JobPrep::Ui::Theme::ThemeMode::Dark, u"jobs-empty-filtered-dark"_s);
+
+    searchEdit->clear();
+    QCoreApplication::processEvents();
+
+    // 2. ApplicationDialog Interviews tab empty
+    for (const auto mode : {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
+        m_jobsCtx->themeManager().setThemeMode(mode);
+        QCoreApplication::processEvents();
+
+        ApplicationDialog dlg(m_jobsCtx->applications(), m_jobsCtx->interviews(), ApplicationDialog::Edit);
+        dlg.setApplication(app);
+        dlg.resize(600, 500);
+        dlg.show();
+        QCoreApplication::processEvents();
+
+        auto* tabs = dlg.findChild<QTabWidget*>(u"ApplicationDialogTabs"_s);
+        QVERIFY(tabs != nullptr);
+        tabs->setCurrentIndex(2); // Interviews tab
+        QCoreApplication::processEvents();
+
+        const QImage image = dlg.grab().toImage();
+        QVERIFY(!image.isNull());
+        const QString name = mode == JobPrep::Ui::Theme::ThemeMode::Light
+                                 ? u"app-dialog-interviews-empty-light.png"_s
+                                 : u"app-dialog-interviews-empty-dark.png"_s;
+        QVERIFY(image.save(QDir(dir).filePath(name)));
+        dlg.reject();
+    }
+}
 
 QTEST_MAIN(tst_PageJobs)
 #include "tst_PageJobs.moc"

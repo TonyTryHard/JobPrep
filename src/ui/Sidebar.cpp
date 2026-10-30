@@ -142,11 +142,18 @@ void Sidebar::setupUi() {
         {u"calendar"_s, tr("Calendar"), 3},
     };
 
+    NavButton* prevBtn = nullptr;
     for (const auto& item : items) {
         auto* btn = new NavButton(item.iconName, item.text, m_themeMgr, this);
+        btn->setObjectName(u"SidebarNavBtn_"_s + item.iconName);
         m_buttonGroup->addButton(btn, item.pageIndex);
         m_mainLayout->addWidget(btn);
         m_navItems.append({btn, item.iconName, item.text, item.pageIndex});
+
+        if (prevBtn) {
+            setTabOrder(prevBtn, btn);
+        }
+        prevBtn = btn;
 
         connect(btn, &QPushButton::clicked, this, [this, idx = item.pageIndex]() {
             setCurrentPage(idx);
@@ -158,9 +165,14 @@ void Sidebar::setupUi() {
 
     // Settings at bottom
     auto* settingsBtn = new NavButton(u"settings"_s, tr("Settings"), m_themeMgr, this);
+    settingsBtn->setObjectName(u"SidebarNavBtn_settings"_s);
     m_buttonGroup->addButton(settingsBtn, 4);
     m_mainLayout->addWidget(settingsBtn);
     m_navItems.append({settingsBtn, u"settings"_s, tr("Settings"), 4});
+
+    if (prevBtn) {
+        setTabOrder(prevBtn, settingsBtn);
+    }
 
     connect(settingsBtn, &QPushButton::clicked, this, [this]() {
         setCurrentPage(4);
@@ -172,6 +184,7 @@ void Sidebar::setupUi() {
     m_toggleBtn->setObjectName(u"SidebarToggleBtn"_s);
     m_toggleBtn->setFixedHeight(36);
     m_toggleBtn->setCursor(Qt::PointingHandCursor);
+    setTabOrder(settingsBtn, m_toggleBtn);
     connect(m_toggleBtn, &QPushButton::clicked, this, [this]() {
         setCollapsed(!m_collapsed);
         emit collapseToggled(m_collapsed);

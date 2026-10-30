@@ -63,6 +63,7 @@ private slots:
     void testIcsEscapingSpecialCharacters();
     void testIcsValarmAndProperties();
     void testIcsCancelledInterviewsExcluded();
+    void testIcsExportFormatDetails();
     void testIcsEmptyListProducesValidCalendar();
 
     // JSON backup tests (C4, SPEC §10)
@@ -258,6 +259,63 @@ void tst_ImportExport::testIcsCancelledInterviewsExcluded() {
 
     QVERIFY(content.contains(u"UID:jobprep-interview-1@jobprep.local"_s));
     QVERIFY(!content.contains(u"UID:jobprep-interview-2@jobprep.local"_s));
+}
+
+void tst_ImportExport::testIcsExportFormatDetails() {
+    JobApplication app;
+    app.id = 1;
+    app.company = u"UkrainianTech"_s;
+
+    QHash<int, JobApplication> apps;
+    apps.insert(1, app);
+
+    // 1. One interview with notes containing comma, semicolon, backslash, newline, and Ukrainian line > 75 octets
+    Interview iv1;
+    iv1.id = 101;
+    iv1.applicationId = 1;
+    iv1.startAt = QDateTime(QDate(2026, 11, 5), QTime(14, 0, 0));
+    iv1.durationMin = 60;
+    iv1.type = InterviewType::Technical;
+    iv1.outcome = InterviewOutcome::Pending;
+    iv1.place = u"Kyiv, Khreshchatyk 1"_s;
+    iv1.notes = u"Нотатки: кома, крапка з комою; зворотний слеш \\ новий рядок\nДуже довгий текст українською мовою для перевірки коректного розбиття рядків за стандартом RFC 5545 без пошкодження символів UTF-8."_s;
+
+    // 2. One cancelled interview (must be absent)
+    Interview ivCancelled;
+    ivCancelled.id = 102;
+    ivCancelled.applicationId = 1;
+    ivCancelled.startAt = QDateTime(QDate(2026, 11, 6), QTime(15, 0, 0));
+    ivCancelled.durationMin = 45;
+    ivCancelled.outcome = InterviewOutcome::Cancelled;
+
+    // 3. One interview without a place (no empty LOCATION line)
+    Interview ivNoPlace;
+    ivNoPlace.id = 103;
+    ivNoPlace.applicationId = 1;
+    ivNoPlace.startAt = QDateTime(QDate(2026, 11, 7), QTime(16, 0, 0));
+    ivNoPlace.durationMin = 30;
+    ivNoPlace.type = InterviewType::Hr;
+    ivNoPlace.outcome = InterviewOutcome::Pending;
+    ivNoPlace.place = QString(); // empty
+
+    const QByteArray ics = ExportService::generateIcs({iv1, ivCancelled, ivNoPlace}, apps);
+    const QString content = QString::fromUtf8(ics);
+
+    // Assert cancelled interview is absent
+    QVERIFY(!content.contains(u"UID:jobprep-interview-102@jobprep.local"_s));
+
+    // Assert ivNoPlace is present but has no LOCATION line
+    QVERIFY(content.contains(u"UID:jobprep-interview-103@jobprep.local"_s));
+    const qsizetype idx103 = content.indexOf(u"UID:jobprep-interview-103@jobprep.local"_s);
+    const qsizetype end103 = content.indexOf(u"END:VEVENT"_s, idx103);
+    const QString vevent103 = content.mid(idx103, end103 - idx103);
+    QVERIFY(!vevent103.contains(u"LOCATION:"_s));
+
+    // Write to /tmp/throwaway_sample.ics
+    QFile f(u"/tmp/throwaway_sample.ics"_s);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write(ics);
+    f.close();
 }
 
 void tst_ImportExport::testIcsEmptyListProducesValidCalendar() {

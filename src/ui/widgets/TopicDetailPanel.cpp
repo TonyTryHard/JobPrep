@@ -247,6 +247,24 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     });
     form->addWidget(m_logTimeBtn, 0, Qt::AlignLeft);
 
+    setTabOrder(m_titleEdit, m_trackCombo);
+    setTabOrder(m_trackCombo, m_statusCombo);
+    setTabOrder(m_statusCombo, m_priorityCombo);
+    setTabOrder(m_priorityCombo, m_dateEdit);
+    setTabOrder(m_dateEdit, m_dateBtn);
+    setTabOrder(m_dateBtn, m_tagsEdit);
+    setTabOrder(m_tagsEdit, m_notesEdit);
+    setTabOrder(m_notesEdit, m_checkList);
+    setTabOrder(m_checkList, m_checkAddEdit);
+    setTabOrder(m_checkAddEdit, m_resourcesTable);
+    setTabOrder(m_resourcesTable, m_resourceTitleEdit);
+    setTabOrder(m_resourceTitleEdit, m_resourceUrlEdit);
+    setTabOrder(m_resourceUrlEdit, resourceAddBtn);
+    setTabOrder(resourceAddBtn, m_resourceOpenBtn);
+    setTabOrder(m_resourceOpenBtn, m_resourceDeleteBtn);
+    setTabOrder(m_resourceDeleteBtn, m_logTimeBtn);
+    setTabOrder(m_logTimeBtn, m_closeBtn);
+
     m_scroll->setWidget(m_form);
     cardLayout->addWidget(m_scroll, 1);
     layout->addWidget(card, 1);

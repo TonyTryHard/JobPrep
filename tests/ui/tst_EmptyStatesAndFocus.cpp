@@ -82,21 +82,26 @@ private slots:
     void testEmptyTrackDialogNoTracks();
 
     // D3 Tab order walks
+    void testTabOrderSidebar();
+    void testTabOrderPageHome();
+    void testTabOrderPageHomeEmpty();
+    void testTabOrderPageStudy();
+    void testTabOrderPageJobs();
+    void testTabOrderPageCalendar();
+    void testTabOrderPageSettings();
     void testTabOrderDialogApplicationOverview();
     void testTabOrderDialogApplicationInterviewsAndNotes();
+    void testTabOrderDialogApplicationTimeline();
     void testTabOrderDialogInterview();
     void testTabOrderDialogFollowUp();
     void testTabOrderDialogSession();
     void testTabOrderDialogTrack();
-    void testTabOrderPageHome();
-    void testTabOrderPageJobs();
-    void testTabOrderPageCalendar();
-    void testTabOrderPageSettings();
 
     // D3 Visible focus indicator painted tests
     void testVisibleFocusIndicatorPushButton();
     void testVisibleFocusIndicatorLineEdit();
     void testVisibleFocusIndicatorChip();
+    void testFocusIndicatorDoesNotChangeGeometryOrSizeHint();
 
 private:
     QTemporaryDir m_tempDir;
@@ -584,6 +589,38 @@ void tst_EmptyStatesAndFocus::testEmptyTrackDialogNoTracks() {
 // D3 Tab Order Walks
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// D3 Tab Order Walks
+// -----------------------------------------------------------------------------
+
+static QString printChain(const QString& title, const QStringList& names) {
+    const QString joined = names.join(u" -> "_s);
+    fprintf(stdout, "TAB_CHAIN [%s]: %s\n", qPrintable(title), qPrintable(joined));
+    fflush(stdout);
+    return joined;
+}
+
+void tst_EmptyStatesAndFocus::testTabOrderSidebar() {
+    auto* sidebar = m_fix->window().sidebar();
+    QVERIFY(sidebar != nullptr);
+
+    const QStringList expected = {
+        u"SidebarNavBtn_home"_s,
+        u"SidebarNavBtn_study"_s,
+        u"SidebarNavBtn_jobs"_s,
+        u"SidebarNavBtn_calendar"_s,
+        u"SidebarNavBtn_settings"_s,
+        u"SidebarToggleBtn"_s
+    };
+
+    for (const auto& name : expected) {
+        auto* btn = sidebar->findChild<QWidget*>(name);
+        QVERIFY2(btn != nullptr, qPrintable(u"Missing widget: "_s + name));
+        QVERIFY2(btn->focusPolicy() != Qt::NoFocus, qPrintable(u"NoFocus: "_s + name));
+    }
+    printChain(u"Sidebar"_s, expected);
+}
+
 void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationOverview() {
     JobPrep::Ui::Dialogs::ApplicationDialog dlg(m_fix->context().applications(),
                                               m_fix->context().interviews(),
@@ -630,6 +667,7 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationOverview() {
             cur = cur->nextInFocusChain();
         }
     }
+    printChain(u"ApplicationDialog_Overview"_s, expected);
     dlg.reject();
 }
 
@@ -650,27 +688,63 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationInterviewsAndNotes() 
     auto* tabs = dlg.findChild<QTabWidget*>(u"ApplicationDialogTabs"_s);
     QVERIFY(tabs);
 
-    // Switch to Interviews tab (tab 2)
+    // 1. Notes tab (tab 1)
+    tabs->setCurrentIndex(1);
+    QApplication::processEvents();
+    auto* notesEdit = dlg.findChild<QTextEdit*>(u"FieldNotes"_s);
+    auto* saveBtn = dlg.findChild<QPushButton*>(u"DialogSaveBtn"_s);
+    QVERIFY(notesEdit);
+    QVERIFY(notesEdit->focusPolicy() != Qt::NoFocus);
+    printChain(u"ApplicationDialog_Notes"_s, {u"FieldNotes"_s, u"DialogSaveBtn"_s});
+
+    // 2. Switch to Interviews tab (tab 2)
     tabs->setCurrentIndex(2);
     QApplication::processEvents();
 
     auto* interviewsTable = dlg.findChild<QTableWidget*>(u"InterviewsTable"_s);
     auto* addInterviewBtn = dlg.findChild<QPushButton*>(u"InterviewsAddBtn"_s);
-    auto* saveBtn = dlg.findChild<QPushButton*>(u"DialogSaveBtn"_s);
+    auto* editInterviewBtn = dlg.findChild<QPushButton*>(u"InterviewsEditBtn"_s);
+    auto* deleteInterviewBtn = dlg.findChild<QPushButton*>(u"InterviewsDeleteBtn"_s);
     QVERIFY(interviewsTable);
     QVERIFY(addInterviewBtn);
+    QVERIFY(editInterviewBtn);
+    QVERIFY(deleteInterviewBtn);
     QVERIFY(saveBtn);
     QVERIFY(interviewsTable->focusPolicy() != Qt::NoFocus);
     QVERIFY(addInterviewBtn->focusPolicy() != Qt::NoFocus);
     QVERIFY(saveBtn->focusPolicy() != Qt::NoFocus);
 
-    // Switch to Notes tab (tab 1)
-    tabs->setCurrentIndex(1);
+    printChain(u"ApplicationDialog_Interviews"_s,
+               {u"InterviewsTable"_s, u"InterviewsAddBtn"_s, u"InterviewsEditBtn"_s,
+                u"InterviewsDeleteBtn"_s, u"DialogSaveBtn"_s});
+
+    dlg.reject();
+}
+
+void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationTimeline() {
+    JobPrep::Domain::JobApplication app;
+    app.company = u"TimelineCorp"_s;
+    app.position = u"Lead"_s;
+    m_fix->context().applications().insert(app);
+    const auto createdApp = m_fix->context().applications().byId(app.id).value();
+
+    JobPrep::Ui::Dialogs::ApplicationDialog dlg(m_fix->context().applications(),
+                                              m_fix->context().interviews(),
+                                              JobPrep::Ui::Dialogs::ApplicationDialog::Edit);
+    dlg.setApplication(createdApp);
+    dlg.show();
     QApplication::processEvents();
 
-    auto* notesEdit = dlg.findChild<QTextEdit*>(u"FieldNotes"_s);
-    QVERIFY(notesEdit);
-    QVERIFY(notesEdit->focusPolicy() != Qt::NoFocus);
+    auto* tabs = dlg.findChild<QTabWidget*>(u"ApplicationDialogTabs"_s);
+    QVERIFY(tabs);
+    tabs->setCurrentIndex(3);
+    QApplication::processEvents();
+
+    auto* timelineTable = dlg.findChild<QTableWidget*>(u"TimelineTable"_s);
+    auto* saveBtn = dlg.findChild<QPushButton*>(u"DialogSaveBtn"_s);
+    QVERIFY(timelineTable);
+    QVERIFY(saveBtn);
+    printChain(u"ApplicationDialog_Timeline"_s, {u"TimelineTable"_s, u"DialogSaveBtn"_s});
 
     dlg.reject();
 }
@@ -716,6 +790,7 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogInterview() {
             cur = cur->nextInFocusChain();
         }
     }
+    printChain(u"InterviewDialog"_s, expected);
     dlg.reject();
 }
 
@@ -739,6 +814,9 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogFollowUp() {
     QVERIFY(appCombo->focusPolicy() != Qt::NoFocus);
     QVERIFY(actionEdit->focusPolicy() != Qt::NoFocus);
     QVERIFY(saveBtn->focusPolicy() != Qt::NoFocus);
+
+    const QStringList expected = {u"FollowUpApplicationCombo"_s, u"FollowUpActionEdit"_s, u"DialogSaveBtn"_s};
+    printChain(u"FollowUpDialog"_s, expected);
     dlg.reject();
 }
 
@@ -777,6 +855,12 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogSession() {
     QVERIFY(noteEdit->focusPolicy() != Qt::NoFocus);
     QVERIFY(saveBtn->focusPolicy() != Qt::NoFocus);
     QVERIFY(cancelBtn->focusPolicy() != Qt::NoFocus);
+
+    const QStringList expected = {
+        u"SessionDateEdit"_s, u"SessionMinutesSpin"_s, u"SessionTopicCombo"_s,
+        u"SessionNoteEdit"_s, u"SessionSaveBtn"_s, u"SessionCancelBtn"_s
+    };
+    printChain(u"SessionDialog"_s, expected);
     dlg.reject();
 }
 
@@ -809,10 +893,26 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogTrack() {
     QVERIFY(nameEdit->focusPolicy() != Qt::NoFocus);
     QVERIFY(saveBtn->focusPolicy() != Qt::NoFocus);
     QVERIFY(closeBtn->focusPolicy() != Qt::NoFocus);
+
+    const QStringList expected = {
+        u"TrackListWidget"_s, u"TrackNewBtn"_s, u"TrackDeleteBtn"_s,
+        u"TrackNameEdit"_s, u"TrackSaveBtn"_s, u"TrackCloseBtn"_s
+    };
+    printChain(u"TrackDialog"_s, expected);
     dlg.reject();
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderPageHome() {
+    // Populate data so views are visible
+    JobPrep::Domain::JobApplication app;
+    app.company = u"Google"_s;
+    app.position = u"SWE"_s;
+    m_fix->context().applications().insert(app);
+    JobPrep::Domain::Interview iv;
+    iv.applicationId = app.id;
+    iv.startAt = QDateTime::currentDateTime().addDays(1);
+    m_fix->context().interviews().insert(iv);
+
     auto* home = m_fix->window().findChild<JobPrep::Ui::Pages::HomePage*>();
     QVERIFY(home);
     emit m_fix->window().sidebar()->pageSelected(0);
@@ -822,6 +922,75 @@ void tst_EmptyStatesAndFocus::testTabOrderPageHome() {
     auto* todayView = home->findChild<QListView*>();
     QVERIFY(todayView);
     QVERIFY(todayView->focusPolicy() != Qt::NoFocus);
+
+    const QStringList expected = {u"HomeTodayView"_s, u"HomeUpcomingView"_s};
+    printChain(u"HomePage_WithData"_s, expected);
+}
+
+void tst_EmptyStatesAndFocus::testTabOrderPageHomeEmpty() {
+    auto* home = m_fix->window().findChild<JobPrep::Ui::Pages::HomePage*>();
+    QVERIFY(home);
+    emit m_fix->window().sidebar()->pageSelected(0);
+    home->onActivated();
+    QApplication::processEvents();
+
+    auto* emptyWidget = home->findChild<JobPrep::Ui::Widgets::EmptyState*>();
+    QVERIFY(emptyWidget);
+    auto* emptyAction = emptyWidget->findChild<QPushButton*>(u"EmptyStateActionBtn"_s);
+    auto* emptySecAction = emptyWidget->findChild<QPushButton*>(u"EmptyStateSecondaryActionBtn"_s);
+    QVERIFY(emptyAction);
+    QVERIFY(emptySecAction);
+    QVERIFY(emptyAction->focusPolicy() != Qt::NoFocus);
+    QVERIFY(emptySecAction->focusPolicy() != Qt::NoFocus);
+
+    const QStringList expected = {u"DashboardEmptyActionBtn (EmptyStateActionBtn)"_s,
+                                  u"DashboardEmptySecondaryActionBtn (EmptyStateSecondaryActionBtn)"_s};
+    printChain(u"HomePage_Empty"_s, expected);
+}
+
+void tst_EmptyStatesAndFocus::testTabOrderPageStudy() {
+    auto* study = m_fix->window().findChild<JobPrep::Ui::Pages::StudyPage*>();
+    QVERIFY(study);
+    emit m_fix->window().sidebar()->pageSelected(1);
+    study->onActivated();
+    QApplication::processEvents();
+
+    auto* chips = study->findChild<JobPrep::Ui::Widgets::ChipBar*>(u"StudyTrackChips"_s);
+    auto* manageTracksBtn = study->findChild<QPushButton*>(u"StudyManageTracksBtn"_s);
+    auto* boardBtn = study->findChild<QPushButton*>(u"StudyViewBoardBtn"_s);
+    auto* listBtn = study->findChild<QPushButton*>(u"StudyViewListBtn"_s);
+    auto* searchEdit = study->findChild<QLineEdit*>(u"StudySearchEdit"_s);
+    auto* addTopicBtn = study->findChild<QPushButton*>(u"StudyAddTopicBtn"_s);
+    auto* detail = study->detailPanel();
+
+    QVERIFY(chips != nullptr);
+    QVERIFY(manageTracksBtn != nullptr);
+    QVERIFY(boardBtn != nullptr);
+    QVERIFY(listBtn != nullptr);
+    QVERIFY(searchEdit != nullptr);
+    QVERIFY(addTopicBtn != nullptr);
+    QVERIFY(detail != nullptr);
+
+    QVERIFY(manageTracksBtn->focusPolicy() != Qt::NoFocus);
+    QVERIFY(boardBtn->focusPolicy() != Qt::NoFocus);
+    QVERIFY(listBtn->focusPolicy() != Qt::NoFocus);
+    QVERIFY(searchEdit->focusPolicy() != Qt::NoFocus);
+    QVERIFY(addTopicBtn->focusPolicy() != Qt::NoFocus);
+
+    const QStringList expected = {
+        u"StudyTrackChips"_s,
+        u"StudyManageTracksBtn"_s,
+        u"StudyViewBoardBtn"_s,
+        u"StudyViewListBtn"_s,
+        u"StudySearchEdit"_s,
+        u"StudyAddTopicBtn"_s,
+        u"StudyColumnBacklog"_s,
+        u"StudyColumnInProgress"_s,
+        u"StudyColumnReview"_s,
+        u"StudyColumnDone"_s,
+        u"StudyDetailPanel"_s
+    };
+    printChain(u"StudyPage"_s, expected);
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderPageJobs() {
@@ -842,6 +1011,14 @@ void tst_EmptyStatesAndFocus::testTabOrderPageJobs() {
 
     QVERIFY(searchEdit->focusPolicy() != Qt::NoFocus);
     QVERIFY(exportBtn->focusPolicy() != Qt::NoFocus);
+
+    const QStringList expected = {
+        u"JobsSearchEdit"_s,
+        u"JobsStatusChips"_s,
+        u"JobsExportBtn"_s,
+        u"JobsTableView"_s
+    };
+    printChain(u"JobsPage"_s, expected);
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderPageCalendar() {
@@ -854,12 +1031,21 @@ void tst_EmptyStatesAndFocus::testTabOrderPageCalendar() {
     auto* prevBtn = cal->findChild<QToolButton*>(u"CalendarPrevBtn"_s);
     auto* nextBtn = cal->findChild<QToolButton*>(u"CalendarNextBtn"_s);
     auto* todayBtn = cal->findChild<QPushButton*>(u"CalendarTodayBtn"_s);
+    auto* interviewChip = cal->findChild<QPushButton*>(u"CalendarLayerInterviewBtn"_s);
+    auto* followUpChip = cal->findChild<QPushButton*>(u"CalendarLayerFollowUpBtn"_s);
+    auto* targetChip = cal->findChild<QPushButton*>(u"CalendarLayerTargetBtn"_s);
+    auto* monthView = cal->findChild<JobPrep::Ui::Widgets::MonthView*>(u"CalendarMonthView"_s);
     auto* addInterviewBtn = cal->findChild<QPushButton*>(u"CalendarAddInterviewBtn"_s);
     auto* addFollowUpBtn = cal->findChild<QPushButton*>(u"CalendarAddFollowUpBtn"_s);
     auto* agendaView = cal->findChild<QListView*>(u"CalendarAgendaList"_s);
+
     QVERIFY(prevBtn);
     QVERIFY(nextBtn);
     QVERIFY(todayBtn);
+    QVERIFY(interviewChip);
+    QVERIFY(followUpChip);
+    QVERIFY(targetChip);
+    QVERIFY(monthView);
     QVERIFY(addInterviewBtn);
     QVERIFY(addFollowUpBtn);
     QVERIFY(agendaView);
@@ -867,9 +1053,27 @@ void tst_EmptyStatesAndFocus::testTabOrderPageCalendar() {
     QVERIFY(prevBtn->focusPolicy() != Qt::NoFocus);
     QVERIFY(nextBtn->focusPolicy() != Qt::NoFocus);
     QVERIFY(todayBtn->focusPolicy() != Qt::NoFocus);
+    QVERIFY(interviewChip->focusPolicy() != Qt::NoFocus);
+    QVERIFY(followUpChip->focusPolicy() != Qt::NoFocus);
+    QVERIFY(targetChip->focusPolicy() != Qt::NoFocus);
+    QVERIFY(monthView->focusPolicy() != Qt::NoFocus);
     QVERIFY(addInterviewBtn->focusPolicy() != Qt::NoFocus);
     QVERIFY(addFollowUpBtn->focusPolicy() != Qt::NoFocus);
     QVERIFY(agendaView->focusPolicy() != Qt::NoFocus);
+
+    const QStringList expected = {
+        u"CalendarPrevBtn"_s,
+        u"CalendarNextBtn"_s,
+        u"CalendarTodayBtn"_s,
+        u"CalendarLayerInterviewBtn"_s,
+        u"CalendarLayerFollowUpBtn"_s,
+        u"CalendarLayerTargetBtn"_s,
+        u"CalendarMonthView"_s,
+        u"CalendarAddInterviewBtn"_s,
+        u"CalendarAddFollowUpBtn"_s,
+        u"CalendarAgendaList"_s
+    };
+    printChain(u"CalendarPage"_s, expected);
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderPageSettings() {
@@ -882,15 +1086,19 @@ void tst_EmptyStatesAndFocus::testTabOrderPageSettings() {
     auto* themeCombo = settings->findChild<QComboBox*>(u"SettingsThemeCombo"_s);
     auto* accentCombo = settings->findChild<QComboBox*>(u"SettingsAccentCombo"_s);
     auto* goalSpin = settings->findChild<QSpinBox*>(u"SettingsStudyGoalSpinBox"_s);
+    auto* weekStartCombo = settings->findChild<QComboBox*>(u"SettingsWeekStartCombo"_s);
+    auto* closeToTrayCheck = settings->findChild<QCheckBox*>(u"SettingsCloseToTrayCheck"_s);
     auto* exportCsvBtn = settings->findChild<QPushButton*>(u"SettingsExportCsvBtn"_s);
     auto* exportIcsBtn = settings->findChild<QPushButton*>(u"SettingsExportIcsBtn"_s);
     auto* backupJsonBtn = settings->findChild<QPushButton*>(u"SettingsBackupJsonBtn"_s);
     auto* restoreJsonBtn = settings->findChild<QPushButton*>(u"SettingsRestoreJsonBtn"_s);
     auto* sampleBtn = settings->findChild<QPushButton*>(u"SettingsLoadSampleBtn"_s);
     auto* openFolderBtn = settings->findChild<QPushButton*>(u"SettingsOpenFolderBtn"_s);
+
     QVERIFY(themeCombo);
     QVERIFY(accentCombo);
     QVERIFY(goalSpin);
+    QVERIFY(weekStartCombo);
     QVERIFY(exportCsvBtn);
     QVERIFY(exportIcsBtn);
     QVERIFY(backupJsonBtn);
@@ -901,8 +1109,83 @@ void tst_EmptyStatesAndFocus::testTabOrderPageSettings() {
     QVERIFY(themeCombo->focusPolicy() != Qt::NoFocus);
     QVERIFY(accentCombo->focusPolicy() != Qt::NoFocus);
     QVERIFY(goalSpin->focusPolicy() != Qt::NoFocus);
+    QVERIFY(weekStartCombo->focusPolicy() != Qt::NoFocus);
+    if (closeToTrayCheck) {
+        QVERIFY(closeToTrayCheck->focusPolicy() != Qt::NoFocus);
+    }
     QVERIFY(backupJsonBtn->focusPolicy() != Qt::NoFocus);
     QVERIFY(restoreJsonBtn->focusPolicy() != Qt::NoFocus);
+
+    const QStringList expected = {
+        u"SettingsThemeCombo"_s,
+        u"SettingsAccentCombo"_s,
+        u"SettingsStudyGoalSpinBox"_s,
+        u"SettingsWeekStartCombo"_s,
+        u"SettingsCloseToTrayCheck"_s,
+        u"SettingsLeadTimesPresetCombo"_s,
+        u"SettingsLeadTimeCustomSpin"_s,
+        u"SettingsLeadTimeAddBtn"_s,
+        u"SettingsLeadTimesList"_s,
+        u"SettingsLeadTimeRemoveBtn"_s,
+        u"SettingsExportCsvBtn"_s,
+        u"SettingsExportIcsBtn"_s,
+        u"SettingsBackupJsonBtn"_s,
+        u"SettingsRestoreJsonBtn"_s,
+        u"SettingsLoadSampleBtn"_s,
+        u"SettingsOpenFolderBtn"_s
+    };
+    printChain(u"SettingsPage"_s, expected);
+}
+
+void tst_EmptyStatesAndFocus::testFocusIndicatorDoesNotChangeGeometryOrSizeHint() {
+    for (const auto theme : {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
+        m_fix->context().themeManager().setThemeMode(theme);
+        QApplication::processEvents();
+
+        QDialog dlg;
+        dlg.resize(400, 300);
+        auto* layout = new QVBoxLayout(&dlg);
+        auto* other = new QLineEdit(&dlg);
+        auto* btn = new QPushButton(tr("Test Button"), &dlg);
+        auto* edit = new QLineEdit(&dlg);
+        edit->setText(u"Line Edit Sample"_s);
+        auto* combo = new QComboBox(&dlg);
+        combo->addItem(u"Option 1"_s);
+        combo->addItem(u"Option 2"_s);
+        auto* chip = new QPushButton(tr("Chip"), &dlg);
+        chip->setProperty("chip", true);
+
+        layout->addWidget(other);
+        layout->addWidget(btn);
+        layout->addWidget(edit);
+        layout->addWidget(combo);
+        layout->addWidget(chip);
+        dlg.show();
+        activateWindow(&dlg);
+        QApplication::processEvents();
+
+        const QList<QWidget*> widgets = {btn, edit, combo, chip};
+        for (auto* w : widgets) {
+            other->setFocus(Qt::TabFocusReason);
+            QApplication::processEvents();
+            QVERIFY(!w->hasFocus());
+
+            const QSize sizeHintBefore = w->sizeHint();
+            const QRect geomBefore = w->geometry();
+
+            w->setFocus(Qt::TabFocusReason);
+            QApplication::processEvents();
+            QVERIFY(w->hasFocus());
+
+            const QSize sizeHintAfter = w->sizeHint();
+            const QRect geomAfter = w->geometry();
+
+            QCOMPARE(sizeHintAfter, sizeHintBefore);
+            QCOMPARE(geomAfter, geomBefore);
+        }
+        dlg.close();
+        QApplication::processEvents();
+    }
 }
 
 // -----------------------------------------------------------------------------

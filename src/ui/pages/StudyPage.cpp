@@ -209,6 +209,12 @@ void StudyPage::setupToolbar(QVBoxLayout* layout) {
 
     layout->addWidget(bar);
 
+    setTabOrder(m_chips, m_manageTracksBtn);
+    setTabOrder(m_manageTracksBtn, m_boardBtn);
+    setTabOrder(m_boardBtn, m_listBtn);
+    setTabOrder(m_listBtn, m_searchEdit);
+    setTabOrder(m_searchEdit, addTopicBtn);
+
     connect(m_chips, &Widgets::ChipBar::chipSelected, this, &StudyPage::onChipSelected);
     connect(m_addTrackBtn, &QPushButton::clicked, this, &StudyPage::openTrackDialog);
     connect(m_manageTracksBtn, &QPushButton::clicked, this, &StudyPage::openTrackDialog);
@@ -300,6 +306,13 @@ void StudyPage::setupBoardView() {
                 [this, column](const QItemSelection&, const QItemSelection&) {
                     onColumnSelectionChanged(column);
                 });
+    }
+
+    for (int i = 0; i < m_columns.size(); ++i) {
+        setTabOrder(m_columns[i]->list(), m_columns[i]->quickAdd());
+        if (i + 1 < m_columns.size()) {
+            setTabOrder(m_columns[i]->quickAdd(), m_columns[i + 1]->list());
+        }
     }
 
     boardLayout->addStretch(1);
