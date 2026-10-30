@@ -5,9 +5,9 @@
 - Compiler: g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0
 - Build tool: cmake version 4.2.3, ninja 1.13.2
 - Qt: Qt version 6.10.2 in /usr/lib/x86_64-linux-gnu
-- Git HEAD commit: `83c0006` (`ci: add keep-going build flag and ignore missing test logs on failure`)
+- Git HEAD commit: `2c308f3` (`fix(tests): avoid time-bomb interview timestamp in tst_PageHome`)
 - Test suite total: **33 binaries, 445 functions**
-- Test runtime: `Total Test time (real) = 46.73 sec`
+- Test runtime: `Total Test time (real) = 51.13 sec`
 
 ---
 
@@ -381,8 +381,49 @@ $ git status --short
 ```
 
 ### Test Totals by Command
-- **Test Binaries:** 33 binaries (unchanged).
-- **Test Functions:** 445 functions (unchanged).
+```
+$ total=0; for b in $(find build/dev-linux/tests -maxdepth 2 -type f -executable | sort); do cnt=$("$b" -functions | wc -l); echo "$b: $cnt"; total=$((total + cnt)); done; echo "TOTAL_FUNCTIONS: $total"; echo "TOTAL_BINARIES: $(find build/dev-linux/tests -maxdepth 2 -type f -executable | wc -l)"
+build/dev-linux/tests/data/tst_ApplicationRepository: 18
+build/dev-linux/tests/data/tst_Database: 16
+build/dev-linux/tests/data/tst_InterviewRepository: 9
+build/dev-linux/tests/data/tst_ReminderLogRepository: 7
+build/dev-linux/tests/data/tst_SeedService: 5
+build/dev-linux/tests/data/tst_SessionRepository: 10
+build/dev-linux/tests/data/tst_TopicRepository: 18
+build/dev-linux/tests/data/tst_TrackRepository: 8
+build/dev-linux/tests/data/tst_TransactionBehavior: 8
+build/dev-linux/tests/models/tst_AgendaListModel: 5
+build/dev-linux/tests/models/tst_ApplicationFilterProxy: 2
+build/dev-linux/tests/models/tst_ApplicationTableModel: 6
+build/dev-linux/tests/models/tst_TopicBoardProxy: 9
+build/dev-linux/tests/models/tst_TopicListModel: 7
+build/dev-linux/tests/models/tst_TopicTableProxy: 6
+build/dev-linux/tests/services/tst_AgendaService: 24
+build/dev-linux/tests/services/tst_DayWatcher: 4
+build/dev-linux/tests/services/tst_ExportService: 4
+build/dev-linux/tests/services/tst_ImportExport: 31
+build/dev-linux/tests/services/tst_ReminderService: 18
+build/dev-linux/tests/services/tst_SettingsService: 7
+build/dev-linux/tests/services/tst_StatsService: 10
+build/dev-linux/tests/ui_smoke/tst_MonthView: 13
+build/dev-linux/tests/ui_smoke/ui_smoke: 9
+build/dev-linux/tests/ui/tst_EmptyStatesAndFocus: 27
+build/dev-linux/tests/ui/tst_Notifiers: 21
+build/dev-linux/tests/ui/tst_PageCalendar: 12
+build/dev-linux/tests/ui/tst_PageHome: 16
+build/dev-linux/tests/ui/tst_PageJobs: 21
+build/dev-linux/tests/ui/tst_PageSettings: 44
+build/dev-linux/tests/ui/tst_PageStudy: 26
+build/dev-linux/tests/ui/tst_Shortcuts: 12
+build/dev-linux/tests/ui/tst_StudyRegression: 12
+TOTAL_FUNCTIONS: 445
+TOTAL_BINARIES: 33
+```
+
+- **Comparison with M6 Part C & Part D1:**
+  - Part C baseline (`docs/reports/M6-partC.md`): 31 binaries, 401 functions.
+  - Part D1 (`docs/reports/M6-partD1.md`) added 2 test suites (`tst_Shortcuts` with 12 functions, `tst_EmptyStatesAndFocus` with 27 functions) and 5 functions in `tst_PageSettings`, reaching 33 binaries and 445 functions.
+  - Current totals: 33 binaries, 445 functions (100% match with Part D1 baseline, zero tests removed).
 
 ---
 
@@ -424,16 +465,27 @@ Date:   Thu Oct 29 18:42:07 2026 +0200
  scripts/check.ps1        | 6 +++++-
  scripts/check.sh         | 6 +++++-
  3 files changed, 13 insertions(+), 2 deletions(-)
+
+$ git show --stat 2c308f3
+commit 2c308f3818f946c1040dd43ad5c988c01a6a186a
+Author: Tony <group.ik31@gmail.com>
+Date:   Fri Oct 30 15:59:27 2026 +0200
+
+    fix(tests): avoid time-bomb interview timestamp in tst_PageHome
+
+ tests/ui/tst_PageHome.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 ```
 
 ### Git Log
 ```
-$ git log --oneline -5
+$ git log --oneline -6
+2c308f3 fix(tests): avoid time-bomb interview timestamp in tst_PageHome
+4768528 docs(reports): add M6 CI fix-up 2 report
 83c0006 ci: add keep-going build flag and ignore missing test logs on failure
 0b74b0e fix(tests): convert QStringView in sqlite_master test helpers for Qt 6.8 compatibility
 733d1a4 docs(reports): add M6 Part D1 report with full evidence
 5ba3155 docs(prompts): add M6 CI fix-up 2 prompt
-5f3d44a docs(spec): document shortcuts, empty state inventory, and tab order in SPEC §14
 ```
 
 ---
