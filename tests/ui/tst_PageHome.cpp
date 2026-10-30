@@ -610,7 +610,7 @@ void tst_PageHome::testStatusBarTextScenarios() {
     JobApplication app; app.company = u"WayneTech"_s; app.position = u"Engineer"_s;
     QVERIFY(ctx.applications().insert(app));
     Interview iv; iv.applicationId = app.id;
-    iv.startAt = QDateTime(QDate(2026, 10, 30), QTime(14, 0));
+    iv.startAt = QDateTime::currentDateTime().addDays(1);
     QVERIFY(ctx.interviews().insert(iv));
 
     win.dashboardController()->refreshNow();
