@@ -26,6 +26,87 @@ using namespace Qt::StringLiterals;
 
 namespace JobPrep::Ui::Pages {
 
+namespace {
+
+std::optional<int> parseGoalMinutes(const QString& text) {
+    const QString clean = text.trimmed();
+    if (clean.isEmpty()) {
+        return std::nullopt;
+    }
+
+    // 1. Explicit minutes with 'min' suffix: e.g. "90 min", "90min", "90 mins", "90 minute", "90 minutes"
+    static const QRegularExpression minOnlyRe(
+        uR"(^(\d+)\s*(?:min|mins|minutes?)$)"_s,
+        QRegularExpression::CaseInsensitiveOption);
+    auto match = minOnlyRe.match(clean);
+    if (match.hasMatch()) {
+        bool ok = false;
+        const int mins = match.captured(1).toInt(&ok);
+        if (!ok) return std::nullopt;
+        const int rounded = static_cast<int>(std::round(static_cast<double>(mins) / 15.0)) * 15;
+        return std::clamp(rounded, 60, 2400);
+    }
+
+    // 2. Hours and minutes with 'h': e.g. "7 h 30 min", "7h 30 min", "7h 30", "7 h 30"
+    static const QRegularExpression hMinRe(
+        uR"(^(\d+)\s*h\s*(\d{1,2})\s*(?:min|mins|minutes?)?$)"_s,
+        QRegularExpression::CaseInsensitiveOption);
+    match = hMinRe.match(clean);
+    if (match.hasMatch()) {
+        const int h = match.captured(1).toInt();
+        const QString mStr = match.captured(2);
+        const int mins = mStr.toInt();
+        if (mins >= 60) return std::nullopt;
+        const int total = h * 60 + mins;
+        const int rounded = static_cast<int>(std::round(static_cast<double>(total) / 15.0)) * 15;
+        return std::clamp(rounded, 60, 2400);
+    }
+
+    // 3. Time separator: <sep> is one of : ; . ,
+    // e.g. "7:30", "7.30", "7,30", "7;30", "7.05", "7.5", "7:5", "7,5", "0:50", "7:20"
+    static const QRegularExpression sepRe(
+        uR"(^(\d+)\s*([:;.,])\s*(\d+)\s*(?:h|hrs?|hours?)?$)"_s,
+        QRegularExpression::CaseInsensitiveOption);
+    match = sepRe.match(clean);
+    if (match.hasMatch()) {
+        const int h = match.captured(1).toInt();
+        const QString minPart = match.captured(3);
+        int mins = 0;
+        if (minPart.length() == 1) {
+            // One digit is tens of minutes (0 to 50 min). 6-9 is an error.
+            const int tens = minPart.toInt();
+            if (tens >= 6) return std::nullopt;
+            mins = tens * 10;
+        } else if (minPart.length() == 2) {
+            // Two digits: 00-59. >= 60 is an error.
+            mins = minPart.toInt();
+            if (mins >= 60) return std::nullopt;
+        } else {
+            // 3 or more digits: error
+            return std::nullopt;
+        }
+        const int total = h * 60 + mins;
+        const int rounded = static_cast<int>(std::round(static_cast<double>(total) / 15.0)) * 15;
+        return std::clamp(rounded, 60, 2400);
+    }
+
+    // 4. Bare integer hours or hours with unit: e.g. "8", "8 h", "8h", "45", "99 h"
+    static const QRegularExpression hoursOnlyRe(
+        uR"(^(\d+)\s*(?:h|hrs?|hours?)?$)"_s,
+        QRegularExpression::CaseInsensitiveOption);
+    match = hoursOnlyRe.match(clean);
+    if (match.hasMatch()) {
+        const int h = match.captured(1).toInt();
+        const int total = h * 60;
+        const int rounded = static_cast<int>(std::round(static_cast<double>(total) / 15.0)) * 15;
+        return std::clamp(rounded, 60, 2400);
+    }
+
+    return std::nullopt;
+}
+
+}  // namespace
+
 class GoalSpinBox : public QSpinBox {
 public:
     explicit GoalSpinBox(QWidget* parent = nullptr) : QSpinBox(parent) {
@@ -43,84 +124,35 @@ public:
     }
 
     int valueFromText(const QString& text) const override {
-        const QString clean = text.trimmed();
-        if (clean.isEmpty()) {
-            return value();
-        }
+        const auto parsed = parseGoalMinutes(text);
+        return parsed.value_or(value());
+    }
 
-        // 1. Explicit minutes: e.g. "450 min", "90 min"
-        static const QRegularExpression minRe(
-            uR"(^(\d+(?:[.,]\d+)?)\s*(?:min|mins|minutes?)$)"_s,
-            QRegularExpression::CaseInsensitiveOption);
-        auto match = minRe.match(clean);
-        if (match.hasMatch()) {
-            QString numStr = match.captured(1);
-            numStr.replace(u',', u'.');
-            bool ok = false;
-            const double mins = numStr.toDouble(&ok);
-            if (ok) {
-                const int rounded = static_cast<int>(std::round(mins / 15.0)) * 15;
-                return std::clamp(rounded, minimum(), maximum());
-            }
-        }
-
-        // 2. Colon or semicolon: e.g. "7:30", "7;30"
-        static const QRegularExpression colonSemiRe(
-            uR"(^(\d+)\s*[:;]\s*(\d+)\s*(?:m|min|mins|minutes?)?$)"_s,
-            QRegularExpression::CaseInsensitiveOption);
-        match = colonSemiRe.match(clean);
-        if (match.hasMatch()) {
-            const int h = match.captured(1).toInt();
-            const int mins = match.captured(2).toInt();
-            const int total = h * 60 + mins;
-            const int rounded = static_cast<int>(std::round(static_cast<double>(total) / 15.0)) * 15;
-            return std::clamp(rounded, minimum(), maximum());
-        }
-
-        // 3. Hours and minutes: e.g. "7 h 30 min", "7h 30", "7 h 30"
-        static const QRegularExpression hMinRe(
-            uR"(^(\d+)\s*h\s*(\d+)\s*(?:m|min|mins|minutes?)?$)"_s,
-            QRegularExpression::CaseInsensitiveOption);
-        match = hMinRe.match(clean);
-        if (match.hasMatch()) {
-            const int h = match.captured(1).toInt();
-            const int mins = match.captured(2).toInt();
-            const int total = h * 60 + mins;
-            const int rounded = static_cast<int>(std::round(static_cast<double>(total) / 15.0)) * 15;
-            return std::clamp(rounded, minimum(), maximum());
-        }
-
-        // 4. Bare hours (with optional 'h'), integer or decimal fraction:
-        // e.g. "8", "8 h", "8h", "7.5", "7,5", "7.30", "0.5", "45", "99 h"
-        static const QRegularExpression hoursRe(
-            uR"(^(\d+(?:[.,]\d+)?)\s*(?:h|hrs?|hours?)?$)"_s,
-            QRegularExpression::CaseInsensitiveOption);
-        match = hoursRe.match(clean);
-        if (match.hasMatch()) {
-            QString numStr = match.captured(1);
-            numStr.replace(u',', u'.');
-            bool ok = false;
-            const double h = numStr.toDouble(&ok);
-            if (ok) {
-                const double rawMinutes = h * 60.0;
-                const int rounded = static_cast<int>(std::round(rawMinutes / 15.0)) * 15;
-                return std::clamp(rounded, minimum(), maximum());
-            }
-        }
-
-        return value();
+    void fixup(QString& input) const override {
+        input = textFromValue(value());
     }
 
     QValidator::State validate(QString& text, int& pos) const override {
         Q_UNUSED(pos);
         const QString clean = text.trimmed();
         if (clean.isEmpty()) return QValidator::Intermediate;
+        const auto parsed = parseGoalMinutes(clean);
+        if (parsed.has_value()) {
+            return QValidator::Acceptable;
+        }
         if (clean.endsWith(u':') || clean.endsWith(u';') ||
             clean.endsWith(u'.') || clean.endsWith(u',') ||
+            clean.endsWith(u'h') || clean.endsWith(u'm') ||
             clean.endsWith(u"mi", Qt::CaseInsensitive)) {
             return QValidator::Intermediate;
         }
-        return QValidator::Acceptable;
+        return QValidator::Intermediate;
+    }
+
+protected:
+    void focusOutEvent(QFocusEvent* event) override {
+        interpretText();
+        QSpinBox::focusOutEvent(event);
     }
 };
 

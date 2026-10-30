@@ -105,9 +105,10 @@ private slots:
 
     // C0.3: Goal spin box typed input
     void testGoalSpinBoxTypedEight();
-    void testGoalSpinBoxTypedDecimals();
+    void testGoalSpinBoxTypingRules_data();
+    void testGoalSpinBoxTypingRules();
+    void testGoalSpinBoxErrorRestoresPreviousValue();
     void testGoalSpinBoxTypedSeparators();
-    void testGoalSpinBoxTypedFractionRounding();
     void testGoalSpinBoxTypedHoursSuffix();
     void testGoalSpinBoxTypedHoursAndMinutes();
     void testGoalSpinBoxTypedMinutesSuffix();
@@ -370,19 +371,122 @@ void tst_PageSettings::testGoalSpinBoxTypedEight() {
     QCOMPARE(spin->value(), 480);
 }
 
-void tst_PageSettings::testGoalSpinBoxTypedDecimals() {
+void tst_PageSettings::testGoalSpinBoxTypingRules_data() {
+    QTest::addColumn<QString>("input");
+    QTest::addColumn<bool>("isError");
+    QTest::addColumn<int>("expectedMinutes");
+
+    // Bare integer hours
+    QTest::newRow("8") << u"8"_s << false << 480;
+
+    // Time separators with 2 digits (00-59)
+    QTest::newRow("7:30") << u"7:30"_s << false << 450;
+    QTest::newRow("7;30") << u"7;30"_s << false << 450;
+    QTest::newRow("7.30") << u"7.30"_s << false << 450;
+    QTest::newRow("7,30") << u"7,30"_s << false << 450;
+    QTest::newRow("7.05") << u"7.05"_s << false << 420; // 425 -> rounded to 420
+
+    // Time separators with 1 digit (tens of minutes)
+    QTest::newRow("7.5") << u"7.5"_s << false << 465; // 470 -> rounded to 465
+    QTest::newRow("7:5") << u"7:5"_s << false << 465;
+    QTest::newRow("7,5") << u"7,5"_s << false << 465;
+    QTest::newRow("7.1") << u"7.1"_s << false << 435; // 430 -> rounded to 435
+    QTest::newRow("7.0") << u"7.0"_s << false << 420; // 420 -> 420
+
+    // Errors: single digit 6-9
+    QTest::newRow("7.6") << u"7.6"_s << true << 0;
+    QTest::newRow("7.7") << u"7.7"_s << true << 0;
+    QTest::newRow("7.8") << u"7.8"_s << true << 0;
+    QTest::newRow("7.9") << u"7.9"_s << true << 0;
+
+    // Errors: two-digit minutes >= 60
+    QTest::newRow("7.75") << u"7.75"_s << true << 0;
+    QTest::newRow("7:60") << u"7:60"_s << true << 0;
+
+    // Errors: 3 or more digits after separator
+    QTest::newRow("7.300") << u"7.300"_s << true << 0;
+
+    // Errors: missing part
+    QTest::newRow("7.") << u"7."_s << true << 0;
+    QTest::newRow(".30") << u".30"_s << true << 0;
+
+    // Errors: empty or letters
+    QTest::newRow("empty") << u""_s << true << 0;
+    QTest::newRow("letters") << u"abc"_s << true << 0;
+
+    // Units
+    QTest::newRow("8 h") << u"8 h"_s << false << 480;
+    QTest::newRow("8h") << u"8h"_s << false << 480;
+    QTest::newRow("7 h 30 min") << u"7 h 30 min"_s << false << 450;
+    QTest::newRow("90 min") << u"90 min"_s << false << 90;
+
+    // Clamping & Rounding
+    QTest::newRow("7:20") << u"7:20"_s << false << 435; // 440 -> rounded to 435
+    QTest::newRow("0:50") << u"0:50"_s << false << 60;  // 50 -> clamped to 60
+    QTest::newRow("99 h") << u"99 h"_s << false << 2400;// 5940 -> clamped to 2400
+    QTest::newRow("45") << u"45"_s << false << 2400;    // 2700 -> clamped to 2400
+}
+
+void tst_PageSettings::testGoalSpinBoxTypingRules() {
+    QFETCH(QString, input);
+    QFETCH(bool, isError);
+    QFETCH(int, expectedMinutes);
+
     AppContext ctx(u":memory:"_s);
     SettingsPage page(ctx.settings(), ctx.themeManager(), false);
     auto* spin = page.studyGoalSpinBox();
     auto* edit = spin->findChild<QLineEdit*>();
 
-    edit->setText(u"7.5"_s);
-    QTest::keyClick(edit, Qt::Key_Return);
-    QCOMPARE(spin->value(), 450);
+    // Initial baseline: 480 (8 h)
+    spin->setValue(480);
 
-    edit->setText(u"7,5"_s);
+    edit->setText(input);
     QTest::keyClick(edit, Qt::Key_Return);
-    QCOMPARE(spin->value(), 450);
+
+    if (isError) {
+        QCOMPARE(spin->value(), 480);
+        QCOMPARE(edit->text(), u"8 h"_s);
+    } else {
+        QCOMPARE(spin->value(), expectedMinutes);
+    }
+}
+
+void tst_PageSettings::testGoalSpinBoxErrorRestoresPreviousValue() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    page.show();
+    QApplication::processEvents();
+
+    auto* spin = page.studyGoalSpinBox();
+    auto* edit = spin->findChild<QLineEdit*>();
+    auto* themeCombo = page.findChild<QComboBox*>(u"SettingsThemeCombo"_s);
+    QVERIFY(spin != nullptr && edit != nullptr && themeCombo != nullptr);
+
+    // Baseline value
+    spin->setValue(480);
+    QCOMPARE(edit->text(), u"8 h"_s);
+
+    // 1. Error on Enter: "7.75"
+    edit->setText(u"7.75"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 480);
+    QCOMPARE(edit->text(), u"8 h"_s);
+
+    // 2. Error on Enter: "7.300"
+    edit->setText(u"7.300"_s);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(spin->value(), 480);
+    QCOMPARE(edit->text(), u"8 h"_s);
+
+    // 3. Error on Focus loss: type "7.6" then shift focus away
+    edit->setFocus();
+    edit->setText(u"7.6"_s);
+    themeCombo->setFocus();
+    QApplication::processEvents();
+    QCOMPARE(spin->value(), 480);
+    QCOMPARE(edit->text(), u"8 h"_s);
+
+    page.close();
 }
 
 void tst_PageSettings::testGoalSpinBoxTypedSeparators() {
@@ -398,18 +502,6 @@ void tst_PageSettings::testGoalSpinBoxTypedSeparators() {
     edit->setText(u"7;30"_s);
     QTest::keyClick(edit, Qt::Key_Return);
     QCOMPARE(spin->value(), 450);
-}
-
-void tst_PageSettings::testGoalSpinBoxTypedFractionRounding() {
-    AppContext ctx(u":memory:"_s);
-    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
-    auto* spin = page.studyGoalSpinBox();
-    auto* edit = spin->findChild<QLineEdit*>();
-
-    // 7.30 = 7.3 hours = 438 minutes, rounded to nearest 15 minutes = 435 minutes
-    edit->setText(u"7.30"_s);
-    QTest::keyClick(edit, Qt::Key_Return);
-    QCOMPARE(spin->value(), 435);
 }
 
 void tst_PageSettings::testGoalSpinBoxTypedHoursSuffix() {
