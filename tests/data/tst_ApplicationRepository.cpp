@@ -1,11 +1,13 @@
 #include <QDate>
 #include <QDateTime>
 #include <QSignalSpy>
+#include <QSqlQuery>
 #include <QTest>
 #include <QTime>
 #include "TestDatabase.h"
 #include "data/ApplicationRepository.h"
 #include "data/InterviewRepository.h"
+#include "data/ReminderLogRepository.h"
 #include "data/TopicRepository.h"
 #include "data/TrackRepository.h"
 
@@ -46,6 +48,7 @@ private slots:
     void funnelStageCountsMatchesRanksAndHistory();
     void byNextActionDateUpToQueries();
     void repositoryCreatedAtAndUpdatedAtAreCurrent();
+    void repositoryWritesProduceTimestampsAfterYear2000();
 
 private:
     int addApplication(const QString& company, ApplicationStatus status = ApplicationStatus::Applied);
@@ -642,6 +645,97 @@ void tst_ApplicationRepository::repositoryCreatedAtAndUpdatedAtAreCurrent() {
     QVERIFY(latestChange.changedAt.date().year() >= 2026);
     QVERIFY(latestChange.changedAt >= before.addSecs(-5));
     QVERIFY(latestChange.changedAt <= QDateTime::currentDateTime().addSecs(5));
+}
+
+void tst_ApplicationRepository::repositoryWritesProduceTimestampsAfterYear2000() {
+    const QDateTime year2000(QDate(2000, 1, 1), QTime(0, 0, 0));
+
+    // 1. Application insert, update, duplicate, setStatus, setNextAction
+    JobApplication app;
+    app.company = u"Epoch Guard"_s;
+    app.position = u"Systems Engineer"_s;
+    app.status = ApplicationStatus::Applied;
+    QVERIFY(m_apps->insert(app));
+    auto stored = m_apps->byId(app.id);
+    QVERIFY(stored.has_value());
+    QVERIFY(stored->createdAt >= year2000);
+    QVERIFY(stored->updatedAt >= year2000);
+
+    app.position = u"Senior Systems Engineer"_s;
+    QVERIFY(m_apps->update(app));
+    stored = m_apps->byId(app.id);
+    QVERIFY(stored.has_value());
+    QVERIFY(stored->updatedAt >= year2000);
+
+    QVERIFY(m_apps->setNextAction(app.id, u"Follow up"_s, QDate(2026, 11, 1)));
+    stored = m_apps->byId(app.id);
+    QVERIFY(stored.has_value());
+    QVERIFY(stored->updatedAt >= year2000);
+
+    QVERIFY(m_apps->setStatus(app.id, ApplicationStatus::Offer, u"Received offer"_s));
+    for (const auto& h : m_apps->statusHistory(app.id)) {
+        QVERIFY(h.changedAt >= year2000);
+    }
+
+    JobApplication dupApp;
+    QVERIFY(m_apps->duplicate(app.id, dupApp));
+    auto dupStored = m_apps->byId(dupApp.id);
+    QVERIFY(dupStored.has_value());
+    QVERIFY(dupStored->createdAt >= year2000);
+    QVERIFY(dupStored->updatedAt >= year2000);
+
+    // 2. Topic insert, update, setStatus
+    JobPrep::Data::TrackRepository trackRepo(m_db->db());
+    JobPrep::Data::TopicRepository topicRepo(m_db->db());
+    JobPrep::Domain::Track track;
+    track.name = u"Backend"_s;
+    track.color = u"#0066aa"_s;
+    QVERIFY(trackRepo.insert(track));
+
+    JobPrep::Domain::Topic topic;
+    topic.trackId = track.id;
+    topic.title = u"Memory Safety"_s;
+    QVERIFY(topicRepo.insert(topic));
+    auto storedTopic = topicRepo.byId(topic.id);
+    QVERIFY(storedTopic.has_value());
+    QVERIFY(storedTopic->createdAt >= year2000);
+    QVERIFY(storedTopic->updatedAt >= year2000);
+
+    topic.title = u"Modern Memory Safety"_s;
+    QVERIFY(topicRepo.update(topic));
+    storedTopic = topicRepo.byId(topic.id);
+    QVERIFY(storedTopic.has_value());
+    QVERIFY(storedTopic->updatedAt >= year2000);
+
+    QVERIFY(topicRepo.setStatus(topic.id, JobPrep::Domain::TopicStatus::Done));
+    storedTopic = topicRepo.byId(topic.id);
+    QVERIFY(storedTopic.has_value());
+    QVERIFY(storedTopic->updatedAt >= year2000);
+
+    // 3. ReminderLog markSent
+    JobPrep::Data::ReminderLogRepository reminderRepo(m_db->db());
+    QVERIFY(reminderRepo.markSent(u"interview:123:60"_s));
+    const auto sentAt = reminderRepo.sentAt(u"interview:123:60"_s);
+    QVERIFY(sentAt.has_value());
+    QVERIFY(*sentAt >= year2000);
+
+    // 4. Direct SQL check across all timestamp columns in the database
+    QSqlQuery q(m_db->db().connection());
+    QVERIFY(q.exec(u"SELECT COUNT(*) FROM applications WHERE created_at < '2000-01-01' OR updated_at < '2000-01-01'"_s));
+    QVERIFY(q.next());
+    QCOMPARE(q.value(0).toInt(), 0);
+
+    QVERIFY(q.exec(u"SELECT COUNT(*) FROM status_history WHERE changed_at < '2000-01-01'"_s));
+    QVERIFY(q.next());
+    QCOMPARE(q.value(0).toInt(), 0);
+
+    QVERIFY(q.exec(u"SELECT COUNT(*) FROM topics WHERE created_at < '2000-01-01' OR updated_at < '2000-01-01'"_s));
+    QVERIFY(q.next());
+    QCOMPARE(q.value(0).toInt(), 0);
+
+    QVERIFY(q.exec(u"SELECT COUNT(*) FROM reminders_sent WHERE sent_at < '2000-01-01'"_s));
+    QVERIFY(q.next());
+    QCOMPARE(q.value(0).toInt(), 0);
 }
 
 QTEST_GUILESS_MAIN(tst_ApplicationRepository)

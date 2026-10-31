@@ -127,6 +127,7 @@ private slots:
     void testPageSwitchShortcutsRealKeyEvents();
     void testPreferencesShortcutRealKeyEvents();
     void testWindowMaximumSizeAndMaximize();
+    void testWindowMinimumSizeExceedsLayoutMinimum();
     void testWindowLoggingCategory();
     void testZeroWarnings();
     void cleanupTestCase();
@@ -339,6 +340,44 @@ void tst_UiSmoke::testWindowMaximumSizeAndMaximize() {
     m_window->showNormal();
     QVERIFY(!m_window->isMaximized());
     QCOMPARE(m_window->geometry(), prevGeo);
+}
+
+void tst_UiSmoke::testWindowMinimumSizeExceedsLayoutMinimum() {
+    QVERIFY(m_window != nullptr);
+    QVERIFY(m_window->isVisible());
+
+    const auto originalTheme = m_ctx->themeManager().currentMode();
+
+    for (const auto theme : {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
+        m_ctx->themeManager().setThemeMode(theme);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(m_window->minimumSize(), QSize(1000, 540));
+        QVERIFY(m_window->layout() != nullptr);
+
+        for (int i = 0; i < m_window->pageStack()->count(); ++i) {
+            m_window->sidebar()->setCurrentPage(i);
+            emit m_window->sidebar()->pageSelected(i);
+            QCoreApplication::processEvents();
+
+            const QSize layoutMin = m_window->layout()->minimumSize();
+            QVERIFY2(m_window->minimumWidth() >= layoutMin.width(),
+                     qPrintable(QString(u"Page %1 theme %2: window minimumWidth (%3) < layout minimumWidth (%4)"_s)
+                                    .arg(i)
+                                    .arg(theme == JobPrep::Ui::Theme::ThemeMode::Light ? u"Light"_s : u"Dark"_s)
+                                    .arg(m_window->minimumWidth())
+                                    .arg(layoutMin.width())));
+            QVERIFY2(m_window->minimumHeight() >= layoutMin.height(),
+                     qPrintable(QString(u"Page %1 theme %2: window minimumHeight (%3) < layout minimumHeight (%4)"_s)
+                                    .arg(i)
+                                    .arg(theme == JobPrep::Ui::Theme::ThemeMode::Light ? u"Light"_s : u"Dark"_s)
+                                    .arg(m_window->minimumHeight())
+                                    .arg(layoutMin.height())));
+        }
+    }
+
+    m_ctx->themeManager().setThemeMode(originalTheme);
+    QCoreApplication::processEvents();
 }
 
 void tst_UiSmoke::testWindowLoggingCategory() {

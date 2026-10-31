@@ -241,13 +241,18 @@ void CalendarPage::setupSplitter(QVBoxLayout* layout) {
 }
 
 void CalendarPage::setupAgendaPanel(QWidget* panel) {
+    panel->setMinimumSize(260, 200);
     auto* panelLayout = new QVBoxLayout(panel);
     panelLayout->setContentsMargins(16, 16, 16, 16);
     panelLayout->setSpacing(12);
 
     auto* panelHeader = new QHBoxLayout;
+    panelHeader->setSpacing(8);
+
     m_agendaTitleLabel = new QLabel(panel);
     m_agendaTitleLabel->setObjectName(u"CalendarAgendaTitle"_s);
+    m_agendaTitleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_agendaTitleLabel->setMinimumWidth(60);
     panelHeader->addWidget(m_agendaTitleLabel, 1);
 
     auto* addInterviewBtn = new QPushButton(tr("+ Interview"), panel);
