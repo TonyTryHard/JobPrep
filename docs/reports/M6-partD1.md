@@ -1118,7 +1118,7 @@ Total Test time (real) =  46.76 sec
 ## 7. Not Verified by Agent, User to Check
 
 1. **Ukrainian Keyboard Layout:** Ctrl+N, Ctrl+F, and Ctrl+S shortcuts under a non-Latin / Ukrainian keyboard layout. Tests ran exclusively under standard offscreen default key mappings.
-2. **Real Window Maximize on Wayland & XCB:** Check window maximize and unmaximize behavior interactively under both Wayland and `QT_QPA_PLATFORM=xcb ./build/dev-linux/jobprep`.
+2. **Real Window Maximize:** **[VERIFIED BY USER]** Interactively tested by user under Linux desktop environment. Diagnostic log identified conflict between 1280x720 screen available height (648 px) and previous minimum window height (700 px). Resolved by commit `e2b1d77` setting `setMinimumSize(980, 540)`. User verified: window maximizes cleanly without bouncing ("looks fine").
 3. **ICS Calendar Import:** Import exported `.ics` file into external calendar software (Google Calendar, Apple Calendar, Thunderbird, Outlook) to verify calendar display and 60-minute alarm triggers.
 4. **Restore on Real Production Data:** Execute full JSON backup and restore on real user data via the Settings UI.
 5. **Visible Focus Ring Look:** Inspect the 2px accent focus ring on the physical desktop monitor in both Light and Dark modes.
@@ -1563,6 +1563,9 @@ Added test slot `testFocusIndicatorDoesNotChangeGeometryOrSizeHint()` asserting 
    ```
    No handlers override size or restore geometry inside `resizeEvent` or `changeEvent`.
 
+5. **Interactive Verification:**
+   The user ran `./build/dev-linux/jobprep` with `setMinimumSize(980, 540)` on the physical 1280x720 Linux desktop and verified that the window maximizes cleanly and stably without reverting ("looks fine").
+
 ---
 
 ### F6. Safety Backup Location & Retention
@@ -1887,5 +1890,18 @@ $ grep -rn "ui/" src/domain src/data src/services src/models
 ```bash
 $ grep -rnE "#[0-9a-fA-F]{3,6}" src/ui/pages src/ui/widgets src/ui/dialogs
 (no output)
+```
+
+#### 4. Git Commit History for Round 2
+```bash
+$ git log -n 8 --oneline
+6c96bd9 docs(spec): document window maximize resolution on 720p displays in SPEC §14
+e2b1d77 fix(ui): lower minimum window size to 980x540 to allow clean maximize on 720p screens
+2cded16 docs(reports): update M6 Part D1 report with round 2 fixups (F1-F9)
+9950420 docs(spec): document date/time single-tab navigation, focus chains, and timezone independence in SPEC §14 (F8, F4, F9)
+8573179 feat(ui): eliminate section-trapping in date/time edits and enable bidirectional key tab traversal (F8, F4)
+d7d3974 m6-partD-fixup.md prompt
+a319f23 (origin/main, origin/HEAD) docs(reports): update M6 Part D1 report with round 2 fix-ups (F1-F7)
+449be38 docs(spec): document goal typing rule, tab order chains, and timestamp fix in SPEC §14
 ```
 
