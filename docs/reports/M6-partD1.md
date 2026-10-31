@@ -1528,22 +1528,36 @@ Added test slot `testFocusIndicatorDoesNotChangeGeometryOrSizeHint()` asserting 
 
 ---
 
-### F5. Maximize Diagnostics & Geometry Grep
+### F5. Maximize Diagnostics, Root Cause on 720p Displays & Resolution
 
-1. **Clarification:** The prior report assumption blaming Wayland compositors was incorrect. The cause of the user's observed window manager maximize behavior is unknown, and offscreen tests test only Qt-side constraints.
-2. **Diagnostic Logging Category `jobprep.window`:** Added debug logging category emitting geometry metrics on `resizeEvent`, `changeEvent(WindowStateChange)`, screen change, and `show()`. Enabled via:
+1. **Diagnostic Logging Category `jobprep.window`:** Added debug logging category emitting geometry metrics on `resizeEvent`, `changeEvent(WindowStateChange)`, screen change, and `show()`. Enabled via:
    ```bash
    QT_LOGGING_RULES="jobprep.window.debug=true" ./build/dev-linux/jobprep
    ```
-3. **Geometry/Size Grep:**
+
+2. **User Diagnostic Log & Root Cause Analysis:**
+   Running under user's desktop environment produced:
+   ```text
+   jobprep.window: [windowStateChange] state=0x2 geom=(1,25 1212x700) frame=(1,25 1212x700) min=(1100x700) max=(16777215x16777215) minHint=(982x515) sizeHint=(1224x644) screenAvail=(0,0 1280x720) dpr=1.000000
+   jobprep.window: [resize] state=0x2 geom=(0,0 1210x648) frame=(-11,-49 1232x708) min=(1100x700) max=(16777215x16777215) minHint=(982x515) sizeHint=(1224x644) screenAvail=(0,0 1280x720) dpr=1.000000
+   jobprep.window: [windowStateChange] state=0x0 geom=(0,0 1210x648) frame=(-11,-49 1232x708) min=(1100x700) max=(16777215x16777215) minHint=(982x515) sizeHint=(1224x644) screenAvail=(0,0 1280x720) dpr=1.000000
+   jobprep.window: [resize] state=0x0 geom=(0,0 1100x700) frame=(-11,-49 1122x760) min=(1100x700) max=(16777215x16777215) minHint=(982x515) sizeHint=(1224x644) screenAvail=(0,0 1280x720) dpr=1.000000
+   ```
+   **Cause:** On a 1280x720 display (`screenAvail=1280x720`), window frame title bar and OS desktop panels occupy 40–72 px vertically (`frame=1232x708`), leaving at most **648 px** of vertical client space when maximized. However, `MainWindow` set `setMinimumSize(1100, 700)`. Because **700 px minimum height > 648 px available height**, the window manager was unable to satisfy both constraints and immediately reverted maximization from `state=0x2` to `state=0x0`.
+
+3. **Resolution:**
+   The composite layout size hint across all views has `minHint=(982x515)`. Lowered `MainWindow` minimum size constraint to `setMinimumSize(980, 540)` in `src/ui/MainWindow.cpp`. This fits safely within 720p screens ($540 \le 648$), allowing the window manager to maximize stably without fighting Qt size constraints. Default unmaximized startup size remains `1100x700`.
+   **Commit:** `e2b1d77 fix(ui): lower minimum window size to 980x540 to allow clean maximize on 720p screens`
+
+4. **Geometry/Size Grep:**
    ```bash
    $ grep -rn "restoreGeometry\|saveGeometry\|setGeometry\|resize(\|setMinimumSize\|setMaximumSize\|setSizeConstraint\|setWindowFlag\|windowFlags" src/ui src/main.cpp
    src/ui/InAppNotifier.cpp:129:        t->setGeometry(x, y, width, h);
    src/ui/InAppNotifier.cpp:140:        m_overflowLabel->setGeometry(x + width - ow, y, ow, oh);
-   src/ui/MainWindow.cpp:52:    setMinimumSize(1100, 700);
-   src/ui/MainWindow.cpp:66:        restoreGeometry(geo);
-   src/ui/MainWindow.cpp:68:        resize(1100, 700);
-   src/ui/MainWindow.cpp:118:    m_ctx.settings().setWindowGeometry(saveGeometry());
+   src/ui/MainWindow.cpp:54:    setMinimumSize(980, 540);
+   src/ui/MainWindow.cpp:68:        restoreGeometry(geo);
+   src/ui/MainWindow.cpp:70:        resize(1100, 700);
+   src/ui/MainWindow.cpp:120:    m_ctx.settings().setWindowGeometry(saveGeometry());
    src/ui/dialogs/TrackDialog.cpp:81:    resize(520, 420);
    src/ui/dialogs/SessionDialog.cpp:33:    resize(420, 340);
    ```
