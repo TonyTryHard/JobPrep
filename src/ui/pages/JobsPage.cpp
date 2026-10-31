@@ -96,6 +96,9 @@ void JobsPage::setupUi(QVBoxLayout* layout) {
 
     setupToolbar(layout);
     setupTable(layout);
+    if (auto* addBtn = findChild<QPushButton*>(u"JobsAddBtn"_s)) {
+        setTabOrder(addBtn, m_view);
+    }
     setupEmptyStates();
     setupContextMenu();
 
@@ -147,6 +150,13 @@ void JobsPage::setupToolbar(QVBoxLayout* layout) {
 
     layout->addWidget(bar);
 
+    setTabOrder(m_searchEdit, m_chips);
+    setTabOrder(m_chips, exportBtn);
+    setTabOrder(exportBtn, addBtn);
+    if (m_view) {
+        setTabOrder(addBtn, m_view);
+    }
+
     connect(m_searchEdit, &QLineEdit::textChanged, this, &JobsPage::setSearchText);
     connect(m_chips, &Widgets::ChipBar::chipSelected, this, [this](int chip) {
         m_proxy->setFilterChip(static_cast<Models::ApplicationFilterProxy::FilterChip>(chip));
@@ -171,6 +181,7 @@ void JobsPage::setupTable(QVBoxLayout* layout) {
     m_view->setModel(m_proxy);
     m_view->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_view->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_view->setTabKeyNavigation(false);
     m_view->setSortingEnabled(true);
     // SPEC §3.3: freshest first, so the table shows what changed most recently.
     m_view->sortByColumn(Models::ApplicationTableModel::UpdatedColumn, Qt::DescendingOrder);

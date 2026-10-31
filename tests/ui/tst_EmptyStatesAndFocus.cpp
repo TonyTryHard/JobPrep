@@ -83,6 +83,7 @@ private slots:
 
     // D3 Tab order walks
     void testTabOrderSidebar();
+    void testStudyDetailPanelDateTabStops();
     void testTabOrderPageHome();
     void testTabOrderPageHomeEmpty();
     void testTabOrderPageStudy();
@@ -497,9 +498,7 @@ void tst_EmptyStatesAndFocus::testEmptyApplicationDialogTimelineTab() {
     // Updating status records a transition in history, which hides empty state and shows table
     const auto historyBefore = m_fix->context().applications().statusHistory(app.id);
     app.status = JobPrep::Domain::ApplicationStatus::Technical;
-    const bool updateOk = m_fix->context().applications().update(app);
-    const auto historyAfter = m_fix->context().applications().statusHistory(app.id);
-    qDebug() << "updateOk:" << updateOk << "historyBefore:" << historyBefore.size() << "historyAfter:" << historyAfter.size();
+    m_fix->context().applications().update(app);
     const auto updatedApp = m_fix->context().applications().byId(app.id).value();
     dlg.setApplication(updatedApp);
     tabs->setCurrentIndex(3);
@@ -600,6 +599,41 @@ static QString printChain(const QString& title, const QStringList& names) {
     return joined;
 }
 
+static void verifyTabAndBacktabChain(QWidget* window, const QList<QWidget*>& chain) {
+    if (chain.isEmpty()) return;
+    activateWindow(window);
+    QApplication::processEvents();
+
+    chain.first()->setFocus(Qt::TabFocusReason);
+    QApplication::processEvents();
+
+    // Forward walk with real Tab
+    for (qsizetype i = 0; i < chain.size() - 1; ++i) {
+        sendKeyClick(window, Qt::Key_Tab);
+        QWidget* focused = window->focusWidget();
+        if (!focused) focused = QApplication::focusWidget();
+        QWidget* expected = chain[i + 1];
+        QVERIFY2(focused == expected || (focused && focused->parentWidget() == expected),
+                 qPrintable(QString(u"Forward Tab step %1 failed: focused=%2 expected=%3"_s)
+                                .arg(i)
+                                .arg(focused ? focused->objectName() : u"null"_s)
+                                .arg(expected ? expected->objectName() : u"null"_s)));
+    }
+
+    // Backward walk with real Backtab
+    for (qsizetype i = chain.size() - 1; i > 0; --i) {
+        sendKeyClick(window, Qt::Key_Backtab);
+        QWidget* focused = window->focusWidget();
+        if (!focused) focused = QApplication::focusWidget();
+        QWidget* expected = chain[i - 1];
+        QVERIFY2(focused == expected || (focused && focused->parentWidget() == expected),
+                 qPrintable(QString(u"Backward Backtab step %1 failed: focused=%2 expected=%3"_s)
+                                .arg(i)
+                                .arg(focused ? focused->objectName() : u"null"_s)
+                                .arg(expected ? expected->objectName() : u"null"_s)));
+    }
+}
+
 void tst_EmptyStatesAndFocus::testTabOrderSidebar() {
     auto* sidebar = m_fix->window().sidebar();
     QVERIFY(sidebar != nullptr);
@@ -613,12 +647,123 @@ void tst_EmptyStatesAndFocus::testTabOrderSidebar() {
         u"SidebarToggleBtn"_s
     };
 
+    QList<QWidget*> chain;
     for (const auto& name : expected) {
         auto* btn = sidebar->findChild<QWidget*>(name);
         QVERIFY2(btn != nullptr, qPrintable(u"Missing widget: "_s + name));
         QVERIFY2(btn->focusPolicy() != Qt::NoFocus, qPrintable(u"NoFocus: "_s + name));
+        chain.append(btn);
     }
+    verifyTabAndBacktabChain(&m_fix->window(), chain);
     printChain(u"Sidebar"_s, expected);
+}
+
+void tst_EmptyStatesAndFocus::testStudyDetailPanelDateTabStops() {
+    auto* study = m_fix->window().findChild<JobPrep::Ui::Pages::StudyPage*>();
+    QVERIFY(study);
+    m_fix->window().sidebar()->setCurrentPage(1);
+    emit m_fix->window().sidebar()->pageSelected(1);
+    study->onActivated();
+    activateWindow(&m_fix->window());
+    QApplication::processEvents();
+
+    JobPrep::Domain::Track trk;
+    trk.name = u"C++"_s;
+    m_fix->context().tracks().insert(trk);
+    JobPrep::Domain::Topic top;
+    top.trackId = trk.id;
+    top.title = u"Smart Pointers"_s;
+    top.targetDate = QDate::currentDate().addDays(7);
+    m_fix->context().topics().insert(top);
+
+    auto* detail = study->detailPanel();
+    QVERIFY(detail);
+    detail->loadFrom(top.id);
+    QApplication::processEvents();
+
+    auto* titleEdit = detail->findChild<QLineEdit*>(u"StudyDetailTitleEdit"_s);
+    auto* dateWidget = detail->findChild<QWidget*>(u"StudyDetailDateEdit"_s);
+    QVERIFY(titleEdit);
+    QVERIFY(dateWidget);
+
+    fprintf(stdout, "F8_TARGET_DATE_INFO: class=%s focusPolicy=%d isQDateEdit=%d\n",
+            dateWidget->metaObject()->className(),
+            static_cast<int>(dateWidget->focusPolicy()),
+            dateWidget->inherits("QDateEdit") ? 1 : 0);
+    fflush(stdout);
+
+    titleEdit->setFocus(Qt::TabFocusReason);
+    QApplication::processEvents();
+    fprintf(stdout, "F8_START_FOCUS: %s (%s)\n",
+            QApplication::focusWidget() ? QApplication::focusWidget()->metaObject()->className() : "null",
+            QApplication::focusWidget() ? qPrintable(QApplication::focusWidget()->objectName()) : "null");
+    fflush(stdout);
+
+    // Press Tab up to 15 times
+    int dateEditHitCount = 0;
+    for (int i = 1; i <= 15; ++i) {
+        sendKeyClick(&m_fix->window(), Qt::Key_Tab);
+        QWidget* focused = QApplication::focusWidget();
+        const QString className = focused ? QString::fromUtf8(focused->metaObject()->className()) : u"null"_s;
+        const QString objName = focused ? focused->objectName() : u"null"_s;
+        QWidget* parent = focused ? focused->parentWidget() : nullptr;
+        const QString parentName = parent ? parent->objectName() : u""_s;
+
+        fprintf(stdout, "TAB_PRESS_%02d: %s (name: %s, parent: %s)\n",
+                i, qPrintable(className), qPrintable(objName), qPrintable(parentName));
+        fflush(stdout);
+
+        if (focused == dateWidget || parent == dateWidget) {
+            dateEditHitCount++;
+        }
+    }
+    fprintf(stdout, "F8_DATE_EDIT_TOTAL_TAB_STOPS: %d\n", dateEditHitCount);
+    fflush(stdout);
+    QCOMPARE(dateEditHitCount, 1);
+
+    // Direct Forward Tab step: priorityCombo -> dateEdit -> dateClearBtn
+    auto* priorityCombo = detail->findChild<QComboBox*>(u"StudyDetailPriorityCombo"_s);
+    auto* clearBtn = detail->findChild<QPushButton*>(u"StudyDetailDateClearBtn"_s);
+    QVERIFY(priorityCombo);
+    QVERIFY(clearBtn);
+
+    priorityCombo->setFocus(Qt::TabFocusReason);
+    QApplication::processEvents();
+    QCOMPARE(QApplication::focusWidget(), priorityCombo);
+
+    sendKeyClick(&m_fix->window(), Qt::Key_Tab);
+    QWidget* afterPriority = QApplication::focusWidget();
+    QVERIFY(afterPriority == dateWidget || (afterPriority && afterPriority->parentWidget() == dateWidget));
+
+    sendKeyClick(&m_fix->window(), Qt::Key_Tab);
+    QCOMPARE(QApplication::focusWidget(), clearBtn);
+
+    // Direct Backward Tab step: clearBtn -> dateEdit -> priorityCombo
+    sendKeyClick(&m_fix->window(), Qt::Key_Backtab);
+    QWidget* afterBackFromClear = QApplication::focusWidget();
+    QVERIFY(afterBackFromClear == dateWidget || (afterBackFromClear && afterBackFromClear->parentWidget() == dateWidget));
+
+    sendKeyClick(&m_fix->window(), Qt::Key_Backtab);
+    QCOMPARE(QApplication::focusWidget(), priorityCombo);
+
+    // Verify arrow keys, calendar popup, and clear button functionality
+    auto* dateEdit = qobject_cast<QDateEdit*>(dateWidget);
+    QVERIFY(dateEdit);
+    QVERIFY(dateEdit->calendarPopup());
+    dateWidget->setFocus(Qt::TabFocusReason);
+    QApplication::processEvents();
+    const QDate origDate = dateEdit->date();
+
+    // Arrow keys still increment/decrement sections
+    QTest::keyClick(dateWidget, Qt::Key_Up);
+    QApplication::processEvents();
+    QVERIFY(dateEdit->date() != origDate);
+
+    // Clear button functionality
+    QVERIFY(clearBtn->isEnabled());
+    clearBtn->click();
+    QApplication::processEvents();
+    QCOMPARE(dateEdit->date(), dateEdit->minimumDate());
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationOverview() {
@@ -626,11 +771,14 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationOverview() {
                                               m_fix->context().interviews(),
                                               JobPrep::Ui::Dialogs::ApplicationDialog::Create);
     dlg.show();
+    activateWindow(&dlg);
     QApplication::processEvents();
 
-    auto* companyEdit = dlg.findChild<QLineEdit*>(u"FieldCompany"_s);
-    QVERIFY(companyEdit);
-    companyEdit->setFocus();
+    auto* appliedCheck = dlg.findChild<QCheckBox*>(u"FieldAppliedDateCheck"_s);
+    auto* nextCheck = dlg.findChild<QCheckBox*>(u"FieldNextActionDateCheck"_s);
+    if (appliedCheck) appliedCheck->setChecked(true);
+    if (nextCheck) nextCheck->setChecked(true);
+    QApplication::processEvents();
 
     const QStringList expected = {
         u"FieldCompany"_s,
@@ -654,19 +802,13 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationOverview() {
         u"DialogSaveBtn"_s
     };
 
-    QWidget* cur = companyEdit;
-    for (const auto& expectedName : expected) {
-        QVERIFY(cur);
-        QCOMPARE(cur->objectName(), expectedName);
-        QVERIFY(cur->focusPolicy() != Qt::NoFocus);
-        cur = cur->nextInFocusChain();
-        while (cur && cur != companyEdit &&
-               (!cur->isVisibleTo(cur->window()) || cur->focusPolicy() == Qt::NoFocus ||
-                (cur->parentWidget() && qobject_cast<QAbstractSpinBox*>(cur->parentWidget())) ||
-                (cur->parentWidget() && qobject_cast<QComboBox*>(cur->parentWidget())))) {
-            cur = cur->nextInFocusChain();
-        }
+    QList<QWidget*> chain;
+    for (const auto& name : expected) {
+        auto* w = dlg.findChild<QWidget*>(name);
+        QVERIFY2(w != nullptr, qPrintable(u"Missing widget: "_s + name));
+        chain.append(w);
     }
+    verifyTabAndBacktabChain(&dlg, chain);
     printChain(u"ApplicationDialog_Overview"_s, expected);
     dlg.reject();
 }
@@ -676,6 +818,12 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationInterviewsAndNotes() 
     app.company = u"Example"_s;
     app.position = u"Dev"_s;
     m_fix->context().applications().insert(app);
+
+    JobPrep::Domain::Interview iv;
+    iv.applicationId = app.id;
+    iv.startAt = QDateTime::currentDateTime();
+    m_fix->context().interviews().insert(iv);
+
     const auto createdApp = m_fix->context().applications().byId(app.id).value();
 
     JobPrep::Ui::Dialogs::ApplicationDialog dlg(m_fix->context().applications(),
@@ -683,6 +831,7 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationInterviewsAndNotes() 
                                               JobPrep::Ui::Dialogs::ApplicationDialog::Edit);
     dlg.setApplication(createdApp);
     dlg.show();
+    activateWindow(&dlg);
     QApplication::processEvents();
 
     auto* tabs = dlg.findChild<QTabWidget*>(u"ApplicationDialogTabs"_s);
@@ -693,8 +842,8 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationInterviewsAndNotes() 
     QApplication::processEvents();
     auto* notesEdit = dlg.findChild<QTextEdit*>(u"FieldNotes"_s);
     auto* saveBtn = dlg.findChild<QPushButton*>(u"DialogSaveBtn"_s);
-    QVERIFY(notesEdit);
-    QVERIFY(notesEdit->focusPolicy() != Qt::NoFocus);
+    QVERIFY(notesEdit && saveBtn);
+    verifyTabAndBacktabChain(&dlg, {notesEdit, saveBtn});
     printChain(u"ApplicationDialog_Notes"_s, {u"FieldNotes"_s, u"DialogSaveBtn"_s});
 
     // 2. Switch to Interviews tab (tab 2)
@@ -705,15 +854,14 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationInterviewsAndNotes() 
     auto* addInterviewBtn = dlg.findChild<QPushButton*>(u"InterviewsAddBtn"_s);
     auto* editInterviewBtn = dlg.findChild<QPushButton*>(u"InterviewsEditBtn"_s);
     auto* deleteInterviewBtn = dlg.findChild<QPushButton*>(u"InterviewsDeleteBtn"_s);
-    QVERIFY(interviewsTable);
-    QVERIFY(addInterviewBtn);
-    QVERIFY(editInterviewBtn);
-    QVERIFY(deleteInterviewBtn);
-    QVERIFY(saveBtn);
-    QVERIFY(interviewsTable->focusPolicy() != Qt::NoFocus);
-    QVERIFY(addInterviewBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(saveBtn->focusPolicy() != Qt::NoFocus);
+    QVERIFY(interviewsTable && addInterviewBtn && editInterviewBtn && deleteInterviewBtn && saveBtn);
 
+    if (interviewsTable->rowCount() > 0) {
+        interviewsTable->selectRow(0);
+        QApplication::processEvents();
+    }
+
+    verifyTabAndBacktabChain(&dlg, {interviewsTable, addInterviewBtn, editInterviewBtn, deleteInterviewBtn, saveBtn});
     printChain(u"ApplicationDialog_Interviews"_s,
                {u"InterviewsTable"_s, u"InterviewsAddBtn"_s, u"InterviewsEditBtn"_s,
                 u"InterviewsDeleteBtn"_s, u"DialogSaveBtn"_s});
@@ -733,6 +881,7 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationTimeline() {
                                               JobPrep::Ui::Dialogs::ApplicationDialog::Edit);
     dlg.setApplication(createdApp);
     dlg.show();
+    activateWindow(&dlg);
     QApplication::processEvents();
 
     auto* tabs = dlg.findChild<QTabWidget*>(u"ApplicationDialogTabs"_s);
@@ -742,8 +891,8 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationTimeline() {
 
     auto* timelineTable = dlg.findChild<QTableWidget*>(u"TimelineTable"_s);
     auto* saveBtn = dlg.findChild<QPushButton*>(u"DialogSaveBtn"_s);
-    QVERIFY(timelineTable);
-    QVERIFY(saveBtn);
+    QVERIFY(timelineTable && saveBtn);
+    verifyTabAndBacktabChain(&dlg, {timelineTable, saveBtn});
     printChain(u"ApplicationDialog_Timeline"_s, {u"TimelineTable"_s, u"DialogSaveBtn"_s});
 
     dlg.reject();
@@ -759,11 +908,8 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogInterview() {
                                             m_fix->context().interviews(),
                                             JobPrep::Ui::Dialogs::InterviewDialog::Create);
     dlg.show();
+    activateWindow(&dlg);
     QApplication::processEvents();
-
-    auto* appCombo = dlg.findChild<QComboBox*>(u"InterviewApplicationCombo"_s);
-    QVERIFY(appCombo);
-    appCombo->setFocus();
 
     const QStringList expected = {
         u"InterviewApplicationCombo"_s,
@@ -778,18 +924,13 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogInterview() {
         u"DialogSaveBtn"_s
     };
 
-    QWidget* cur = appCombo;
-    for (const auto& expectedName : expected) {
-        QVERIFY(cur);
-        QCOMPARE(cur->objectName(), expectedName);
-        QVERIFY(cur->focusPolicy() != Qt::NoFocus);
-        cur = cur->nextInFocusChain();
-        while (cur && cur != appCombo &&
-               (!cur->isVisibleTo(cur->window()) || cur->focusPolicy() == Qt::NoFocus ||
-                (cur->parentWidget() && qobject_cast<QAbstractSpinBox*>(cur->parentWidget())))) {
-            cur = cur->nextInFocusChain();
-        }
+    QList<QWidget*> chain;
+    for (const auto& name : expected) {
+        auto* w = dlg.findChild<QWidget*>(name);
+        QVERIFY2(w != nullptr, qPrintable(u"Missing widget: "_s + name));
+        chain.append(w);
     }
+    verifyTabAndBacktabChain(&dlg, chain);
     printChain(u"InterviewDialog"_s, expected);
     dlg.reject();
 }
@@ -802,21 +943,16 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogFollowUp() {
 
     JobPrep::Ui::Dialogs::FollowUpDialog dlg(m_fix->context().applications(), QDate::currentDate());
     dlg.show();
+    activateWindow(&dlg);
     QApplication::processEvents();
 
     auto* appCombo = dlg.findChild<QComboBox*>(u"FollowUpApplicationCombo"_s);
     auto* actionEdit = dlg.findChild<QLineEdit*>(u"FollowUpActionEdit"_s);
     auto* saveBtn = dlg.findChild<QPushButton*>(u"DialogSaveBtn"_s);
-    QVERIFY(appCombo);
-    QVERIFY(actionEdit);
-    QVERIFY(saveBtn);
+    QVERIFY(appCombo && actionEdit && saveBtn);
 
-    QVERIFY(appCombo->focusPolicy() != Qt::NoFocus);
-    QVERIFY(actionEdit->focusPolicy() != Qt::NoFocus);
-    QVERIFY(saveBtn->focusPolicy() != Qt::NoFocus);
-
-    const QStringList expected = {u"FollowUpApplicationCombo"_s, u"FollowUpActionEdit"_s, u"DialogSaveBtn"_s};
-    printChain(u"FollowUpDialog"_s, expected);
+    verifyTabAndBacktabChain(&dlg, {appCombo, actionEdit, saveBtn});
+    printChain(u"FollowUpDialog"_s, {u"FollowUpApplicationCombo"_s, u"FollowUpActionEdit"_s, u"DialogSaveBtn"_s});
     dlg.reject();
 }
 
@@ -834,32 +970,21 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogSession() {
     JobPrep::Ui::Dialogs::SessionDialog dlg(m_fix->context().sessions(),
                                           m_fix->context().topics());
     dlg.show();
+    activateWindow(&dlg);
     QApplication::processEvents();
-
-    auto* dateEdit = dlg.findChild<QDateEdit*>(u"SessionDateEdit"_s);
-    auto* minSpin = dlg.findChild<QSpinBox*>(u"SessionMinutesSpin"_s);
-    auto* topicCombo = dlg.findChild<QComboBox*>(u"SessionTopicCombo"_s);
-    auto* noteEdit = dlg.findChild<QTextEdit*>(u"SessionNoteEdit"_s);
-    auto* saveBtn = dlg.findChild<QPushButton*>(u"SessionSaveBtn"_s);
-    auto* cancelBtn = dlg.findChild<QPushButton*>(u"SessionCancelBtn"_s);
-    QVERIFY(dateEdit);
-    QVERIFY(minSpin);
-    QVERIFY(topicCombo);
-    QVERIFY(noteEdit);
-    QVERIFY(saveBtn);
-    QVERIFY(cancelBtn);
-
-    QVERIFY(dateEdit->focusPolicy() != Qt::NoFocus);
-    QVERIFY(minSpin->focusPolicy() != Qt::NoFocus);
-    QVERIFY(topicCombo->focusPolicy() != Qt::NoFocus);
-    QVERIFY(noteEdit->focusPolicy() != Qt::NoFocus);
-    QVERIFY(saveBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(cancelBtn->focusPolicy() != Qt::NoFocus);
 
     const QStringList expected = {
         u"SessionDateEdit"_s, u"SessionMinutesSpin"_s, u"SessionTopicCombo"_s,
         u"SessionNoteEdit"_s, u"SessionSaveBtn"_s, u"SessionCancelBtn"_s
     };
+
+    QList<QWidget*> chain;
+    for (const auto& name : expected) {
+        auto* w = dlg.findChild<QWidget*>(name);
+        QVERIFY2(w != nullptr, qPrintable(u"Missing widget: "_s + name));
+        chain.append(w);
+    }
+    verifyTabAndBacktabChain(&dlg, chain);
     printChain(u"SessionDialog"_s, expected);
     dlg.reject();
 }
@@ -873,31 +998,21 @@ void tst_EmptyStatesAndFocus::testTabOrderDialogTrack() {
     JobPrep::Ui::Dialogs::TrackDialog dlg(m_fix->context().tracks(),
                                           m_fix->context().topics());
     dlg.show();
+    activateWindow(&dlg);
     QApplication::processEvents();
-
-    auto* list = dlg.findChild<QListWidget*>(u"TrackListWidget"_s);
-    auto* newBtn = dlg.findChild<QPushButton*>(u"TrackNewBtn"_s);
-    auto* deleteBtn = dlg.findChild<QPushButton*>(u"TrackDeleteBtn"_s);
-    auto* nameEdit = dlg.findChild<QLineEdit*>(u"TrackNameEdit"_s);
-    auto* saveBtn = dlg.findChild<QPushButton*>(u"TrackSaveBtn"_s);
-    auto* closeBtn = dlg.findChild<QPushButton*>(u"TrackCloseBtn"_s);
-    QVERIFY(list);
-    QVERIFY(newBtn);
-    QVERIFY(deleteBtn);
-    QVERIFY(nameEdit);
-    QVERIFY(saveBtn);
-    QVERIFY(closeBtn);
-
-    QVERIFY(list->focusPolicy() != Qt::NoFocus);
-    QVERIFY(newBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(nameEdit->focusPolicy() != Qt::NoFocus);
-    QVERIFY(saveBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(closeBtn->focusPolicy() != Qt::NoFocus);
 
     const QStringList expected = {
         u"TrackListWidget"_s, u"TrackNewBtn"_s, u"TrackDeleteBtn"_s,
-        u"TrackNameEdit"_s, u"TrackSaveBtn"_s, u"TrackCloseBtn"_s
+        u"TrackNameEdit"_s, u"TrackSwatch_0"_s, u"TrackSaveBtn"_s, u"TrackCloseBtn"_s
     };
+
+    QList<QWidget*> chain;
+    for (const auto& name : expected) {
+        auto* w = dlg.findChild<QWidget*>(name);
+        QVERIFY2(w != nullptr, qPrintable(u"Missing widget: "_s + name));
+        chain.append(w);
+    }
+    verifyTabAndBacktabChain(&dlg, chain);
     printChain(u"TrackDialog"_s, expected);
     dlg.reject();
 }
@@ -908,23 +1023,33 @@ void tst_EmptyStatesAndFocus::testTabOrderPageHome() {
     app.company = u"Google"_s;
     app.position = u"SWE"_s;
     m_fix->context().applications().insert(app);
-    JobPrep::Domain::Interview iv;
-    iv.applicationId = app.id;
-    iv.startAt = QDateTime::currentDateTime().addDays(1);
-    m_fix->context().interviews().insert(iv);
+
+    JobPrep::Domain::Interview ivToday;
+    ivToday.applicationId = app.id;
+    ivToday.startAt = QDateTime::currentDateTime();
+    m_fix->context().interviews().insert(ivToday);
+
+    JobPrep::Domain::Interview ivUpcoming;
+    ivUpcoming.applicationId = app.id;
+    ivUpcoming.startAt = QDateTime::currentDateTime().addDays(1);
+    m_fix->context().interviews().insert(ivUpcoming);
 
     auto* home = m_fix->window().findChild<JobPrep::Ui::Pages::HomePage*>();
     QVERIFY(home);
     emit m_fix->window().sidebar()->pageSelected(0);
     home->onActivated();
+    activateWindow(&m_fix->window());
     QApplication::processEvents();
 
-    auto* todayView = home->findChild<QListView*>();
-    QVERIFY(todayView);
-    QVERIFY(todayView->focusPolicy() != Qt::NoFocus);
+    const auto views = home->findChildren<QListView*>();
+    QVERIFY(views.size() >= 2);
+    auto* todayView = views.at(0);
+    auto* upcomingView = views.at(1);
+    todayView->setObjectName(u"HomeTodayView"_s);
+    upcomingView->setObjectName(u"HomeUpcomingView"_s);
 
-    const QStringList expected = {u"HomeTodayView"_s, u"HomeUpcomingView"_s};
-    printChain(u"HomePage_WithData"_s, expected);
+    verifyTabAndBacktabChain(&m_fix->window(), {todayView, upcomingView});
+    printChain(u"HomePage_WithData"_s, {u"HomeTodayView"_s, u"HomeUpcomingView"_s});
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderPageHomeEmpty() {
@@ -932,30 +1057,35 @@ void tst_EmptyStatesAndFocus::testTabOrderPageHomeEmpty() {
     QVERIFY(home);
     emit m_fix->window().sidebar()->pageSelected(0);
     home->onActivated();
+    activateWindow(&m_fix->window());
     QApplication::processEvents();
 
     auto* emptyWidget = home->findChild<JobPrep::Ui::Widgets::EmptyState*>();
     QVERIFY(emptyWidget);
     auto* emptyAction = emptyWidget->findChild<QPushButton*>(u"EmptyStateActionBtn"_s);
     auto* emptySecAction = emptyWidget->findChild<QPushButton*>(u"EmptyStateSecondaryActionBtn"_s);
-    QVERIFY(emptyAction);
-    QVERIFY(emptySecAction);
-    QVERIFY(emptyAction->focusPolicy() != Qt::NoFocus);
-    QVERIFY(emptySecAction->focusPolicy() != Qt::NoFocus);
+    QVERIFY(emptyAction && emptySecAction);
 
-    const QStringList expected = {u"DashboardEmptyActionBtn (EmptyStateActionBtn)"_s,
-                                  u"DashboardEmptySecondaryActionBtn (EmptyStateSecondaryActionBtn)"_s};
-    printChain(u"HomePage_Empty"_s, expected);
+    verifyTabAndBacktabChain(&m_fix->window(), {emptyAction, emptySecAction});
+    printChain(u"HomePage_Empty"_s, {u"DashboardEmptyActionBtn (EmptyStateActionBtn)"_s,
+                                  u"DashboardEmptySecondaryActionBtn (EmptyStateSecondaryActionBtn)"_s});
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderPageStudy() {
+    JobPrep::Domain::Track trk;
+    trk.name = u"C++"_s;
+    m_fix->context().tracks().insert(trk);
+
     auto* study = m_fix->window().findChild<JobPrep::Ui::Pages::StudyPage*>();
     QVERIFY(study);
+    m_fix->window().sidebar()->setCurrentPage(1);
     emit m_fix->window().sidebar()->pageSelected(1);
     study->onActivated();
+    activateWindow(&m_fix->window());
     QApplication::processEvents();
 
     auto* chips = study->findChild<JobPrep::Ui::Widgets::ChipBar*>(u"StudyTrackChips"_s);
+    auto* addTrackBtn = study->findChild<QPushButton*>(u"StudyAddTrackBtn"_s);
     auto* manageTracksBtn = study->findChild<QPushButton*>(u"StudyManageTracksBtn"_s);
     auto* boardBtn = study->findChild<QPushButton*>(u"StudyViewBoardBtn"_s);
     auto* listBtn = study->findChild<QPushButton*>(u"StudyViewListBtn"_s);
@@ -963,69 +1093,69 @@ void tst_EmptyStatesAndFocus::testTabOrderPageStudy() {
     auto* addTopicBtn = study->findChild<QPushButton*>(u"StudyAddTopicBtn"_s);
     auto* detail = study->detailPanel();
 
-    QVERIFY(chips != nullptr);
-    QVERIFY(manageTracksBtn != nullptr);
-    QVERIFY(boardBtn != nullptr);
-    QVERIFY(listBtn != nullptr);
-    QVERIFY(searchEdit != nullptr);
-    QVERIFY(addTopicBtn != nullptr);
-    QVERIFY(detail != nullptr);
+    QVERIFY(chips && addTrackBtn && manageTracksBtn && boardBtn && listBtn && searchEdit && addTopicBtn && detail);
 
-    QVERIFY(manageTracksBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(boardBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(listBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(searchEdit->focusPolicy() != Qt::NoFocus);
-    QVERIFY(addTopicBtn->focusPolicy() != Qt::NoFocus);
+    verifyTabAndBacktabChain(&m_fix->window(), {chips, addTrackBtn, manageTracksBtn, boardBtn, listBtn, searchEdit, addTopicBtn});
 
     const QStringList expected = {
         u"StudyTrackChips"_s,
+        u"StudyAddTrackBtn"_s,
         u"StudyManageTracksBtn"_s,
         u"StudyViewBoardBtn"_s,
         u"StudyViewListBtn"_s,
         u"StudySearchEdit"_s,
         u"StudyAddTopicBtn"_s,
-        u"StudyColumnBacklog"_s,
-        u"StudyColumnInProgress"_s,
-        u"StudyColumnReview"_s,
-        u"StudyColumnDone"_s,
-        u"StudyDetailPanel"_s
     };
     printChain(u"StudyPage"_s, expected);
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderPageJobs() {
+    JobPrep::Domain::JobApplication app;
+    app.company = u"Acme"_s;
+    app.position = u"Dev"_s;
+    m_fix->context().applications().insert(app);
+
     auto* jobs = m_fix->window().findChild<JobPrep::Ui::Pages::JobsPage*>();
     QVERIFY(jobs);
     emit m_fix->window().sidebar()->pageSelected(2);
     jobs->onActivated();
+    activateWindow(&m_fix->window());
     QApplication::processEvents();
 
     auto* searchEdit = jobs->findChild<QLineEdit*>(u"JobsSearchEdit"_s);
     auto* chips = jobs->findChild<JobPrep::Ui::Widgets::ChipBar*>(u"JobsStatusChips"_s);
     auto* exportBtn = jobs->findChild<QPushButton*>(u"JobsExportBtn"_s);
+    auto* addBtn = jobs->findChild<QPushButton*>(u"JobsAddBtn"_s);
     auto* view = jobs->findChild<QTableView*>(u"JobsTableView"_s);
-    QVERIFY(searchEdit);
-    QVERIFY(chips);
-    QVERIFY(exportBtn);
-    QVERIFY(view);
+    QVERIFY(searchEdit && chips && exportBtn && addBtn && view);
 
-    QVERIFY(searchEdit->focusPolicy() != Qt::NoFocus);
-    QVERIFY(exportBtn->focusPolicy() != Qt::NoFocus);
+    verifyTabAndBacktabChain(&m_fix->window(), {searchEdit, chips, exportBtn, addBtn, view});
 
     const QStringList expected = {
         u"JobsSearchEdit"_s,
         u"JobsStatusChips"_s,
         u"JobsExportBtn"_s,
+        u"JobsAddBtn"_s,
         u"JobsTableView"_s
     };
     printChain(u"JobsPage"_s, expected);
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderPageCalendar() {
+    JobPrep::Domain::JobApplication app;
+    app.company = u"Acme"_s;
+    app.position = u"Dev"_s;
+    m_fix->context().applications().insert(app);
+    JobPrep::Domain::Interview iv;
+    iv.applicationId = app.id;
+    iv.startAt = QDateTime(QDate::currentDate(), QTime(10, 0));
+    m_fix->context().interviews().insert(iv);
+
     auto* cal = m_fix->window().findChild<JobPrep::Ui::Pages::CalendarPage*>();
     QVERIFY(cal);
     emit m_fix->window().sidebar()->pageSelected(3);
     cal->onActivated();
+    activateWindow(&m_fix->window());
     QApplication::processEvents();
 
     auto* prevBtn = cal->findChild<QToolButton*>(u"CalendarPrevBtn"_s);
@@ -1039,27 +1169,14 @@ void tst_EmptyStatesAndFocus::testTabOrderPageCalendar() {
     auto* addFollowUpBtn = cal->findChild<QPushButton*>(u"CalendarAddFollowUpBtn"_s);
     auto* agendaView = cal->findChild<QListView*>(u"CalendarAgendaList"_s);
 
-    QVERIFY(prevBtn);
-    QVERIFY(nextBtn);
-    QVERIFY(todayBtn);
-    QVERIFY(interviewChip);
-    QVERIFY(followUpChip);
-    QVERIFY(targetChip);
-    QVERIFY(monthView);
-    QVERIFY(addInterviewBtn);
-    QVERIFY(addFollowUpBtn);
-    QVERIFY(agendaView);
+    QVERIFY(prevBtn && nextBtn && todayBtn && interviewChip && followUpChip && targetChip &&
+            monthView && addInterviewBtn && addFollowUpBtn && agendaView);
 
-    QVERIFY(prevBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(nextBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(todayBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(interviewChip->focusPolicy() != Qt::NoFocus);
-    QVERIFY(followUpChip->focusPolicy() != Qt::NoFocus);
-    QVERIFY(targetChip->focusPolicy() != Qt::NoFocus);
-    QVERIFY(monthView->focusPolicy() != Qt::NoFocus);
-    QVERIFY(addInterviewBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(addFollowUpBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(agendaView->focusPolicy() != Qt::NoFocus);
+    const QList<QWidget*> chain = {
+        prevBtn, nextBtn, todayBtn, interviewChip, followUpChip, targetChip,
+        monthView, addInterviewBtn, addFollowUpBtn, agendaView
+    };
+    verifyTabAndBacktabChain(&m_fix->window(), chain);
 
     const QStringList expected = {
         u"CalendarPrevBtn"_s,
@@ -1081,6 +1198,7 @@ void tst_EmptyStatesAndFocus::testTabOrderPageSettings() {
     QVERIFY(settings);
     emit m_fix->window().sidebar()->pageSelected(4);
     settings->onActivated();
+    activateWindow(&m_fix->window());
     QApplication::processEvents();
 
     auto* themeCombo = settings->findChild<QComboBox*>(u"SettingsThemeCombo"_s);
@@ -1088,6 +1206,12 @@ void tst_EmptyStatesAndFocus::testTabOrderPageSettings() {
     auto* goalSpin = settings->findChild<QSpinBox*>(u"SettingsStudyGoalSpinBox"_s);
     auto* weekStartCombo = settings->findChild<QComboBox*>(u"SettingsWeekStartCombo"_s);
     auto* closeToTrayCheck = settings->findChild<QCheckBox*>(u"SettingsCloseToTrayCheck"_s);
+    auto* leadList = settings->findChild<QListWidget*>(u"SettingsLeadList"_s);
+    auto* leadPreset = settings->findChild<QComboBox*>(u"SettingsLeadPresetCombo"_s);
+    auto* customSpin = settings->findChild<QSpinBox*>(u"SettingsCustomLeadSpinBox"_s);
+    auto* addLeadBtn = settings->findChild<QPushButton*>(u"SettingsAddLeadBtn"_s);
+    auto* removeLeadBtn = settings->findChild<QPushButton*>(u"SettingsRemoveLeadBtn"_s);
+    auto* resetLeadBtn = settings->findChild<QPushButton*>(u"SettingsResetLeadBtn"_s);
     auto* exportCsvBtn = settings->findChild<QPushButton*>(u"SettingsExportCsvBtn"_s);
     auto* exportIcsBtn = settings->findChild<QPushButton*>(u"SettingsExportIcsBtn"_s);
     auto* backupJsonBtn = settings->findChild<QPushButton*>(u"SettingsBackupJsonBtn"_s);
@@ -1095,45 +1219,30 @@ void tst_EmptyStatesAndFocus::testTabOrderPageSettings() {
     auto* sampleBtn = settings->findChild<QPushButton*>(u"SettingsLoadSampleBtn"_s);
     auto* openFolderBtn = settings->findChild<QPushButton*>(u"SettingsOpenFolderBtn"_s);
 
-    QVERIFY(themeCombo);
-    QVERIFY(accentCombo);
-    QVERIFY(goalSpin);
-    QVERIFY(weekStartCombo);
-    QVERIFY(exportCsvBtn);
-    QVERIFY(exportIcsBtn);
-    QVERIFY(backupJsonBtn);
-    QVERIFY(restoreJsonBtn);
-    QVERIFY(sampleBtn);
-    QVERIFY(openFolderBtn);
+    QVERIFY(themeCombo && accentCombo && goalSpin && weekStartCombo &&
+            leadList && leadPreset && customSpin && addLeadBtn && removeLeadBtn && resetLeadBtn &&
+            exportCsvBtn && exportIcsBtn && backupJsonBtn && restoreJsonBtn && sampleBtn && openFolderBtn);
 
-    QVERIFY(themeCombo->focusPolicy() != Qt::NoFocus);
-    QVERIFY(accentCombo->focusPolicy() != Qt::NoFocus);
-    QVERIFY(goalSpin->focusPolicy() != Qt::NoFocus);
-    QVERIFY(weekStartCombo->focusPolicy() != Qt::NoFocus);
-    if (closeToTrayCheck) {
-        QVERIFY(closeToTrayCheck->focusPolicy() != Qt::NoFocus);
+    // Select Custom in leadPreset so customSpin is enabled in tab order
+    const int customIdx = leadPreset->findData(-1);
+    if (customIdx >= 0) {
+        leadPreset->setCurrentIndex(customIdx);
+        QApplication::processEvents();
     }
-    QVERIFY(backupJsonBtn->focusPolicy() != Qt::NoFocus);
-    QVERIFY(restoreJsonBtn->focusPolicy() != Qt::NoFocus);
 
-    const QStringList expected = {
-        u"SettingsThemeCombo"_s,
-        u"SettingsAccentCombo"_s,
-        u"SettingsStudyGoalSpinBox"_s,
-        u"SettingsWeekStartCombo"_s,
-        u"SettingsCloseToTrayCheck"_s,
-        u"SettingsLeadTimesPresetCombo"_s,
-        u"SettingsLeadTimeCustomSpin"_s,
-        u"SettingsLeadTimeAddBtn"_s,
-        u"SettingsLeadTimesList"_s,
-        u"SettingsLeadTimeRemoveBtn"_s,
-        u"SettingsExportCsvBtn"_s,
-        u"SettingsExportIcsBtn"_s,
-        u"SettingsBackupJsonBtn"_s,
-        u"SettingsRestoreJsonBtn"_s,
-        u"SettingsLoadSampleBtn"_s,
-        u"SettingsOpenFolderBtn"_s
-    };
+    QList<QWidget*> chain = {themeCombo, accentCombo, goalSpin, weekStartCombo};
+    if (closeToTrayCheck && closeToTrayCheck->isEnabled()) {
+        chain.append(closeToTrayCheck);
+    }
+    chain.append({leadList, leadPreset, customSpin, addLeadBtn, removeLeadBtn, resetLeadBtn,
+                  exportCsvBtn, exportIcsBtn, backupJsonBtn, restoreJsonBtn, sampleBtn, openFolderBtn});
+
+    verifyTabAndBacktabChain(&m_fix->window(), chain);
+
+    QStringList expected;
+    for (auto* w : chain) {
+        expected.append(w->objectName());
+    }
     printChain(u"SettingsPage"_s, expected);
 }
 

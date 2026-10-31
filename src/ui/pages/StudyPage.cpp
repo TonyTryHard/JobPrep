@@ -168,25 +168,19 @@ void StudyPage::setupToolbar(QVBoxLayout* layout) {
     barLayout->addWidget(m_manageTracksBtn, 0);
 
     // View mode toggle [Board | List]
-    auto* viewToggle = new QWidget(bar);
-    auto* toggleLayout = new QHBoxLayout(viewToggle);
-    toggleLayout->setContentsMargins(0, 0, 0, 0);
-    toggleLayout->setSpacing(2);
-
-    m_boardBtn = new QPushButton(tr("Board"), viewToggle);
+    m_boardBtn = new QPushButton(tr("Board"), bar);
     m_boardBtn->setObjectName(u"StudyViewBoardBtn"_s);
     m_boardBtn->setCheckable(true);
     m_boardBtn->setChecked(true);
     m_boardBtn->setCursor(Qt::PointingHandCursor);
 
-    m_listBtn = new QPushButton(tr("List"), viewToggle);
+    m_listBtn = new QPushButton(tr("List"), bar);
     m_listBtn->setObjectName(u"StudyViewListBtn"_s);
     m_listBtn->setCheckable(true);
     m_listBtn->setCursor(Qt::PointingHandCursor);
 
-    toggleLayout->addWidget(m_boardBtn);
-    toggleLayout->addWidget(m_listBtn);
-    barLayout->addWidget(viewToggle, 0);
+    barLayout->addWidget(m_boardBtn, 0);
+    barLayout->addWidget(m_listBtn, 0);
 
     barLayout->addStretch(1);
 
@@ -209,7 +203,8 @@ void StudyPage::setupToolbar(QVBoxLayout* layout) {
 
     layout->addWidget(bar);
 
-    setTabOrder(m_chips, m_manageTracksBtn);
+    setTabOrder(m_chips, m_addTrackBtn);
+    setTabOrder(m_addTrackBtn, m_manageTracksBtn);
     setTabOrder(m_manageTracksBtn, m_boardBtn);
     setTabOrder(m_boardBtn, m_listBtn);
     setTabOrder(m_listBtn, m_searchEdit);
@@ -252,6 +247,13 @@ void StudyPage::setupSplitterAndViews() {
     m_splitter->addWidget(m_detail);
     m_splitter->setStretchFactor(0, 1);
     m_splitter->setStretchFactor(1, 0);
+
+    if (!m_columns.isEmpty()) {
+        if (auto* addTopicBtn = findChild<QPushButton*>(u"StudyAddTopicBtn"_s)) {
+            setTabOrder(addTopicBtn, m_columns.first()->list());
+        }
+        setTabOrder(m_columns.last()->quickAdd(), m_detail);
+    }
 
     connect(m_splitter, &QSplitter::splitterMoved, this, [this] {
         m_settings.setStudySplitterState(m_splitter->saveState());
@@ -865,6 +867,16 @@ void StudyPage::refreshChips() {
         m_settings.setStudyTrackFilter(kAllTracks);
     }
     m_chips->setCurrent(m_trackFilter);
+    setTabOrder(m_chips, m_addTrackBtn);
+    setTabOrder(m_addTrackBtn, m_manageTracksBtn);
+    setTabOrder(m_manageTracksBtn, m_boardBtn);
+    setTabOrder(m_boardBtn, m_listBtn);
+    setTabOrder(m_listBtn, m_searchEdit);
+    if (auto* bar = m_searchEdit ? m_searchEdit->parentWidget() : nullptr) {
+        if (auto* addTopicBtn = bar->findChild<QPushButton*>(u"StudyAddTopicBtn"_s)) {
+            setTabOrder(m_searchEdit, addTopicBtn);
+        }
+    }
 }
 
 void StudyPage::applyFilters() {

@@ -23,6 +23,7 @@
 #include "data/ApplicationRepository.h"
 #include "data/DbFormat.h"
 #include "data/InterviewRepository.h"
+#include "ui/widgets/SingleTabDateTime.h"
 #include "domain/EnumStrings.h"
 #include "ui/dialogs/InterviewDialog.h"
 #include "ui/theme/StatusStyle.h"
@@ -169,7 +170,7 @@ void ApplicationDialog::setupOverviewTab() {
 
     m_appliedDateEnabled = new QCheckBox(tr("Set"), page);
     m_appliedDateEnabled->setObjectName(u"FieldAppliedDateCheck"_s);
-    m_appliedDateEdit = new QDateEdit(page);
+    m_appliedDateEdit = new Widgets::SingleTabDateEdit(page);
     m_appliedDateEdit->setObjectName(u"FieldAppliedDate"_s);
     m_appliedDateEdit->setCalendarPopup(true);
     m_appliedDateEdit->setDate(kUnsetDate);
@@ -189,7 +190,7 @@ void ApplicationDialog::setupOverviewTab() {
 
     m_nextActionDateEnabled = new QCheckBox(tr("Set"), page);
     m_nextActionDateEnabled->setObjectName(u"FieldNextActionDateCheck"_s);
-    m_nextActionDateEdit = new QDateEdit(page);
+    m_nextActionDateEdit = new Widgets::SingleTabDateEdit(page);
     m_nextActionDateEdit->setObjectName(u"FieldNextActionDate"_s);
     m_nextActionDateEdit->setCalendarPopup(true);
     m_nextActionDateEdit->setDate(kUnsetDate);
@@ -273,6 +274,7 @@ void ApplicationDialog::setupNotesTab() {
     m_notesEdit = new QTextEdit(page);
     m_notesEdit->setObjectName(u"FieldNotes"_s);
     m_notesEdit->setPlaceholderText(tr("Recruiter feedback, interview topics, links..."));
+    m_notesEdit->setTabChangesFocus(true);
     layout->addWidget(m_notesEdit);
     m_tabs->addTab(page, tr("Notes"));
     connect(m_notesEdit, &QTextEdit::textChanged, this, &ApplicationDialog::onFormChanged);
@@ -300,6 +302,7 @@ void ApplicationDialog::setupInterviewsTab() {
     m_interviewsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_interviewsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_interviewsTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_interviewsTable->setTabKeyNavigation(false);
 
     m_interviewsStack = new QStackedWidget(page);
     m_interviewsStack->setObjectName(u"InterviewsStack"_s);
@@ -359,6 +362,7 @@ void ApplicationDialog::setupTimelineTab() {
     m_timelineTable->verticalHeader()->setVisible(false);
     m_timelineTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_timelineTable->setSelectionMode(QAbstractItemView::NoSelection);
+    m_timelineTable->setTabKeyNavigation(false);
 
     m_timelineStack = new QStackedWidget(page);
     m_timelineStack->setObjectName(u"TimelineStack"_s);
@@ -374,6 +378,8 @@ void ApplicationDialog::setupTimelineTab() {
 
     layout->addWidget(m_timelineStack, 1);
     m_tabs->addTab(page, tr("Timeline"));
+
+    QWidget::setTabOrder(m_timelineTable, m_saveBtn);
 }
 
 void ApplicationDialog::loadFrom(const JobPrep::Domain::JobApplication& app) {

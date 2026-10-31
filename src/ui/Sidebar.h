@@ -48,7 +48,6 @@ private:
     QLabel* m_logoText{nullptr};
     QPushButton* m_toggleBtn{nullptr};
 
-    QButtonGroup* m_buttonGroup{nullptr};
     struct NavItem {
         QPushButton* button{nullptr};
         QString iconName;

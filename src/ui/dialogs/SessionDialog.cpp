@@ -11,6 +11,7 @@
 #include <QSpinBox>
 #include <QTextEdit>
 #include <QVBoxLayout>
+#include "ui/widgets/SingleTabDateTime.h"
 #include "data/SessionRepository.h"
 #include "data/TopicRepository.h"
 
@@ -45,7 +46,7 @@ void SessionDialog::setupUi() {
     formLayout->setLabelAlignment(Qt::AlignLeft);
 
     const QDate today = m_todayProvider ? m_todayProvider() : QDate::currentDate();
-    m_dateEdit = new QDateEdit(today, this);
+    m_dateEdit = new Widgets::SingleTabDateEdit(today, this);
     m_dateEdit->setObjectName(u"SessionDateEdit"_s);
     m_dateEdit->setCalendarPopup(true);
     m_dateEdit->setDisplayFormat(u"yyyy-MM-dd"_s);
@@ -65,6 +66,7 @@ void SessionDialog::setupUi() {
     m_noteEdit = new QTextEdit(this);
     m_noteEdit->setObjectName(u"SessionNoteEdit"_s);
     m_noteEdit->setPlaceholderText(tr("Notes (optional)"));
+    m_noteEdit->setTabChangesFocus(true);
     m_noteEdit->setMaximumHeight(80);
     formLayout->addRow(tr("Notes:"), m_noteEdit);
 

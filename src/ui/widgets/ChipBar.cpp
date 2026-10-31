@@ -8,6 +8,7 @@ using namespace Qt::StringLiterals;
 namespace JobPrep::Ui::Widgets {
 
 ChipBar::ChipBar(QWidget* parent) : QWidget(parent) {
+    setFocusPolicy(Qt::TabFocus);
     m_layout = new QHBoxLayout(this);
     m_layout->setContentsMargins(0, 0, 0, 0);
     m_layout->setSpacing(8);
@@ -28,6 +29,7 @@ void ChipBar::addChip(const QString& text, int id) {
 }
 
 void ChipBar::clearChips() {
+    setFocusProxy(nullptr);
     const auto buttons = m_group->buttons();
     for (auto* btn : buttons) {
         m_group->removeButton(btn);
@@ -38,7 +40,10 @@ void ChipBar::clearChips() {
 }
 
 void ChipBar::setCurrent(int id) {
-    if (auto* btn = m_buttons.value(id)) btn->setChecked(true);
+    if (auto* btn = m_buttons.value(id)) {
+        btn->setChecked(true);
+        setFocusProxy(btn);
+    }
 }
 
 int ChipBar::currentId() const {

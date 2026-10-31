@@ -19,6 +19,7 @@
 #include "data/ApplicationRepository.h"
 #include "data/InterviewRepository.h"
 #include "ui/theme/StatusStyle.h"
+#include "ui/widgets/SingleTabDateTime.h"
 
 using namespace Qt::StringLiterals;
 
@@ -94,11 +95,11 @@ void InterviewDialog::setupUi() {
     m_appCombo->setToolTip(tr("The application this interview belongs to"));
     form->addRow(tr("&Application *"), m_appCombo);
 
-    m_dateEdit = new QDateEdit(this);
+    m_dateEdit = new Widgets::SingleTabDateEdit(this);
     m_dateEdit->setObjectName(u"InterviewDateEdit"_s);
     m_dateEdit->setCalendarPopup(true);
     m_dateEdit->setToolTip(tr("Interview date"));
-    m_timeEdit = new QTimeEdit(this);
+    m_timeEdit = new Widgets::SingleTabTimeEdit(this);
     m_timeEdit->setObjectName(u"InterviewTimeEdit"_s);
     m_timeEdit->setDisplayFormat(u"HH:mm"_s);
     m_timeEdit->setToolTip(tr("Start time"));
@@ -149,6 +150,7 @@ void InterviewDialog::setupUi() {
     m_notesEdit->setObjectName(u"InterviewNotesEdit"_s);
     m_notesEdit->setPlaceholderText(tr("Preparation notes, questions to ask..."));
     m_notesEdit->setToolTip(tr("Preparation notes"));
+    m_notesEdit->setTabChangesFocus(true);
     form->addRow(tr("&Notes"), m_notesEdit);
 
     m_messageLabel = new QLabel(this);

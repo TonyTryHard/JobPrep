@@ -1,5 +1,4 @@
 #include "ui/Sidebar.h"
-#include <QButtonGroup>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPainter>
@@ -127,10 +126,6 @@ void Sidebar::setupUi() {
     logoLayout->addWidget(m_logoText, 1, Qt::AlignVCenter | Qt::AlignLeft);
     m_mainLayout->addWidget(m_logoContainer);
 
-    // Navigation buttons group
-    m_buttonGroup = new QButtonGroup(this);
-    m_buttonGroup->setExclusive(true);
-
     const struct {
         QString iconName;
         QString text;
@@ -146,7 +141,6 @@ void Sidebar::setupUi() {
     for (const auto& item : items) {
         auto* btn = new NavButton(item.iconName, item.text, m_themeMgr, this);
         btn->setObjectName(u"SidebarNavBtn_"_s + item.iconName);
-        m_buttonGroup->addButton(btn, item.pageIndex);
         m_mainLayout->addWidget(btn);
         m_navItems.append({btn, item.iconName, item.text, item.pageIndex});
 
@@ -166,7 +160,6 @@ void Sidebar::setupUi() {
     // Settings at bottom
     auto* settingsBtn = new NavButton(u"settings"_s, tr("Settings"), m_themeMgr, this);
     settingsBtn->setObjectName(u"SidebarNavBtn_settings"_s);
-    m_buttonGroup->addButton(settingsBtn, 4);
     m_mainLayout->addWidget(settingsBtn);
     m_navItems.append({settingsBtn, u"settings"_s, tr("Settings"), 4});
 
@@ -213,8 +206,10 @@ void Sidebar::setCollapsed(bool collapsed) {
 
 void Sidebar::setCurrentPage(int index) {
     m_currentPage = index;
-    if (auto* btn = m_buttonGroup->button(index)) {
-        btn->setChecked(true);
+    for (const auto& item : m_navItems) {
+        if (item.button) {
+            item.button->setChecked(item.pageIndex == index);
+        }
     }
     update();
 }

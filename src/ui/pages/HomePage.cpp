@@ -180,6 +180,8 @@ void HomePage::setupUi() {
     upcomingLayout->addWidget(m_upcomingView);
     upcomingLayout->addWidget(m_upcomingEmptyState);
 
+    QWidget::setTabOrder(m_todayView, m_upcomingView);
+
     auto* upcomingCard = createCard(tr("Upcoming interviews"), upcomingContainer);
     leftCol->addWidget(upcomingCard, 1);
 

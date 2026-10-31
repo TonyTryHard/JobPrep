@@ -112,6 +112,9 @@ public:
     explicit GoalSpinBox(QWidget* parent = nullptr) : QSpinBox(parent) {
         setRange(60, 2400);
         setSingleStep(15);
+        if (lineEdit()) {
+            lineEdit()->installEventFilter(this);
+        }
     }
 
     QString textFromValue(int val) const override {
@@ -149,9 +152,18 @@ public:
         return QValidator::Intermediate;
     }
 
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (watched == lineEdit() && event->type() == QEvent::FocusOut) {
+            interpretText();
+            lineEdit()->setText(textFromValue(value()));
+        }
+        return QSpinBox::eventFilter(watched, event);
+    }
+
 protected:
     void focusOutEvent(QFocusEvent* event) override {
         interpretText();
+        lineEdit()->setText(textFromValue(value()));
         QSpinBox::focusOutEvent(event);
     }
 };

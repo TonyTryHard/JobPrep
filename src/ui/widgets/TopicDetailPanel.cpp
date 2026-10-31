@@ -27,6 +27,7 @@
 #include "ui/theme/StatusStyle.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
+#include "ui/widgets/SingleTabDateTime.h"
 
 using namespace Qt::StringLiterals;
 
@@ -138,7 +139,7 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     form->addLayout(statusRow);
 
     auto* dateRow = new QHBoxLayout;
-    m_dateEdit = new QDateEdit(m_form);
+    m_dateEdit = new SingleTabDateEdit(m_form);
     m_dateEdit->setObjectName(u"StudyDetailDateEdit"_s);
     m_dateEdit->setCalendarPopup(true);
     m_dateEdit->setDisplayFormat(u"yyyy-MM-dd"_s);
@@ -164,6 +165,7 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     m_notesEdit->setObjectName(u"StudyDetailNotesEdit"_s);
     m_notesEdit->setPlaceholderText(tr("Notes"));
     m_notesEdit->setAcceptRichText(false);
+    m_notesEdit->setTabChangesFocus(true);
     m_notesEdit->setMinimumHeight(80);
     form->addWidget(m_notesEdit);
 

@@ -454,7 +454,7 @@ void tst_PageSettings::testGoalSpinBoxTypingRules() {
 void tst_PageSettings::testGoalSpinBoxErrorRestoresPreviousValue() {
     AppContext ctx(u":memory:"_s);
     SettingsPage page(ctx.settings(), ctx.themeManager(), false);
-    page.show();
+    JobPrep::UiTest::activateWindow(&page);
     QApplication::processEvents();
 
     auto* spin = page.studyGoalSpinBox();
@@ -479,7 +479,9 @@ void tst_PageSettings::testGoalSpinBoxErrorRestoresPreviousValue() {
     QCOMPARE(edit->text(), u"8 h"_s);
 
     // 3. Error on Focus loss: type "7.6" then shift focus away
-    edit->setFocus();
+    spin->setFocus();
+    QCOMPARE(QApplication::focusWidget(), spin);
+    edit->setModified(true);
     edit->setText(u"7.6"_s);
     themeCombo->setFocus();
     QApplication::processEvents();
