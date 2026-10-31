@@ -149,8 +149,66 @@ jobs:
           CMAKE_BUILD_PARALLEL_LEVEL: 2
           QT_QPA_PLATFORM: offscreen
           JOBPREP_KEEP_GOING: 1
+          QT_FORCE_STDERR_LOGGING: 1
+          QT_ASSUME_STDERR_HAS_CONSOLE: 1
         shell: pwsh
         run: ./scripts/check.ps1
+
+      - name: Diagnose failed tests (Windows)
+        if: failure() && runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $logdir = "build/dev-windows/Testing/Temporary/diag"
+          New-Item -ItemType Directory -Force -Path $logdir | Out-Null
+          $logFile = "build/dev-windows/Testing/Temporary/LastTestsFailed.log"
+          $testNames = @()
+          if (Test-Path $logFile) {
+            Get-Content $logFile | ForEach-Object {
+              if ($_ -match '^\d+:(.+)$') {
+                $testNames += $Matches[1].Trim()
+              }
+            }
+          } else {
+            Write-Host "LastTestsFailed.log missing"
+            Get-ChildItem -Path "build/dev-windows/tests" -Recurse -Filter "*.exe" | ForEach-Object {
+              if ($_.BaseName -like "tst_*" -or $_.BaseName -eq "ui_smoke") {
+                $testNames += $_.BaseName
+              }
+            }
+          }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          foreach ($name in $testNames) {
+            $exe = Get-ChildItem -Path "build/dev-windows" -Recurse -Filter "$name.exe" | Select-Object -First 1
+            if (-not $exe) {
+              Write-Host "Executable for $name not found"
+              continue
+            }
+            $outFile = "$logdir/$name.txt"
+            $proc = Start-Process -FilePath $exe.FullName -ArgumentList @("-v2", "-o", "$outFile,txt") -PassThru -NoNewWindow
+            $finished = $proc.WaitForExit(150000)
+            if (-not $finished) {
+              $proc.Kill()
+              $proc.WaitForExit()
+              Write-Host "TIMEOUT"
+            }
+            $code = $proc.ExitCode
+            Write-Host "=== TEST: $name ==="
+            Write-Host ('{0} (0x{0:X8})' -f $code)
+            if (Test-Path $outFile) {
+              $lines = @(Get-Content $outFile)
+              if ($lines.Count -le 200) {
+                $lines | ForEach-Object { Write-Host $_ }
+              } else {
+                $lines[0..119] | ForEach-Object { Write-Host $_ }
+                $cut = $lines.Count - 180
+                Write-Host "... [$cut lines cut] ..."
+                $lines[($lines.Count - 60)..($lines.Count - 1)] | ForEach-Object { Write-Host $_ }
+              }
+            } else {
+              Write-Host "(no output file produced)"
+            }
+          }
 
       - name: Upload test logs on failure
         if: failure()
@@ -161,3 +219,5 @@ jobs:
           path: |
             build/*/Testing/Temporary/LastTest.log
             build/*/Testing/Temporary/*.log
+            build/*/Testing/Temporary/LastTestsFailed.log
+            build/*/Testing/Temporary/diag/*.txt
