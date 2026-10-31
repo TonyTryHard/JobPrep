@@ -49,7 +49,9 @@ MainWindow::MainWindow(App::AppContext& ctx, bool trayAvailable, QWidget* parent
     : QMainWindow(parent), m_ctx(ctx), m_trayAvailable(trayAvailable) {
     setObjectName(u"MainWindow"_s);
     setWindowTitle(u"JobPrep"_s);
-    setMinimumSize(1100, 700);
+    // Minimum size accommodates 720p screens (e.g. 1280x720 with window decorations and panels)
+    // while layout minHint is 982x515.
+    setMinimumSize(980, 540);
 
     m_dashboardController = std::make_unique<DashboardController>(
         m_ctx.statsService(), m_ctx.agendaService(), m_ctx.settings(), m_ctx.dayWatcher(),
