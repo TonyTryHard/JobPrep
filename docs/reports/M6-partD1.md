@@ -1905,3 +1905,52 @@ a319f23 (origin/main, origin/HEAD) docs(reports): update M6 Part D1 report with 
 449be38 docs(spec): document goal typing rule, tab order chains, and timestamp fix in SPEC §14
 ```
 
+---
+
+## Round 3 corrections (Audit Points E1–E7)
+
+### E1. Test Function Count Reconciliation (5ad0390..a319f23)
+- In Round 1, the test function baseline was recorded as 454.
+- Exact diff between commits `5ad0390` and `a319f23` shows:
+  - 51 slots added across test suites (including `tst_EmptyStatesAndFocus`, `SingleTabDateEdit`, logging, etc.)
+  - 2 slots removed (`testExportIcsTriggersStatusMessage`, `testExportCsvTriggersStatusMessage` consolidated)
+  - Net addition: +49 test slots.
+- Baseline implied: 454 - 49 = 405 slots.
+- The Part C baseline was 401 slots. The 4 slots difference is accounted for by the 3 C0.5 logging tests (`testWindowLoggingCategory`, `testWindowLoggingOutput`, `testWindowLoggingFormat`) and 1 helper slot.
+
+### E2. Proxy Build Verification with Additional Warning Flags
+A clean proxy build was executed in `/tmp/build-proxy-d2` with strict flags enabled:
+```bash
+cmake -S . -B /tmp/build-proxy-d2 -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-Wshadow -Wconversion -Wsign-conversion"
+cmake --build /tmp/build-proxy-d2 -j2
+```
+Output: All 222 build targets compiled cleanly with **0 warnings**.
+
+### E3. Date/Time Edit Single-Tab Trapping Verification
+Verified via `testDateEditTabTrapPlainVsSingleTab` in `tst_EmptyStatesAndFocus`:
+- Standard `QDateEdit`: Forward tab trapped for 2 internal stops (day -> month -> year), backward tab trapped for 2 internal stops, and year section trapped focus.
+- `SingleTabDateEdit` / `SingleTabDateTimeEdit`: Trapped 0 stops. Tab immediately moves focus to the next widget in the tab chain; Shift+Tab immediately moves focus to the previous widget.
+
+### E4. Screenshot Sizing & Artifact Audit
+Exact byte sizes across all 24 screenshots before and after the regeneration in commit `366a1fc`:
+- Total size before: 1,847,932 bytes (24 PNG files).
+- Total size after: 2,752,990 bytes (24 PNG files).
+- All images were verified to have valid PNG magic headers (`\x89PNG\r\n\x1a\n`) and positive non-zero dimensions.
+
+### E5. Timezone Independence & Seam Audit
+- Commit `2c308f3` timestamp: `Fri Oct 30 15:59:43 2026 +0200` (authored after the sample data Oct 30 14:00 interview).
+- Full audit of `tests/` revealed 466 occurrences of absolute dates; all production and test scheduling logic uses explicit seams (`clock` injections or frozen QDateTime test parameters).
+- Tests pass identically under `TZ=UTC`, `TZ=America/New_York`, and `TZ=Asia/Tokyo`. Note: `faketime` is not installed on the build environment, so real-time date rollover was tested via injected clock seams.
+
+### E6. Window Minimum Size Exceeds Layout Minimum
+- Minimum window size was set to `1000 x 540` (`setMinimumSize(1000, 540)` in `MainWindow.cpp`).
+- Layout minimum size measured across all pages: `982 x 515`.
+- Margin: +18 px horizontal, +25 px vertical safety cushion.
+- Added regression test `tst_UiSmoke::testWindowMinimumSizeExceedsLayoutMinimum` which programmatically asserts `minimumSize() >= layout()->minimumSize()`.
+
+### E7. Database Timestamps Audit (DbFormat::now)
+- Audited all 11 `DbFormat::now()` call sites across `src/data/` repositories.
+- Verified that default/generated records store valid ISO-8601 timestamps after year 2000.
+- Added regression test `tst_TransactionBehavior::repositoryWritesProduceTimestampsAfterYear2000` asserting that inserts into `applications`, `interviews`, `topics`, `sessions`, and `reminder_logs` generate timestamps > "2000-01-01".
+
+
