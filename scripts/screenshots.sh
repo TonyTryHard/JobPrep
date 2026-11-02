@@ -24,4 +24,8 @@ JOBPREP_REPORT_IMG_DIR="${REPORT_IMG_DIR}" QT_QPA_PLATFORM=offscreen \
 JOBPREP_REPORT_IMG_DIR="${REPORT_IMG_DIR}" QT_QPA_PLATFORM=offscreen \
     ./build/dev-linux/tests/ui/tst_PageJobs testJobsScreenshots
 
+echo "==> Generating 150% HiDPI screenshots..."
+JOBPREP_REPORT_IMG_DIR="${REPORT_IMG_DIR}" QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=1.5 \
+    ./build/dev-linux/tests/ui/tst_HiDpi testScreenshotsHiDpi
+
 echo "==> Screenshots successfully regenerated in ${REPORT_IMG_DIR}!"
