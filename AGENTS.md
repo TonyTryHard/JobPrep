@@ -7,13 +7,13 @@ JobPrep is a small, polished, offline desktop app for ONE user to (a) plan and t
 
 ## 2. Stack (fixed — do not change without asking)
 - C++20, CMake >= 3.21, Ninja (or the generator already used in `build/`).
-- Qt 6, target 6.8 LTS or newer; avoid APIs newer than 6.5 unless version-guarded. Modules: Core, Gui, Widgets, Sql (SQLite), Svg; Qt Test for tests.
+- Qt 6, target 6.8 LTS or newer; avoid APIs newer than 6.8 unless version-guarded (CI builds on 6.8.2 while the development machine has 6.10.2). Modules: Core, Gui, Widgets, Sql (SQLite), Svg; Qt Test for tests.
 - No QML/Qt Quick, no Qt Charts, no third-party libraries. Custom visuals use QPainter.
 - Platforms: Windows 10/11 x64 (MSVC 2022 or MinGW) and Linux x86_64 (GCC 11+ or Clang; X11 and Wayland). Both are first-class; follow §12.
 - UI language: English.
 
 ## 3. Build & test
-Never hard-code the Qt path. Use env `QT_PREFIX_PATH` (Qt kit folder, e.g. `C:\Qt\6.8.x\msvc2022_64` or `~/Qt/6.8.x/gcc_64`), an existing `build/CMakeCache.txt`, or ask the user. On Linux, distro Qt packages are acceptable only if they are Qt >= 6.5 (Ubuntu 22.04/24.04 ship older Qt: use the Qt online installer or aqtinstall).
+Never hard-code the Qt path. Use env `QT_PREFIX_PATH` (Qt kit folder, e.g. `C:\Qt\6.8.x\msvc2022_64` or `~/Qt/6.8.x/gcc_64`), an existing `build/CMakeCache.txt`, or ask the user. On Linux, distro Qt packages are acceptable only if they are Qt >= 6.8 (Ubuntu 22.04/24.04 ship older Qt: use the Qt online installer or aqtinstall).
 
 `CMakePresets.json` (created in M0) provides `dev-windows` and `dev-linux` configure/build/test presets that read `$env{QT_PREFIX_PATH}`:
 ```

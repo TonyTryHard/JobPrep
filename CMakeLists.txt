@@ -22,7 +22,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Find Qt 6 packages
-find_package(Qt6 6.5 REQUIRED COMPONENTS
+find_package(Qt6 6.8 REQUIRED COMPONENTS
     Core
     Gui
     Widgets
@@ -252,6 +252,18 @@ add_executable(jobprep
 target_link_libraries(jobprep PRIVATE
     jobprep_core
 )
+
+if(WIN32)
+    option(JOBPREP_WIN32_GUI "Build JobPrep with Windows GUI subsystem (no console) in Release" ON)
+    if(JOBPREP_WIN32_GUI)
+        set_target_properties(jobprep PROPERTIES
+            WIN32_EXECUTABLE $<NOT:$<CONFIG:Debug>>
+        )
+    endif()
+    target_sources(jobprep PRIVATE
+        resources/windows/jobprep.rc
+    )
+endif()
 
 jobprep_apply_warnings(jobprep)
 
