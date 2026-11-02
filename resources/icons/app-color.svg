@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#4338CA"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded squircle -->
+  <rect x="12" y="12" width="232" height="232" rx="52" ry="52" fill="url(#bg)"/>
+  
+  <!-- Briefcase Handle -->
+  <path d="M 92 76 V 58 C 92 48 100 40 110 40 H 146 C 156 40 164 48 164 58 V 76" 
+        fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+        
+  <!-- Briefcase Main Body -->
+  <rect x="44" y="76" width="168" height="124" rx="20" ry="20" 
+        fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linejoin="round"/>
+        
+  <!-- Horizontal seam line -->
+  <line x1="44" y1="120" x2="212" y2="120" 
+        stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>
+        
+  <!-- Center Clasp / Checkmark Badge -->
+  <circle cx="128" cy="144" r="34" fill="#FFFFFF"/>
+  <!-- Accent Checkmark inside badge -->
+  <path d="M 112 144 L 123 155 L 145 133" 
+        fill="none" stroke="#4F46E5" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -18,6 +18,7 @@ private slots:
     void testLeadMinutesSanitizing();
     void testTrayHintShownKey();
     void testToDayOfWeekNormalization();
+    void testWeeklyGoalSurvivesRestart();
 };
 
 void tst_SettingsService::defaultLeadMinutesReturns1440And60() {
@@ -148,6 +149,27 @@ void tst_SettingsService::testToDayOfWeekNormalization() {
     QCOMPARE(SettingsService::toDayOfWeek(3), Qt::Monday);
     QCOMPARE(SettingsService::toDayOfWeek(8), Qt::Monday);
     QCOMPARE(SettingsService::toDayOfWeek(-1), Qt::Monday);
+}
+
+void tst_SettingsService::testWeeklyGoalSurvivesRestart() {
+    QTemporaryFile temp;
+    QVERIFY(temp.open());
+    const QString path = temp.fileName();
+    temp.close();
+
+    {
+        auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        SettingsService svc(std::move(qsettings));
+        QCOMPARE(svc.weeklyGoalMinutes(), 360);
+        svc.setWeeklyGoalMinutes(480);
+        QCOMPARE(svc.weeklyGoalMinutes(), 480);
+    }
+
+    {
+        auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        SettingsService svc(std::move(qsettings));
+        QCOMPARE(svc.weeklyGoalMinutes(), 480);
+    }
 }
 
 QTEST_GUILESS_MAIN(tst_SettingsService)

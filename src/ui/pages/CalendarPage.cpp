@@ -241,19 +241,17 @@ void CalendarPage::setupSplitter(QVBoxLayout* layout) {
 }
 
 void CalendarPage::setupAgendaPanel(QWidget* panel) {
-    panel->setMinimumSize(260, 200);
+    panel->setMinimumSize(280, 200);
     auto* panelLayout = new QVBoxLayout(panel);
     panelLayout->setContentsMargins(16, 16, 16, 16);
-    panelLayout->setSpacing(12);
-
-    auto* panelHeader = new QHBoxLayout;
-    panelHeader->setSpacing(8);
+    panelLayout->setSpacing(10);
 
     m_agendaTitleLabel = new QLabel(panel);
     m_agendaTitleLabel->setObjectName(u"CalendarAgendaTitle"_s);
-    m_agendaTitleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-    m_agendaTitleLabel->setMinimumWidth(60);
-    panelHeader->addWidget(m_agendaTitleLabel, 1);
+    panelLayout->addWidget(m_agendaTitleLabel);
+
+    auto* buttonGrid = new QGridLayout;
+    buttonGrid->setSpacing(6);
 
     auto* addInterviewBtn = new QPushButton(tr("+ Interview"), panel);
     addInterviewBtn->setObjectName(u"CalendarAddInterviewBtn"_s);
@@ -271,10 +269,10 @@ void CalendarPage::setupAgendaPanel(QWidget* panel) {
     addTargetBtn->setEnabled(false);
     addTargetBtn->setToolTip(tr("Plan and manage study target dates on the Study page"));
 
-    panelHeader->addWidget(addInterviewBtn);
-    panelHeader->addWidget(addFollowUpBtn);
-    panelHeader->addWidget(addTargetBtn);
-    panelLayout->addLayout(panelHeader);
+    buttonGrid->addWidget(addInterviewBtn, 0, 0);
+    buttonGrid->addWidget(addFollowUpBtn, 0, 1);
+    buttonGrid->addWidget(addTargetBtn, 1, 0, 1, 2);
+    panelLayout->addLayout(buttonGrid);
 
     m_agendaStack = new QStackedWidget(panel);
     m_agendaStack->setObjectName(u"CalendarAgendaStack"_s);

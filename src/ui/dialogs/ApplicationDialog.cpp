@@ -66,6 +66,7 @@ ApplicationDialog::ApplicationDialog(JobPrep::Data::ApplicationRepository& apps,
     setObjectName(u"ApplicationDialog"_s);
     setWindowTitle(mode == Create ? tr("Add Application") : tr("Edit Application"));
     setModal(true);
+    setMinimumSize(500, 420);
     setupUi();
 
     m_original = m_app;

@@ -41,4 +41,16 @@ foreach(test_name IN LISTS PAGE_TESTS)
     )
 endforeach()
 
+add_executable(tst_HiDpi tst_HiDpi.cpp)
+target_link_libraries(tst_HiDpi PRIVATE jobprep_core jobprep_test_helpers jobprep_ui_test_helpers Qt6::Test Qt6::Widgets)
+target_include_directories(tst_HiDpi PRIVATE ${CMAKE_SOURCE_DIR}/tests/data)
+jobprep_apply_warnings(tst_HiDpi)
+
+add_test(NAME tst_HiDpi COMMAND tst_HiDpi)
+set_tests_properties(tst_HiDpi PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_SCALE_FACTOR=1.5"
+    LABELS "ui"
+)
+
+
 

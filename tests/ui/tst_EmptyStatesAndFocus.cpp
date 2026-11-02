@@ -769,204 +769,196 @@ void tst_EmptyStatesAndFocus::testStudyDetailPanelDateTabStops() {
 }
 
 void tst_EmptyStatesAndFocus::testDateEditTabTrapPlainVsSingleTab() {
-    // 1. Control: Plain QDateEdit between two QLineEdits
-    {
-        QDialog dlg;
-        auto* layout = new QVBoxLayout(&dlg);
-        auto* edit1 = new QLineEdit(&dlg);
-        edit1->setObjectName(u"edit1"_s);
-        auto* plainDate = new QDateEdit(QDate(2026, 10, 31), &dlg);
-        plainDate->setObjectName(u"plainDate"_s);
-        plainDate->setDisplayFormat(u"yyyy-MM-dd"_s);
-        auto* edit2 = new QLineEdit(&dlg);
-        edit2->setObjectName(u"edit2"_s);
-        layout->addWidget(edit1);
-        layout->addWidget(plainDate);
-        layout->addWidget(edit2);
-        dlg.show();
-        activateWindow(&dlg);
-        QApplication::processEvents();
+    QDialog dlg(&m_fix->window());
+    dlg.setWindowModality(Qt::ApplicationModal);
+    auto* layout = new QVBoxLayout(&dlg);
+    auto* edit1 = new QLineEdit(&dlg);
+    edit1->setObjectName(u"edit1"_s);
+    auto* plainDate = new QDateEdit(QDate(2026, 10, 31), &dlg);
+    plainDate->setObjectName(u"plainDate"_s);
+    plainDate->setDisplayFormat(u"yyyy-MM-dd"_s);
+    auto* edit2 = new QLineEdit(&dlg);
+    edit2->setObjectName(u"edit2"_s);
+    auto* singleDate = new JobPrep::Ui::Widgets::SingleTabDateEdit(QDate(2026, 10, 31), &dlg);
+    singleDate->setObjectName(u"singleDate"_s);
+    singleDate->setDisplayFormat(u"yyyy-MM-dd"_s);
+    auto* edit3 = new QLineEdit(&dlg);
+    edit3->setObjectName(u"edit3"_s);
 
-        // (a) Forward Tab from edit1
-        edit1->setFocus(Qt::TabFocusReason);
-        QApplication::processEvents();
-        QCOMPARE(QApplication::focusWidget(), edit1);
+    layout->addWidget(edit1);
+    layout->addWidget(plainDate);
+    layout->addWidget(edit2);
+    layout->addWidget(singleDate);
+    layout->addWidget(edit3);
+    dlg.show();
+    activateWindow(&dlg);
+    QApplication::processEvents();
 
+    // 1. Control: Plain QDateEdit between edit1 and edit2
+    // (a) Forward Tab from edit1
+    edit1->setFocus(Qt::TabFocusReason);
+    QApplication::processEvents();
+    QCOMPARE(QApplication::focusWidget(), edit1);
+
+    sendKeyClick(&dlg, Qt::Key_Tab);
+    QWidget* focusedAfterFirstTab = QApplication::focusWidget();
+    QVERIFY(focusedAfterFirstTab == plainDate || (focusedAfterFirstTab && focusedAfterFirstTab->parentWidget() == plainDate));
+
+    int plainForwardTrappedStops = 0;
+    for (int i = 0; i < 10; ++i) {
         sendKeyClick(&dlg, Qt::Key_Tab);
-        QWidget* focusedAfterFirstTab = QApplication::focusWidget();
-        QVERIFY(focusedAfterFirstTab == plainDate || (focusedAfterFirstTab && focusedAfterFirstTab->parentWidget() == plainDate));
-
-        int plainForwardTrappedStops = 0;
-        for (int i = 0; i < 10; ++i) {
-            sendKeyClick(&dlg, Qt::Key_Tab);
-            QWidget* focused = QApplication::focusWidget();
-            if (focused == plainDate || (focused && focused->parentWidget() == plainDate)) {
-                plainForwardTrappedStops++;
-            } else if (focused == edit2) {
-                break;
-            }
+        QWidget* focused = QApplication::focusWidget();
+        if (focused == plainDate || (focused && focused->parentWidget() == plainDate)) {
+            plainForwardTrappedStops++;
+        } else if (focused == edit2) {
+            break;
         }
-        fprintf(stdout, "PLAIN_QDATEEDIT_FORWARD_TRAPPED_STOPS: %d\n", plainForwardTrappedStops);
-
-        // (b) Backward Backtab from edit2
-        edit2->setFocus(Qt::TabFocusReason);
-        QApplication::processEvents();
-        QCOMPARE(QApplication::focusWidget(), edit2);
-
-        sendKeyClick(&dlg, Qt::Key_Backtab);
-        QWidget* focusedAfterFirstBacktab = QApplication::focusWidget();
-        QVERIFY(focusedAfterFirstBacktab == plainDate || (focusedAfterFirstBacktab && focusedAfterFirstBacktab->parentWidget() == plainDate));
-
-        int plainBackwardTrappedStops = 0;
-        for (int i = 0; i < 10; ++i) {
-            sendKeyClick(&dlg, Qt::Key_Backtab);
-            QWidget* focused = QApplication::focusWidget();
-            if (focused == plainDate || (focused && focused->parentWidget() == plainDate)) {
-                plainBackwardTrappedStops++;
-            } else if (focused == edit1) {
-                break;
-            }
-        }
-        fprintf(stdout, "PLAIN_QDATEEDIT_BACKWARD_TRAPPED_STOPS: %d\n", plainBackwardTrappedStops);
-
-        // (c) User scenario: focus dateEdit and select DaySection, then Tab
-        plainDate->setFocus(Qt::TabFocusReason);
-        plainDate->setCurrentSection(QDateTimeEdit::DaySection);
-        QApplication::processEvents();
-        int plainDaySectionTrappedStops = 0;
-        for (int i = 0; i < 10; ++i) {
-            sendKeyClick(&dlg, Qt::Key_Tab);
-            QWidget* focused = QApplication::focusWidget();
-            if (focused == plainDate || (focused && focused->parentWidget() == plainDate)) {
-                plainDaySectionTrappedStops++;
-            } else if (focused == edit2) {
-                break;
-            }
-        }
-        fprintf(stdout, "PLAIN_QDATEEDIT_DAYSECTION_TRAPPED_STOPS: %d\n", plainDaySectionTrappedStops);
-
-        // (d) Select YearSection (first section in yyyy-MM-dd), then Tab
-        plainDate->setFocus(Qt::TabFocusReason);
-        plainDate->setCurrentSection(QDateTimeEdit::YearSection);
-        QApplication::processEvents();
-        int plainYearSectionTrappedStops = 0;
-        for (int i = 0; i < 10; ++i) {
-            sendKeyClick(&dlg, Qt::Key_Tab);
-            QWidget* focused = QApplication::focusWidget();
-            if (focused == plainDate || (focused && focused->parentWidget() == plainDate)) {
-                plainYearSectionTrappedStops++;
-            } else if (focused == edit2) {
-                break;
-            }
-        }
-        fprintf(stdout, "PLAIN_QDATEEDIT_YEARSECTION_TRAPPED_STOPS: %d\n", plainYearSectionTrappedStops);
-        fflush(stdout);
-
-        // Plain QDateEdit traps: forward walk stops at internal sections (> 0 trapped presses)
-        QVERIFY(plainForwardTrappedStops > 0);
-        QVERIFY(plainBackwardTrappedStops > 0);
-        QVERIFY(plainYearSectionTrappedStops > 0);
     }
+    fprintf(stdout, "PLAIN_QDATEEDIT_FORWARD_TRAPPED_STOPS: %d\n", plainForwardTrappedStops);
 
-    // 2. SingleTabDateEdit between two QLineEdits
-    {
-        QDialog dlg;
-        auto* layout = new QVBoxLayout(&dlg);
-        auto* edit1 = new QLineEdit(&dlg);
-        edit1->setObjectName(u"edit1"_s);
-        auto* singleDate = new JobPrep::Ui::Widgets::SingleTabDateEdit(QDate(2026, 10, 31), &dlg);
-        singleDate->setObjectName(u"singleDate"_s);
-        singleDate->setDisplayFormat(u"yyyy-MM-dd"_s);
-        auto* edit2 = new QLineEdit(&dlg);
-        edit2->setObjectName(u"edit2"_s);
-        layout->addWidget(edit1);
-        layout->addWidget(singleDate);
-        layout->addWidget(edit2);
-        dlg.show();
-        activateWindow(&dlg);
-        QApplication::processEvents();
+    // (b) Backward Backtab from edit2
+    edit2->setFocus(Qt::TabFocusReason);
+    QApplication::processEvents();
+    QCOMPARE(QApplication::focusWidget(), edit2);
 
-        // (a) Forward Tab from edit1
-        edit1->setFocus(Qt::TabFocusReason);
-        QApplication::processEvents();
-        QCOMPARE(QApplication::focusWidget(), edit1);
+    sendKeyClick(&dlg, Qt::Key_Backtab);
+    QWidget* focusedAfterFirstBacktab = QApplication::focusWidget();
+    QVERIFY(focusedAfterFirstBacktab == plainDate || (focusedAfterFirstBacktab && focusedAfterFirstBacktab->parentWidget() == plainDate));
 
+    int plainBackwardTrappedStops = 0;
+    for (int i = 0; i < 10; ++i) {
+        sendKeyClick(&dlg, Qt::Key_Backtab);
+        QWidget* focused = QApplication::focusWidget();
+        if (focused == plainDate || (focused && focused->parentWidget() == plainDate)) {
+            plainBackwardTrappedStops++;
+        } else if (focused == edit1) {
+            break;
+        }
+    }
+    fprintf(stdout, "PLAIN_QDATEEDIT_BACKWARD_TRAPPED_STOPS: %d\n", plainBackwardTrappedStops);
+
+    // (c) User scenario: focus dateEdit and select DaySection, then Tab
+    plainDate->setFocus(Qt::TabFocusReason);
+    plainDate->setCurrentSection(QDateTimeEdit::DaySection);
+    QApplication::processEvents();
+    int plainDaySectionTrappedStops = 0;
+    for (int i = 0; i < 10; ++i) {
         sendKeyClick(&dlg, Qt::Key_Tab);
-        QWidget* focusedAfterFirstTab = QApplication::focusWidget();
-        QVERIFY(focusedAfterFirstTab == singleDate || (focusedAfterFirstTab && focusedAfterFirstTab->parentWidget() == singleDate));
-
-        int singleForwardTrappedStops = 0;
-        for (int i = 0; i < 10; ++i) {
-            sendKeyClick(&dlg, Qt::Key_Tab);
-            QWidget* focused = QApplication::focusWidget();
-            if (focused == singleDate || (focused && focused->parentWidget() == singleDate)) {
-                singleForwardTrappedStops++;
-            } else if (focused == edit2) {
-                break;
-            }
+        QWidget* focused = QApplication::focusWidget();
+        if (focused == plainDate || (focused && focused->parentWidget() == plainDate)) {
+            plainDaySectionTrappedStops++;
+        } else if (focused == edit2) {
+            break;
         }
-        fprintf(stdout, "SINGLE_TAB_DATEEDIT_FORWARD_TRAPPED_STOPS: %d\n", singleForwardTrappedStops);
-
-        // (b) Backward Backtab from edit2
-        edit2->setFocus(Qt::TabFocusReason);
-        QApplication::processEvents();
-        QCOMPARE(QApplication::focusWidget(), edit2);
-
-        sendKeyClick(&dlg, Qt::Key_Backtab);
-        QWidget* focusedAfterFirstBacktab = QApplication::focusWidget();
-        QVERIFY(focusedAfterFirstBacktab == singleDate || (focusedAfterFirstBacktab && focusedAfterFirstBacktab->parentWidget() == singleDate));
-
-        int singleBackwardTrappedStops = 0;
-        for (int i = 0; i < 10; ++i) {
-            sendKeyClick(&dlg, Qt::Key_Backtab);
-            QWidget* focused = QApplication::focusWidget();
-            if (focused == singleDate || (focused && focused->parentWidget() == singleDate)) {
-                singleBackwardTrappedStops++;
-            } else if (focused == edit1) {
-                break;
-            }
-        }
-        fprintf(stdout, "SINGLE_TAB_DATEEDIT_BACKWARD_TRAPPED_STOPS: %d\n", singleBackwardTrappedStops);
-
-        // (c) User scenario: focus dateEdit and select DaySection, then Tab
-        singleDate->setFocus(Qt::TabFocusReason);
-        singleDate->setCurrentSection(QDateTimeEdit::DaySection);
-        QApplication::processEvents();
-        int singleDaySectionTrappedStops = 0;
-        for (int i = 0; i < 10; ++i) {
-            sendKeyClick(&dlg, Qt::Key_Tab);
-            QWidget* focused = QApplication::focusWidget();
-            if (focused == singleDate || (focused && focused->parentWidget() == singleDate)) {
-                singleDaySectionTrappedStops++;
-            } else if (focused == edit2) {
-                break;
-            }
-        }
-        fprintf(stdout, "SINGLE_TAB_DATEEDIT_DAYSECTION_TRAPPED_STOPS: %d\n", singleDaySectionTrappedStops);
-
-        // (d) Select YearSection, then Tab
-        singleDate->setFocus(Qt::TabFocusReason);
-        singleDate->setCurrentSection(QDateTimeEdit::YearSection);
-        QApplication::processEvents();
-        int singleYearSectionTrappedStops = 0;
-        for (int i = 0; i < 10; ++i) {
-            sendKeyClick(&dlg, Qt::Key_Tab);
-            QWidget* focused = QApplication::focusWidget();
-            if (focused == singleDate || (focused && focused->parentWidget() == singleDate)) {
-                singleYearSectionTrappedStops++;
-            } else if (focused == edit2) {
-                break;
-            }
-        }
-        fprintf(stdout, "SINGLE_TAB_DATEEDIT_YEARSECTION_TRAPPED_STOPS: %d\n", singleYearSectionTrappedStops);
-        fflush(stdout);
-
-        // SingleTabDateEdit never traps internal sections: 0 trapped stops on subsequent Tab
-        QCOMPARE(singleForwardTrappedStops, 0);
-        QCOMPARE(singleBackwardTrappedStops, 0);
-        QCOMPARE(singleDaySectionTrappedStops, 0);
-        QCOMPARE(singleYearSectionTrappedStops, 0);
     }
+    fprintf(stdout, "PLAIN_QDATEEDIT_DAYSECTION_TRAPPED_STOPS: %d\n", plainDaySectionTrappedStops);
+
+    // (d) Select YearSection (first section in yyyy-MM-dd), then Tab
+    plainDate->setFocus(Qt::TabFocusReason);
+    plainDate->setCurrentSection(QDateTimeEdit::YearSection);
+    QApplication::processEvents();
+    int plainYearSectionTrappedStops = 0;
+    for (int i = 0; i < 10; ++i) {
+        sendKeyClick(&dlg, Qt::Key_Tab);
+        QWidget* focused = QApplication::focusWidget();
+        if (focused == plainDate || (focused && focused->parentWidget() == plainDate)) {
+            plainYearSectionTrappedStops++;
+        } else if (focused == edit2) {
+            break;
+        }
+    }
+    fprintf(stdout, "PLAIN_QDATEEDIT_YEARSECTION_TRAPPED_STOPS: %d\n", plainYearSectionTrappedStops);
+    fflush(stdout);
+
+    // Plain QDateEdit traps: forward walk stops at internal sections (> 0 trapped presses)
+    QVERIFY(plainForwardTrappedStops > 0);
+    QVERIFY(plainBackwardTrappedStops > 0);
+    QVERIFY(plainYearSectionTrappedStops > 0);
+
+    // 2. SingleTabDateEdit between edit2 and edit3
+    // (a) Forward Tab from edit2
+    edit2->setFocus(Qt::TabFocusReason);
+    QApplication::processEvents();
+    QCOMPARE(QApplication::focusWidget(), edit2);
+
+    sendKeyClick(&dlg, Qt::Key_Tab);
+    QWidget* singleAfterFirstTab = QApplication::focusWidget();
+    QVERIFY(singleAfterFirstTab == singleDate || (singleAfterFirstTab && singleAfterFirstTab->parentWidget() == singleDate));
+
+    int singleForwardTrappedStops = 0;
+    for (int i = 0; i < 10; ++i) {
+        sendKeyClick(&dlg, Qt::Key_Tab);
+        QWidget* focused = QApplication::focusWidget();
+        if (focused == singleDate || (focused && focused->parentWidget() == singleDate)) {
+            singleForwardTrappedStops++;
+        } else if (focused == edit3) {
+            break;
+        }
+    }
+    fprintf(stdout, "SINGLE_TAB_DATEEDIT_FORWARD_TRAPPED_STOPS: %d\n", singleForwardTrappedStops);
+
+    // (b) Backward Backtab from edit3
+    edit3->setFocus(Qt::TabFocusReason);
+    QApplication::processEvents();
+    QCOMPARE(QApplication::focusWidget(), edit3);
+
+    sendKeyClick(&dlg, Qt::Key_Backtab);
+    QWidget* singleAfterFirstBacktab = QApplication::focusWidget();
+    QVERIFY(singleAfterFirstBacktab == singleDate || (singleAfterFirstBacktab && singleAfterFirstBacktab->parentWidget() == singleDate));
+
+    int singleBackwardTrappedStops = 0;
+    for (int i = 0; i < 10; ++i) {
+        sendKeyClick(&dlg, Qt::Key_Backtab);
+        QWidget* focused = QApplication::focusWidget();
+        if (focused == singleDate || (focused && focused->parentWidget() == singleDate)) {
+            singleBackwardTrappedStops++;
+        } else if (focused == edit2) {
+            break;
+        }
+    }
+    fprintf(stdout, "SINGLE_TAB_DATEEDIT_BACKWARD_TRAPPED_STOPS: %d\n", singleBackwardTrappedStops);
+
+    // (c) User scenario: focus dateEdit and select DaySection, then Tab
+    singleDate->setFocus(Qt::TabFocusReason);
+    singleDate->setCurrentSection(QDateTimeEdit::DaySection);
+    QApplication::processEvents();
+    int singleDaySectionTrappedStops = 0;
+    for (int i = 0; i < 10; ++i) {
+        sendKeyClick(&dlg, Qt::Key_Tab);
+        QWidget* focused = QApplication::focusWidget();
+        if (focused == singleDate || (focused && focused->parentWidget() == singleDate)) {
+            singleDaySectionTrappedStops++;
+        } else if (focused == edit3) {
+            break;
+        }
+    }
+    fprintf(stdout, "SINGLE_TAB_DATEEDIT_DAYSECTION_TRAPPED_STOPS: %d\n", singleDaySectionTrappedStops);
+
+    // (d) Select YearSection, then Tab
+    singleDate->setFocus(Qt::TabFocusReason);
+    singleDate->setCurrentSection(QDateTimeEdit::YearSection);
+    QApplication::processEvents();
+    int singleYearSectionTrappedStops = 0;
+    for (int i = 0; i < 10; ++i) {
+        sendKeyClick(&dlg, Qt::Key_Tab);
+        QWidget* focused = QApplication::focusWidget();
+        if (focused == singleDate || (focused && focused->parentWidget() == singleDate)) {
+            singleYearSectionTrappedStops++;
+        } else if (focused == edit3) {
+            break;
+        }
+    }
+    fprintf(stdout, "SINGLE_TAB_DATEEDIT_YEARSECTION_TRAPPED_STOPS: %d\n", singleYearSectionTrappedStops);
+    fflush(stdout);
+
+    // SingleTabDateEdit never traps internal sections: 0 trapped stops on subsequent Tab
+    QCOMPARE(singleForwardTrappedStops, 0);
+    QCOMPARE(singleBackwardTrappedStops, 0);
+    QCOMPARE(singleDaySectionTrappedStops, 0);
+    QCOMPARE(singleYearSectionTrappedStops, 0);
+
+    dlg.close();
+    QApplication::processEvents();
 }
 
 void tst_EmptyStatesAndFocus::testTabOrderDialogApplicationOverview() {

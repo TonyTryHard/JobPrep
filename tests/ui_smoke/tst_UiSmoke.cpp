@@ -129,6 +129,7 @@ private slots:
     void testWindowMaximumSizeAndMaximize();
     void testWindowMinimumSizeExceedsLayoutMinimum();
     void testWindowLoggingCategory();
+    void testApplicationIcon();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -382,6 +383,30 @@ void tst_UiSmoke::testWindowMinimumSizeExceedsLayoutMinimum() {
 
 void tst_UiSmoke::testWindowLoggingCategory() {
     QVERIFY(!JobPrep::Ui::lcWindow().isDebugEnabled());
+}
+
+void tst_UiSmoke::testApplicationIcon() {
+    QVERIFY(QFileInfo::exists(u":/icons/app-color.svg"_s));
+    QVERIFY(QFileInfo::exists(u":/icons/app-256.png"_s));
+
+    QIcon appIcon;
+    appIcon.addPixmap(QIcon(u":/icons/app-color.svg"_s).pixmap(16, 16));
+    appIcon.addPixmap(QIcon(u":/icons/app-color.svg"_s).pixmap(32, 32));
+    appIcon.addFile(u":/icons/app-256.png"_s);
+
+    const auto sizes = appIcon.availableSizes();
+    for (const auto& s : sizes) {
+        fprintf(stdout, "ICON_SIZE: %dx%d\n", s.width(), s.height());
+    }
+    fflush(stdout);
+    QVERIFY(sizes.contains(QSize(16, 16)));
+    QVERIFY(sizes.contains(QSize(32, 32)));
+    QVERIFY(sizes.contains(QSize(256, 256)));
+
+    const QPixmap pm32 = appIcon.pixmap(32, 32);
+    QVERIFY(!pm32.isNull());
+    QCOMPARE(pm32.width(), 32);
+    QCOMPARE(pm32.height(), 32);
 }
 
 void tst_UiSmoke::testZeroWarnings() {

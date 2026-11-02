@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QFont>
 #include <QFontDatabase>
+#include <QIcon>
 #include <QMessageBox>
 #include <QSystemTrayIcon>
 #include "app/AppContext.h"
@@ -19,6 +20,14 @@ int main(int argc, char* argv[]) {
     QCoreApplication::setOrganizationName(u"JobPrep"_s);
     QCoreApplication::setOrganizationDomain(u"jobprep.local"_s);
     QCoreApplication::setApplicationName(u"JobPrep"_s);
+    QGuiApplication::setDesktopFileName(u"jobprep"_s);
+
+    // Set application window icon from bundled resources (SVG and multi-size PNG)
+    QIcon appIcon;
+    appIcon.addPixmap(QIcon(u":/icons/app-color.svg"_s).pixmap(16, 16));
+    appIcon.addPixmap(QIcon(u":/icons/app-color.svg"_s).pixmap(32, 32));
+    appIcon.addFile(u":/icons/app-256.png"_s);
+    QApplication::setWindowIcon(appIcon);
 
     // Set base font (10pt, fallback to system UI font)
     QFont baseFont = QFontDatabase::systemFont(QFontDatabase::GeneralFont);

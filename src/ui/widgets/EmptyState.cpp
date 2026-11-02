@@ -23,8 +23,8 @@ EmptyState::EmptyState(const QString& iconName, const QString& title, const QStr
 
 void EmptyState::setupUi() {
     m_layout = new QVBoxLayout(this);
-    m_layout->setContentsMargins(32, 48, 32, 48);
-    m_layout->setSpacing(16);
+    m_layout->setContentsMargins(16, 16, 16, 16);
+    m_layout->setSpacing(8);
     m_layout->setAlignment(Qt::AlignCenter);
 
     m_iconLabel = new QLabel(this);

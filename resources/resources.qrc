@@ -3,6 +3,8 @@
     <qresource prefix="/">
         <file>styles/theme.qss</file>
         <file>icons/app.svg</file>
+        <file>icons/app-color.svg</file>
+        <file>icons/app-256.png</file>
         <file>icons/home.svg</file>
         <file>icons/study.svg</file>
         <file>icons/jobs.svg</file>
