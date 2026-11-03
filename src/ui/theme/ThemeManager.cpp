@@ -1,4 +1,5 @@
 #include "ui/theme/ThemeManager.h"
+#include "app/Resources.h"
 #include <QApplication>
 #include <QFile>
 #include <QGuiApplication>
@@ -85,6 +86,7 @@ void ThemeManager::applyTheme() {
     const ColorTokens tokens = currentTokens();
     QApplication::setPalette(tokens.toPalette());
 
+    App::ensureResources();
     QFile file(u":/styles/theme.qss"_s);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         const QString rawQss = QString::fromUtf8(file.readAll());

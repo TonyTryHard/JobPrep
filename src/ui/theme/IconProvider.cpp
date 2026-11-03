@@ -1,4 +1,5 @@
 #include "ui/theme/IconProvider.h"
+#include "app/Resources.h"
 #include <QFile>
 #include <QGuiApplication>
 #include <QPainter>
@@ -12,6 +13,7 @@ namespace JobPrep::Ui::Theme {
 QMap<QPair<QString, QRgb>, QIcon> IconProvider::s_cache;
 
 QIcon IconProvider::icon(const QString& name, const QColor& color) {
+    App::ensureResources();
     const auto key = qMakePair(name, color.rgba());
     auto it = s_cache.constFind(key);
     if (it != s_cache.constEnd()) {

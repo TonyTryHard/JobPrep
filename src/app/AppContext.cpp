@@ -1,4 +1,5 @@
 #include "app/AppContext.h"
+#include "app/Resources.h"
 
 #include <QDir>
 #include <QStandardPaths>
@@ -20,13 +21,6 @@
 
 using namespace Qt::StringLiterals;
 
-// Q_INIT_RESOURCE mangles the generated symbol with the enclosing namespace and
-// declares it with the enclosing linkage, while AUTORCC defines a global symbol,
-// so this helper must sit at global scope with external linkage.
-void initializeResources() {
-    Q_INIT_RESOURCE(resources);
-}
-
 namespace JobPrep::App {
 
 namespace {
@@ -40,7 +34,7 @@ QString defaultDatabasePath() {
 }  // namespace
 
 AppContext::AppContext(const QString& databasePath) {
-    initializeResources();
+    ensureResources();
     m_database = std::make_unique<Data::Database>();
     m_database->open(databasePath.isEmpty() ? defaultDatabasePath() : databasePath);
 

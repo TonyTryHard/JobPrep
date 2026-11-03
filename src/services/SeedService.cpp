@@ -7,6 +7,7 @@
 #include <QSet>
 #include <QStringList>
 #include "services/SeedService.h"
+#include "app/Resources.h"
 #include "data/Database.h"
 #include "data/TopicRepository.h"
 #include "data/TrackRepository.h"
@@ -34,6 +35,7 @@ struct SeedTrack {
 
 /// Reads the bundled sample data; `error` describes the first problem found.
 bool readSeedFile(QList<SeedTrack>* tracks, QString* error) {
+    App::ensureResources();
     QFile file(u":/seed/topics.json"_s);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         if (error) *error = u"Cannot read seed data: %1"_s.arg(file.errorString());

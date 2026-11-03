@@ -5,6 +5,7 @@
 #include <QMessageBox>
 #include <QSystemTrayIcon>
 #include "app/AppContext.h"
+#include "app/Resources.h"
 #include "data/Database.h"
 #include "services/SeedService.h"
 #include "services/SettingsService.h"
@@ -23,6 +24,7 @@ int main(int argc, char* argv[]) {
     QGuiApplication::setDesktopFileName(u"jobprep"_s);
 
     // Set application window icon from bundled resources (SVG and multi-size PNG)
+    JobPrep::App::ensureResources();
     QIcon appIcon;
     appIcon.addPixmap(QIcon(u":/icons/app-color.svg"_s).pixmap(16, 16));
     appIcon.addPixmap(QIcon(u":/icons/app-color.svg"_s).pixmap(32, 32));

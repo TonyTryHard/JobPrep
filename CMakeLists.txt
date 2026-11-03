@@ -57,6 +57,8 @@ add_library(jobprep_core STATIC
     # App composition root
     src/app/AppContext.h
     src/app/AppContext.cpp
+    src/app/Resources.h
+    src/app/Resources.cpp
 
     # Domain models
     src/domain/Enums.h
