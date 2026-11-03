@@ -1,6 +1,8 @@
 #include <memory>
 #include <QDate>
 #include <QSettings>
+#include <QCoreApplication> // CI-DIAG
+#include <QDebug> // CI-DIAG
 #include <QSignalSpy>
 #include <QTest>
 #include "TestDatabase.h"
@@ -301,6 +303,23 @@ void tst_TopicListModel::trackChangesUpdateModel() {
 }
 
 void tst_TopicListModel::settingsKeysAndFallbacks() {
+    { // CI-DIAG
+        QSettings nativeSettings(QSettings::NativeFormat, QSettings::UserScope, QCoreApplication::organizationName(), QCoreApplication::applicationName()); // CI-DIAG
+        nativeSettings.sync(); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG TopicListModel start nativeSettings" // CI-DIAG
+                          << "org:" << QCoreApplication::organizationName() // CI-DIAG
+                          << "app:" << QCoreApplication::applicationName() // CI-DIAG
+                          << "arg0:" << QCoreApplication::arguments().value(0) // CI-DIAG
+                          << "fileName:" << nativeSettings.fileName() // CI-DIAG
+                          << "format:" << static_cast<int>(nativeSettings.format()) // CI-DIAG
+                          << "status:" << static_cast<int>(nativeSettings.status()) // CI-DIAG
+                          << "writable:" << nativeSettings.isWritable(); // CI-DIAG
+        QSettings probe(QSettings::NativeFormat, QSettings::UserScope, "JobPrepProbe", "probe"); // CI-DIAG
+        probe.setValue("k", 1); // CI-DIAG
+        probe.sync(); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG TopicListModel start probe status:" << static_cast<int>(probe.status()) << "val:" << probe.value("k"); // CI-DIAG
+    } // CI-DIAG
+
     auto clearStudySettings = []() {
         QSettings s;
         s.remove(u"study/viewMode"_s);
@@ -316,6 +335,19 @@ void tst_TopicListModel::settingsKeysAndFallbacks() {
     QCOMPARE(settings.studyViewMode(), u"board"_s);
 
     settings.setStudyViewMode(u"list"_s);
+    { // CI-DIAG
+        QSettings probe; // CI-DIAG
+        probe.sync(); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG TopicListModel before line 319" // CI-DIAG
+                          << "org:" << QCoreApplication::organizationName() // CI-DIAG
+                          << "app:" << QCoreApplication::applicationName() // CI-DIAG
+                          << "arg0:" << QCoreApplication::arguments().value(0) // CI-DIAG
+                          << "fileName:" << probe.fileName() // CI-DIAG
+                          << "format:" << static_cast<int>(probe.format()) // CI-DIAG
+                          << "status:" << static_cast<int>(probe.status()) // CI-DIAG
+                          << "writable:" << probe.isWritable() // CI-DIAG
+                          << "value:" << probe.value(u"study/viewMode"_s); // CI-DIAG
+    } // CI-DIAG
     QCOMPARE(settings.studyViewMode(), u"list"_s);
 
     // Unknown view mode returns "board" (A9)

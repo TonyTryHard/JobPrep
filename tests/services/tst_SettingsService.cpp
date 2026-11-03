@@ -2,6 +2,11 @@
 #include <QSignalSpy>
 #include <QTest>
 #include <QSettings>
+#include <QCoreApplication> // CI-DIAG
+#include <QDebug> // CI-DIAG
+#include <QFile> // CI-DIAG
+#include <QFileInfo> // CI-DIAG
+#include <QTextStream> // CI-DIAG
 #include "services/SettingsService.h"
 
 using namespace Qt::StringLiterals;
@@ -130,10 +135,34 @@ void tst_SettingsService::testTrayHintShownKey() {
         QCOMPARE(spy.count(), 1);
     }
 
+    // CI-DIAG: File inspection after first scope ends
+    { // CI-DIAG
+        QFileInfo fi(path); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG testTrayHintShownKey file exists:" << fi.exists() << "size:" << fi.size(); // CI-DIAG
+        QFile f(path); // CI-DIAG
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) { // CI-DIAG
+            QTextStream in(&f); // CI-DIAG
+            for (int i = 0; i < 20 && !in.atEnd(); ++i) { // CI-DIAG
+                qInfo().noquote() << "CI-DIAG testTrayHintShownKey L" << (i + 1) << ":" << in.readLine(); // CI-DIAG
+            } // CI-DIAG
+        } // CI-DIAG
+    } // CI-DIAG
+
     // Persists across SettingsService instances
     {
         auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        QSettings* qs = qsettings.get(); // CI-DIAG
         SettingsService svc(std::move(qsettings));
+        qs->sync(); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG testTrayHintShownKey" // CI-DIAG
+                          << "org:" << QCoreApplication::organizationName() // CI-DIAG
+                          << "app:" << QCoreApplication::applicationName() // CI-DIAG
+                          << "arg0:" << QCoreApplication::arguments().value(0) // CI-DIAG
+                          << "fileName:" << qs->fileName() // CI-DIAG
+                          << "format:" << static_cast<int>(qs->format()) // CI-DIAG
+                          << "status:" << static_cast<int>(qs->status()) // CI-DIAG
+                          << "writable:" << qs->isWritable() // CI-DIAG
+                          << "value:" << qs->value(u"app/trayHintShown"_s); // CI-DIAG
         QCOMPARE(svc.trayHintShown(), true);
     }
 }

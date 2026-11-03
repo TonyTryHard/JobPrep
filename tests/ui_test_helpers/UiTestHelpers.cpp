@@ -20,7 +20,14 @@ QtMessageHandler s_previousHandler = nullptr;
 
 void testMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg) {
     Q_UNUSED(context);
-    if (type != QtWarningMsg && type != QtCriticalMsg && type != QtFatalMsg) return;
+    if (type != QtWarningMsg && type != QtCriticalMsg && type != QtFatalMsg) {
+        if (s_previousHandler) { // CI-DIAG
+            s_previousHandler(type, context, msg); // CI-DIAG
+        } else { // CI-DIAG
+            fprintf(stderr, "QINFO  : %s\n", qPrintable(msg)); // CI-DIAG
+        } // CI-DIAG
+        return;
+    }
     if (isPlatformPluginNoise(msg)) return;
 
     QMutexLocker locker(&s_warningMutex);

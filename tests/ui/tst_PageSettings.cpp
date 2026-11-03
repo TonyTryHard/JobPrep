@@ -11,6 +11,9 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QSettings>
+#include <QDebug> // CI-DIAG
+#include <QFileInfo> // CI-DIAG
+#include <QTextStream> // CI-DIAG
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QStyleHints>
@@ -350,10 +353,34 @@ void tst_PageSettings::testWeeklyGoalPersistence() {
         QCOMPARE(svc.weeklyGoalMinutes(), 540);
     }
 
+    // CI-DIAG: File inspection after first scope ends
+    { // CI-DIAG
+        QFileInfo fi(filePath); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG testWeeklyGoalPersistence file exists:" << fi.exists() << "size:" << fi.size(); // CI-DIAG
+        QFile f(filePath); // CI-DIAG
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) { // CI-DIAG
+            QTextStream in(&f); // CI-DIAG
+            for (int i = 0; i < 20 && !in.atEnd(); ++i) { // CI-DIAG
+                qInfo().noquote() << "CI-DIAG testWeeklyGoalPersistence L" << (i + 1) << ":" << in.readLine(); // CI-DIAG
+            } // CI-DIAG
+        } // CI-DIAG
+    } // CI-DIAG
+
     // New instance loads persisted value
     {
         auto qsettings = std::make_unique<QSettings>(filePath, QSettings::IniFormat);
+        QSettings* qs = qsettings.get(); // CI-DIAG
         SettingsService svc(std::move(qsettings));
+        qs->sync(); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG testWeeklyGoalPersistence" // CI-DIAG
+                          << "org:" << QCoreApplication::organizationName() // CI-DIAG
+                          << "app:" << QCoreApplication::applicationName() // CI-DIAG
+                          << "arg0:" << QCoreApplication::arguments().value(0) // CI-DIAG
+                          << "fileName:" << qs->fileName() // CI-DIAG
+                          << "format:" << static_cast<int>(qs->format()) // CI-DIAG
+                          << "status:" << static_cast<int>(qs->status()) // CI-DIAG
+                          << "writable:" << qs->isWritable() // CI-DIAG
+                          << "value:" << qs->value(u"study/weeklyGoalMinutes"_s); // CI-DIAG
         QCOMPARE(svc.weeklyGoalMinutes(), 540);
     }
 }

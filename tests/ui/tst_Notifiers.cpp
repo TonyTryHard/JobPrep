@@ -5,6 +5,9 @@
 #include <QLineEdit>
 #include <QStackedWidget>
 #include <QTest>
+#include <QCoreApplication> // CI-DIAG
+#include <QDebug> // CI-DIAG
+#include <QSettings> // CI-DIAG
 #include <QTimer>
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
@@ -651,6 +654,19 @@ void tst_Notifiers::coordinatorEndToEndSettingsLeadMinutesChangeTakesEffect() {
     coord.checkNow(false);
     auto* inApp = dynamic_cast<InAppNotifier*>(&coord.notifier());
     QVERIFY(inApp != nullptr);
+    { // CI-DIAG
+        QSettings probe; // CI-DIAG
+        probe.sync(); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG Notifiers before line 654" // CI-DIAG
+                          << "org:" << QCoreApplication::organizationName() // CI-DIAG
+                          << "app:" << QCoreApplication::applicationName() // CI-DIAG
+                          << "arg0:" << QCoreApplication::arguments().value(0) // CI-DIAG
+                          << "fileName:" << probe.fileName() // CI-DIAG
+                          << "format:" << static_cast<int>(probe.format()) // CI-DIAG
+                          << "status:" << static_cast<int>(probe.status()) // CI-DIAG
+                          << "writable:" << probe.isWritable() // CI-DIAG
+                          << "value:" << probe.value(u"reminders/interviewLeadMinutes"_s); // CI-DIAG
+    } // CI-DIAG
     QCOMPARE(inApp->totalToastCount(), 0);
 
     // Change setting to include 120 minutes lead
