@@ -920,11 +920,14 @@ void tst_ImportExport::testRestoreSafetyBackupCreatedPrunedAndAbortsWhenReadOnly
     QCOMPARE(preRestores.size(), 5);
     QVERIFY(unrelated.exists());
 
-    // 3. Read-only safety backup dir aborts restore and leaves database untouched
+    // 3. Unwritable safety backup dir (parent is a regular file) aborts restore and leaves database untouched
     const auto dumpBefore = dumpDatabase(testDb.db());
-    const QString roDir = tempDir.filePath(u"ro_folder"_s);
-    QVERIFY(d.mkdir(u"ro_folder"_s));
-    QFile::setPermissions(roDir, QFileDevice::ReadOwner | QFileDevice::ReadUser | QFileDevice::ExeOwner | QFileDevice::ExeUser);
+    const QString blockingFilePath = tempDir.filePath(u"blocking_file.txt"_s);
+    QFile blockingFile(blockingFilePath);
+    QVERIFY(blockingFile.open(QIODevice::WriteOnly));
+    blockingFile.write("blocking");
+    blockingFile.close();
+    const QString roDir = blockingFilePath + u"/safety_subfolder"_s;
 
     const auto roRes = RestoreService::restoreDatabase(testDb.db(), validJson, roDir);
     QVERIFY(!roRes.success);
@@ -933,8 +936,6 @@ void tst_ImportExport::testRestoreSafetyBackupCreatedPrunedAndAbortsWhenReadOnly
     const auto dumpAfter = dumpDatabase(testDb.db());
     QString diff;
     QVERIFY2(compareDumps(dumpBefore, dumpAfter, &diff), qPrintable(diff));
-
-    QFile::setPermissions(roDir, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
 }
 
 void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHome() {
@@ -961,9 +962,13 @@ void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHom
     QVERIFY(res.success);
     QVERIFY(!res.safetyBackupPath.isEmpty());
     QVERIFY(QFile::exists(res.safetyBackupPath));
-    QVERIFY(res.safetyBackupPath.startsWith(customXdg));
+    QVERIFY(res.safetyBackupPath.startsWith(prodSafetyDir));
+    if (QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation).startsWith(customXdg)) {
+        QVERIFY(res.safetyBackupPath.startsWith(customXdg));
+    }
 
     qunsetenv("XDG_DATA_HOME");
+    QDir(customXdg).removeRecursively();
     QStandardPaths::setTestModeEnabled(true);
     QCoreApplication::setOrganizationName(origOrg);
     QCoreApplication::setApplicationName(origApp);
