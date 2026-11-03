@@ -151,12 +151,15 @@ jobs:
           JOBPREP_KEEP_GOING: 1
           QT_FORCE_STDERR_LOGGING: 1
           QT_ASSUME_STDERR_HAS_CONSOLE: 1
+          QT_QPA_FONTDIR: C:\Windows\Fonts
         shell: pwsh
         run: ./scripts/check.ps1
 
       - name: Diagnose failed tests (Windows)
         if: failure() && runner.os == 'Windows'
         continue-on-error: true
+        env:
+          QT_QPA_FONTDIR: C:\Windows\Fonts
         shell: pwsh
         run: |
           $logdir = "build/dev-windows/Testing/Temporary/diag"
@@ -178,6 +181,7 @@ jobs:
             }
           }
           $env:QT_QPA_PLATFORM = "offscreen"
+          $env:QT_QPA_FONTDIR = "C:\Windows\Fonts"
           foreach ($name in $testNames) {
             $exe = Get-ChildItem -Path "build/dev-windows" -Recurse -Filter "$name.exe" | Select-Object -First 1
             if (-not $exe) {
@@ -185,7 +189,7 @@ jobs:
               continue
             }
             $outFile = "$logdir/$name.txt"
-            $proc = Start-Process -FilePath $exe.FullName -ArgumentList @("-v2", "-o", "$outFile,txt") -PassThru -NoNewWindow
+            $proc = Start-Process -FilePath $exe.FullName -ArgumentList @("-o", "$outFile,txt") -PassThru -NoNewWindow
             $finished = $proc.WaitForExit(150000)
             if (-not $finished) {
               $proc.Kill()
@@ -196,18 +200,59 @@ jobs:
             Write-Host "=== TEST: $name ==="
             Write-Host ('{0} (0x{0:X8})' -f $code)
             if (Test-Path $outFile) {
-              $lines = @(Get-Content $outFile)
-              if ($lines.Count -le 200) {
+              $rawLines = @(Get-Content $outFile)
+              $lines = @($rawLines | Where-Object { $_ -notmatch '^\s*(QINFO|INFO)\s*:' })
+              if ($lines.Count -le 300) {
                 $lines | ForEach-Object { Write-Host $_ }
               } else {
-                $lines[0..119] | ForEach-Object { Write-Host $_ }
-                $cut = $lines.Count - 180
-                Write-Host "... [$cut lines cut] ..."
-                $lines[($lines.Count - 60)..($lines.Count - 1)] | ForEach-Object { Write-Host $_ }
+                $printIndices = [System.Collections.Generic.HashSet[int]]::new()
+                for ($i = 0; $i -lt $lines.Count; $i++) {
+                  $line = $lines[$i]
+                  if ($line -match 'FAIL!|XFAIL|QWARN|Totals:') {
+                    $null = $printIndices.Add($i)
+                    if ($line -match 'FAIL!') {
+                      for ($j = 1; $j -le 8; $j++) {
+                        if ($i + $j -lt $lines.Count) {
+                          $null = $printIndices.Add($i + $j)
+                        }
+                      }
+                    }
+                  }
+                }
+                $sortedIndices = $printIndices | Sort-Object
+                foreach ($idx in $sortedIndices) {
+                  Write-Host $lines[$idx]
+                }
               }
             } else {
               Write-Host "(no output file produced)"
             }
+          }
+
+      - name: Registry write probe (Windows)
+        if: failure() && runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "USERNAME: $env:USERNAME"
+          Write-Host "whoami: $(whoami)"
+          try {
+            Write-Host "HKCU\Software Name: $((Get-Item HKCU:\Software).Name)"
+          } catch {
+            Write-Host "Get-Item HKCU:\Software Exception: $_"
+          }
+          $probeKey = "HKCU:\Software\JobPrepProbe"
+          try {
+            New-Item -Path $probeKey -Force | Out-Null
+            Write-Host "Created key $probeKey successfully"
+            Set-ItemProperty -Path $probeKey -Name "TestValue" -Value "Probe123"
+            Write-Host "Wrote property TestValue successfully"
+            $readVal = (Get-ItemProperty -Path $probeKey -Name "TestValue").TestValue
+            Write-Host "Read back value: $readVal"
+            Remove-Item -Path $probeKey -Recurse -Force
+            Write-Host "Deleted key $probeKey successfully"
+          } catch {
+            Write-Host "Registry write probe Exception: $_"
           }
 
       - name: Upload test logs on failure
