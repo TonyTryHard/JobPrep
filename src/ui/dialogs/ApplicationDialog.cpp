@@ -460,7 +460,7 @@ void ApplicationDialog::reloadReadOnlyTabs() {
         for (int row = 0; row < history.size(); ++row) {
             const auto& change = history.at(row);
             m_timelineTable->setItem(row, 0, new QTableWidgetItem(
-                JobPrep::Data::DbFormat::toText(change.changedAt.date())));
+                JobPrep::Data::DbFormat::formatStoredTimestamp(change.changedAt)));
             m_timelineTable->setItem(row, 1, new QTableWidgetItem(
                 change.fromStatus.has_value() ? Theme::StatusStyle::label(*change.fromStatus)
                                               : tr("—")));

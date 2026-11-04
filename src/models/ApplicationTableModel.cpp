@@ -116,7 +116,7 @@ QVariant ApplicationTableModel::data(const QModelIndex& index, int role) const {
                 return QString();
             }
             case SourceColumn: return app.source;
-            case UpdatedColumn: return JobPrep::Data::DbFormat::toText(app.updatedAt.date());
+            case UpdatedColumn: return JobPrep::Data::DbFormat::formatStoredTimestamp(app.updatedAt);
             default: return QVariant();
         }
     } else if (role == StatusRole) {

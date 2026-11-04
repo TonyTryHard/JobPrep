@@ -1,8 +1,12 @@
 #include "data/DbFormat.h"
 
+#include <QTimeZone>
+
 using namespace Qt::StringLiterals;
 
 namespace JobPrep::Data::DbFormat {
+
+const QDateTime kLegacyTimestampCutoffUtc{QDate(2013, 1, 1), QTime(0, 0, 0), QTimeZone::UTC};
 
 QDateTime now() {
     QDateTime current = QDateTime::currentDateTime();
@@ -36,6 +40,37 @@ std::optional<QDate> dateFromValue(const QVariant& value) {
 
 std::optional<QDateTime> dateTimeFromValue(const QVariant& value) {
     return dateTimeFromText(value.toString());
+}
+
+bool isPlausibleTimestamp(const QDateTime& dateTime) {
+    if (!dateTime.isValid()) {
+        return false;
+    }
+    if (dateTime.timeSpec() == Qt::LocalTime) {
+        return dateTime.date() >= kLegacyTimestampCutoffUtc.date();
+    }
+    return dateTime.toUTC() >= kLegacyTimestampCutoffUtc;
+}
+
+bool isPlausibleTimestamp(const QDate& date) {
+    if (!date.isValid()) {
+        return false;
+    }
+    return date >= kLegacyTimestampCutoffUtc.date();
+}
+
+QString formatStoredTimestamp(const QDateTime& dateTime) {
+    if (!isPlausibleTimestamp(dateTime)) {
+        return u"—"_s;
+    }
+    return toText(dateTime.date());
+}
+
+QString formatStoredTimestamp(const QDate& date) {
+    if (!isPlausibleTimestamp(date)) {
+        return u"—"_s;
+    }
+    return toText(date);
 }
 
 }  // namespace JobPrep::Data::DbFormat
