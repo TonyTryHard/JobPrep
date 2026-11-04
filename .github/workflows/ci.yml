@@ -201,7 +201,7 @@ jobs:
             Write-Host ('{0} (0x{0:X8})' -f $code)
             if (Test-Path $outFile) {
               $rawLines = @(Get-Content $outFile)
-              $lines = @($rawLines | Where-Object { $_ -notmatch '^\s*(QINFO|INFO)\s*:' })
+              $lines = @($rawLines | Where-Object { $_ -match 'CI-DIAG' -or $_ -notmatch '^\s*(QINFO|INFO)\s*:' })
               if ($lines.Count -le 300) {
                 $lines | ForEach-Object { Write-Host $_ }
               } else {
