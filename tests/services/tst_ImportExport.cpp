@@ -93,6 +93,7 @@ private slots:
     void testRestorePerformanceSanity();
     void testRestoreCoalescedRefresh();
     void testRestoreStudyPanelWithVanishedTopic();
+    void testBackupAndRestorePreservesLegacy1970Timestamp();
 
 private:
     /// Test helper to unfold RFC 5545 lines and unescape characters for round-trip verification.
@@ -1327,6 +1328,67 @@ void tst_ImportExport::testRestoreStudyPanelWithVanishedTopic() {
     // Loading vanished topic resets detail panel safely
     QVERIFY(!panel.loadFrom(10));
     QCOMPARE(panel.currentTopicId(), std::nullopt);
+}
+
+void tst_ImportExport::testBackupAndRestorePreservesLegacy1970Timestamp() {
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString dbPath = tempDir.filePath(u"legacy.sqlite"_s);
+    const QString backupPath = tempDir.filePath(u"backup_legacy.json"_s);
+    const QString safetyDir = tempDir.filePath(u"safety"_s);
+    QDir().mkpath(safetyDir);
+
+    // 1. Populate database with a legacy application row having 1970 timestamps
+    {
+        TestDatabase testDb(u"tst_legacy_initial"_s);
+        QVERIFY(testDb.open(dbPath));
+
+        QSqlQuery q(testDb.db().connection());
+        q.exec(u"PRAGMA defer_foreign_keys=ON;"_s);
+        QVERIFY(q.exec(u"INSERT INTO applications (id, company, position, status, created_at, updated_at) "
+                       u"VALUES (100, 'Legacy 1970 Co', 'Developer', 'applied', '1970-01-01T00:00:00', '1970-01-01T00:00:00');"_s));
+        QVERIFY(q.exec(u"INSERT INTO status_history (id, application_id, to_status, changed_at) "
+                       u"VALUES (200, 100, 'applied', '1970-01-01T00:00:00');"_s));
+    }
+
+    // 2. Export backup to JSON
+    {
+        TestDatabase testDb(u"tst_legacy_export"_s);
+        QVERIFY(testDb.open(dbPath));
+        ExportService exporter;
+        const auto res = exporter.exportBackupJson(testDb.db(), backupPath);
+        QVERIFY(res.success);
+    }
+
+    // Verify the JSON file contains the raw 1970 timestamp unchanged
+    {
+        QFile f(backupPath);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QString jsonStr = QString::fromUtf8(f.readAll());
+        QVERIFY(jsonStr.contains(u"\"created_at\": \"1970-01-01T00:00:00\""_s));
+        QVERIFY(jsonStr.contains(u"\"updated_at\": \"1970-01-01T00:00:00\""_s));
+        QVERIFY(jsonStr.contains(u"\"changed_at\": \"1970-01-01T00:00:00\""_s));
+    }
+
+    // 3. Restore into a fresh/wiped database
+    {
+        TestDatabase testDb(u"tst_legacy_restore"_s);
+        QVERIFY(testDb.open(dbPath));
+        wipeDatabase(testDb.db());
+        const auto res = RestoreService::restoreFromFile(testDb.db(), backupPath, safetyDir);
+        QVERIFY(res.success);
+
+        // Verify restored SQLite values match exactly 1970-01-01T00:00:00
+        QSqlQuery q(testDb.db().connection());
+        QVERIFY(q.exec(u"SELECT created_at, updated_at FROM applications WHERE id = 100"_s));
+        QVERIFY(q.next());
+        QCOMPARE(q.value(0).toString(), u"1970-01-01T00:00:00"_s);
+        QCOMPARE(q.value(1).toString(), u"1970-01-01T00:00:00"_s);
+
+        QVERIFY(q.exec(u"SELECT changed_at FROM status_history WHERE id = 200"_s));
+        QVERIFY(q.next());
+        QCOMPARE(q.value(0).toString(), u"1970-01-01T00:00:00"_s);
+    }
 }
 
 QTEST_MAIN(tst_ImportExport)

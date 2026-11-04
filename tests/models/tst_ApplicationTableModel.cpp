@@ -1,5 +1,7 @@
 #include <QDateTime>
 #include <QSignalSpy>
+#include <QSortFilterProxyModel>
+#include <QSqlQuery>
 #include <QTest>
 #include "TestDatabase.h"
 #include "data/ApplicationRepository.h"
@@ -43,6 +45,10 @@ private slots:
     void testPastAndSettledInterviewsAreIgnored();
     void testFallsBackToNextActionTextAndDate();
     void testReloadOnRepositoryChanged();
+    void testLegacyTimestampDisplayRoleShowsEmDash();
+    void testModernTimestampDisplayRoleShowsFormattedDate();
+    void testLegacyTimestampCutoffBoundary();
+    void testSortingPreservesChronologicalOrderWithLegacyAndModernRows();
 };
 
 void tst_ApplicationTableModel::testColumnsAndHeaders() {
@@ -208,6 +214,132 @@ void tst_ApplicationTableModel::testReloadOnRepositoryChanged() {
                                    JobPrep::Domain::InterviewOutcome::Pending);
     QVERIFY(interviews.insert(interview));
     QCOMPARE(model.rowCount(), 2);
+}
+
+void tst_ApplicationTableModel::testLegacyTimestampDisplayRoleShowsEmDash() {
+    JobPrep::Tests::TestDatabase db(u"atm_legacy"_s);
+    db.open(u":memory:"_s);
+    JobPrep::Data::ApplicationRepository apps(db.db());
+    JobPrep::Data::InterviewRepository interviews(db.db());
+    JobPrep::Models::ApplicationTableModel model(apps, interviews);
+
+    auto app = makeApplication(u"Legacy Corp"_s);
+    QVERIFY(apps.insert(app));
+
+    // Simulate legacy 1970 timestamp stored prior to M6 fix
+    QSqlQuery q(db.db().connection());
+    QVERIFY(q.exec(u"UPDATE applications SET updated_at = '1970-01-01T00:00:00' WHERE id = %1"_s.arg(app.id)));
+    model.reload();
+
+    const QModelIndex idx = model.index(0, JobPrep::Models::ApplicationTableModel::UpdatedColumn);
+    QVERIFY(idx.isValid());
+    // DisplayRole must return "—" (em dash)
+    QCOMPARE(idx.data(Qt::DisplayRole).toString(), u"—"_s);
+    // SortRole must retain the real underlying QDateTime
+    const auto sortVal = idx.data(JobPrep::Models::ApplicationTableModel::SortRole).toDateTime();
+    QCOMPARE(sortVal.date(), QDate(1970, 1, 1));
+}
+
+void tst_ApplicationTableModel::testModernTimestampDisplayRoleShowsFormattedDate() {
+    JobPrep::Tests::TestDatabase db(u"atm_modern"_s);
+    db.open(u":memory:"_s);
+    JobPrep::Data::ApplicationRepository apps(db.db());
+    JobPrep::Data::InterviewRepository interviews(db.db());
+    JobPrep::Models::ApplicationTableModel model(apps, interviews);
+
+    auto app = makeApplication(u"Modern Corp"_s);
+    QVERIFY(apps.insert(app));
+
+    QSqlQuery q(db.db().connection());
+    QVERIFY(q.exec(u"UPDATE applications SET updated_at = '2026-03-10T14:30:00' WHERE id = %1"_s.arg(app.id)));
+    model.reload();
+
+    const QModelIndex idx = model.index(0, JobPrep::Models::ApplicationTableModel::UpdatedColumn);
+    QVERIFY(idx.isValid());
+    QCOMPARE(idx.data(Qt::DisplayRole).toString(), u"2026-03-10"_s);
+}
+
+void tst_ApplicationTableModel::testLegacyTimestampCutoffBoundary() {
+    // 1. Direct DbFormat functions with UTC timestamps
+    const QDateTime dtBefore = QDateTime::fromString(u"2012-12-31T23:59:59Z"_s, Qt::ISODate);
+    QVERIFY(dtBefore.isValid());
+    QVERIFY(!JobPrep::Data::DbFormat::isPlausibleTimestamp(dtBefore));
+    QCOMPARE(JobPrep::Data::DbFormat::formatStoredTimestamp(dtBefore), u"—"_s);
+
+    const QDateTime dtCutoff = QDateTime::fromString(u"2013-01-01T00:00:00Z"_s, Qt::ISODate);
+    QVERIFY(dtCutoff.isValid());
+    QVERIFY(JobPrep::Data::DbFormat::isPlausibleTimestamp(dtCutoff));
+    QCOMPARE(JobPrep::Data::DbFormat::formatStoredTimestamp(dtCutoff), u"2013-01-01"_s);
+
+    // 2. In model via SQLite storage
+    JobPrep::Tests::TestDatabase db(u"atm_boundary"_s);
+    db.open(u":memory:"_s);
+    JobPrep::Data::ApplicationRepository apps(db.db());
+    JobPrep::Data::InterviewRepository interviews(db.db());
+    JobPrep::Models::ApplicationTableModel model(apps, interviews);
+
+    auto appBefore = makeApplication(u"BeforeCutoff"_s);
+    QVERIFY(apps.insert(appBefore));
+    auto appAtCutoff = makeApplication(u"AtCutoff"_s);
+    QVERIFY(apps.insert(appAtCutoff));
+
+    QSqlQuery q(db.db().connection());
+    QVERIFY(q.exec(u"UPDATE applications SET updated_at = '2012-12-31T23:59:59' WHERE id = %1"_s.arg(appBefore.id)));
+    QVERIFY(q.exec(u"UPDATE applications SET updated_at = '2013-01-01T00:00:00' WHERE id = %1"_s.arg(appAtCutoff.id)));
+    model.reload();
+
+    for (int r = 0; r < model.rowCount(); ++r) {
+        const QString company = model.index(r, JobPrep::Models::ApplicationTableModel::CompanyColumn).data().toString();
+        const QString updatedText = model.index(r, JobPrep::Models::ApplicationTableModel::UpdatedColumn).data(Qt::DisplayRole).toString();
+        if (company == u"BeforeCutoff"_s) {
+            QCOMPARE(updatedText, u"—"_s);
+        } else if (company == u"AtCutoff"_s) {
+            QCOMPARE(updatedText, u"2013-01-01"_s);
+        }
+    }
+}
+
+void tst_ApplicationTableModel::testSortingPreservesChronologicalOrderWithLegacyAndModernRows() {
+    JobPrep::Tests::TestDatabase db(u"atm_sorting"_s);
+    db.open(u":memory:"_s);
+    JobPrep::Data::ApplicationRepository apps(db.db());
+    JobPrep::Data::InterviewRepository interviews(db.db());
+    JobPrep::Models::ApplicationTableModel model(apps, interviews);
+
+    auto app1970 = makeApplication(u"App1970"_s);
+    QVERIFY(apps.insert(app1970));
+    auto app2015 = makeApplication(u"App2015"_s);
+    QVERIFY(apps.insert(app2015));
+    auto app2026 = makeApplication(u"App2026"_s);
+    QVERIFY(apps.insert(app2026));
+
+    QSqlQuery q(db.db().connection());
+    QVERIFY(q.exec(u"UPDATE applications SET updated_at = '1970-01-01T00:00:00' WHERE id = %1"_s.arg(app1970.id)));
+    QVERIFY(q.exec(u"UPDATE applications SET updated_at = '2015-06-15T10:00:00' WHERE id = %1"_s.arg(app2015.id)));
+    QVERIFY(q.exec(u"UPDATE applications SET updated_at = '2026-11-04T12:00:00' WHERE id = %1"_s.arg(app2026.id)));
+    model.reload();
+
+    QSortFilterProxyModel proxy;
+    proxy.setSourceModel(&model);
+    proxy.setSortRole(JobPrep::Models::ApplicationTableModel::SortRole);
+
+    // Ascending sort: 1970 -> 2015 -> 2026
+    proxy.sort(JobPrep::Models::ApplicationTableModel::UpdatedColumn, Qt::AscendingOrder);
+    QCOMPARE(proxy.index(0, JobPrep::Models::ApplicationTableModel::CompanyColumn).data().toString(), u"App1970"_s);
+    QCOMPARE(proxy.index(0, JobPrep::Models::ApplicationTableModel::UpdatedColumn).data(Qt::DisplayRole).toString(), u"—"_s);
+    QCOMPARE(proxy.index(1, JobPrep::Models::ApplicationTableModel::CompanyColumn).data().toString(), u"App2015"_s);
+    QCOMPARE(proxy.index(1, JobPrep::Models::ApplicationTableModel::UpdatedColumn).data(Qt::DisplayRole).toString(), u"2015-06-15"_s);
+    QCOMPARE(proxy.index(2, JobPrep::Models::ApplicationTableModel::CompanyColumn).data().toString(), u"App2026"_s);
+    QCOMPARE(proxy.index(2, JobPrep::Models::ApplicationTableModel::UpdatedColumn).data(Qt::DisplayRole).toString(), u"2026-11-04"_s);
+
+    // Descending sort: 2026 -> 2015 -> 1970
+    proxy.sort(JobPrep::Models::ApplicationTableModel::UpdatedColumn, Qt::DescendingOrder);
+    QCOMPARE(proxy.index(0, JobPrep::Models::ApplicationTableModel::CompanyColumn).data().toString(), u"App2026"_s);
+    QCOMPARE(proxy.index(0, JobPrep::Models::ApplicationTableModel::UpdatedColumn).data(Qt::DisplayRole).toString(), u"2026-11-04"_s);
+    QCOMPARE(proxy.index(1, JobPrep::Models::ApplicationTableModel::CompanyColumn).data().toString(), u"App2015"_s);
+    QCOMPARE(proxy.index(1, JobPrep::Models::ApplicationTableModel::UpdatedColumn).data(Qt::DisplayRole).toString(), u"2015-06-15"_s);
+    QCOMPARE(proxy.index(2, JobPrep::Models::ApplicationTableModel::CompanyColumn).data().toString(), u"App1970"_s);
+    QCOMPARE(proxy.index(2, JobPrep::Models::ApplicationTableModel::UpdatedColumn).data(Qt::DisplayRole).toString(), u"—"_s);
 }
 
 QTEST_GUILESS_MAIN(tst_ApplicationTableModel)
