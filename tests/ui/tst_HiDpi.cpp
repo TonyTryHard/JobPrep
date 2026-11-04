@@ -62,6 +62,7 @@ private:
 };
 
 void tst_HiDpi::initTestCase() {
+    JobPrep::UiTest::applyTestFontFamily();
     JobPrep::UiTest::installWarningFilter();
     JobPrep::UiTest::isolateSettings(m_settingsDir);
     m_fix = std::make_unique<JobPrep::UiTest::WindowFixture>();

@@ -34,6 +34,10 @@ bool isPlatformPluginNoise(const QString& msg);
 /// so tests never collide on disk when executed in parallel (ctest -j).
 void isolateSettings(QTemporaryDir& tempDir);
 
+/// Overrides the application font if the JOBPREP_TEST_FONT_FAMILY environment variable
+/// is set (used to reproduce CI font environments locally).
+void applyTestFontFamily();
+
 /// Runs `action` against the next modal widget once `exec()`'s event loop spins.
 template <typename Action>
 void withNextModal(Action action) {

@@ -72,6 +72,14 @@ void isolateSettings(QTemporaryDir& tempDir) {
     QCoreApplication::setApplicationName(uniqueAppName);
 }
 
+void applyTestFontFamily() {
+    const QByteArray family = qgetenv("JOBPREP_TEST_FONT_FAMILY");
+    if (!family.isEmpty()) {
+        QFont font(QString::fromUtf8(family), 10);
+        QApplication::setFont(font);
+    }
+}
+
 QPushButton* buttonNamed(QWidget* root, const QString& objectName) {
     return childNamed<QPushButton>(root, objectName);
 }

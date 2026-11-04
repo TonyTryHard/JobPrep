@@ -140,6 +140,7 @@ private:
 };
 
 void tst_UiSmoke::initTestCase() {
+    JobPrep::UiTest::applyTestFontFamily();
     JobPrep::UiTest::installWarningFilter();
     JobPrep::UiTest::isolateSettings(m_tempDir);
 
@@ -349,12 +350,18 @@ void tst_UiSmoke::testWindowMinimumSizeExceedsLayoutMinimum() {
 
     const auto originalTheme = m_ctx->themeManager().currentMode();
 
+    // Qt's QLayout::SetDefaultConstraint (default) uses the layout minimum for axes
+    // that have no explicit minimum set on the widget. We set only minimumHeight(540),
+    // so Qt adopts the layout's own minimum width automatically. This test verifies
+    // that the effective minimumSize is >= layout minimum on both axes, both themes,
+    // and that minimumHeight stays at or below 648 (720p available area).
     for (const auto theme : {JobPrep::Ui::Theme::ThemeMode::Light, JobPrep::Ui::Theme::ThemeMode::Dark}) {
         m_ctx->themeManager().setThemeMode(theme);
         QCoreApplication::processEvents();
 
-        QCOMPARE(m_window->minimumSize(), QSize(1000, 540));
         QVERIFY(m_window->layout() != nullptr);
+        // No hard-coded minimum width: only minimumHeight is set explicitly
+        QCOMPARE(m_window->minimumHeight(), 540);
 
         for (int i = 0; i < m_window->pageStack()->count(); ++i) {
             m_window->sidebar()->setCurrentPage(i);
@@ -362,18 +369,25 @@ void tst_UiSmoke::testWindowMinimumSizeExceedsLayoutMinimum() {
             QCoreApplication::processEvents();
 
             const QSize layoutMin = m_window->layout()->minimumSize();
+            const QString themeName = (theme == JobPrep::Ui::Theme::ThemeMode::Light
+                                           ? u"Light"_s : u"Dark"_s);
+
             QVERIFY2(m_window->minimumWidth() >= layoutMin.width(),
                      qPrintable(QString(u"Page %1 theme %2: window minimumWidth (%3) < layout minimumWidth (%4)"_s)
-                                    .arg(i)
-                                    .arg(theme == JobPrep::Ui::Theme::ThemeMode::Light ? u"Light"_s : u"Dark"_s)
+                                    .arg(i).arg(themeName)
                                     .arg(m_window->minimumWidth())
                                     .arg(layoutMin.width())));
             QVERIFY2(m_window->minimumHeight() >= layoutMin.height(),
                      qPrintable(QString(u"Page %1 theme %2: window minimumHeight (%3) < layout minimumHeight (%4)"_s)
-                                    .arg(i)
-                                    .arg(theme == JobPrep::Ui::Theme::ThemeMode::Light ? u"Light"_s : u"Dark"_s)
+                                    .arg(i).arg(themeName)
                                     .arg(m_window->minimumHeight())
                                     .arg(layoutMin.height())));
+
+            // 720p limit: available height is typically 648 px; minimumHeight must fit
+            QVERIFY2(m_window->minimumHeight() <= 648,
+                     qPrintable(QString(u"Page %1 theme %2: minimumHeight (%3) > 648 (720p limit)"_s)
+                                    .arg(i).arg(themeName)
+                                    .arg(m_window->minimumHeight())));
         }
     }
 
