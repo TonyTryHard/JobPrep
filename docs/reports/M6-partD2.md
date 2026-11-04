@@ -1,3 +1,5 @@
+> Superseded in part by M6-partD2-fixups.md
+
 # Milestone 6 Part D2 Final Report: Polish, Packaging, HiDPI & Verification
 
 **Date:** November 3, 2026  
