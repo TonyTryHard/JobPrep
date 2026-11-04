@@ -95,7 +95,7 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     m_messageLabel = new QLabel(card);
     m_messageLabel->setObjectName(u"StudyDetailMessageLabel"_s);
     m_messageLabel->setWordWrap(true);
-    m_messageLabel->setMinimumHeight(32);
+    m_messageLabel->setMinimumHeight(fontMetrics().height() * 2);
     m_messageLabel->hide();
     cardLayout->addWidget(m_messageLabel);
 

@@ -139,7 +139,7 @@ void HomePage::setupUi() {
         tr("Log a study session or follow up on an application."),
         QString(), todayContainer);
     m_todayEmptyState->setObjectName(u"TodayEmptyState"_s);
-    m_todayEmptyState->setMinimumHeight(190);
+    m_todayEmptyState->setMinimumHeight(QFontMetrics(font()).height() * 11);
 
     connect(m_todayView, &QListView::activated, this, &HomePage::onTodayItemActivated);
     connect(m_todayView, &QListView::doubleClicked, this, &HomePage::onTodayItemActivated);
@@ -148,7 +148,7 @@ void HomePage::setupUi() {
     todayLayout->addWidget(m_todayEmptyState);
 
     auto* todayCard = createCard(tr("Today"), todayContainer);
-    todayCard->setMinimumHeight(250);
+    todayCard->setMinimumHeight(QFontMetrics(font()).height() * 15);
     leftCol->addWidget(todayCard, 1);
 
     // Upcoming container
@@ -173,7 +173,7 @@ void HomePage::setupUi() {
         tr("Schedule your next interview stage or screening."),
         tr("+ Schedule interview"), upcomingContainer);
     m_upcomingEmptyState->setObjectName(u"UpcomingEmptyState"_s);
-    m_upcomingEmptyState->setMinimumHeight(210);
+    m_upcomingEmptyState->setMinimumHeight(QFontMetrics(font()).height() * 11);
 
     connect(m_upcomingView, &QListView::activated, this, &HomePage::onUpcomingItemActivated);
     connect(m_upcomingView, &QListView::doubleClicked, this, &HomePage::onUpcomingItemActivated);
@@ -186,7 +186,7 @@ void HomePage::setupUi() {
     QWidget::setTabOrder(m_todayView, m_upcomingView);
 
     auto* upcomingCard = createCard(tr("Upcoming interviews"), upcomingContainer);
-    upcomingCard->setMinimumHeight(270);
+    upcomingCard->setMinimumHeight(QFontMetrics(font()).height() * 14);
     leftCol->addWidget(upcomingCard, 1);
 
     columnsLayout->addLayout(leftCol, 1);

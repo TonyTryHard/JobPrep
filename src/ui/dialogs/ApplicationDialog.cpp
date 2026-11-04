@@ -66,7 +66,9 @@ ApplicationDialog::ApplicationDialog(JobPrep::Data::ApplicationRepository& apps,
     setObjectName(u"ApplicationDialog"_s);
     setWindowTitle(mode == Create ? tr("Add Application") : tr("Edit Application"));
     setModal(true);
-    setMinimumSize(500, 420);
+    const int minW = fontMetrics().averageCharWidth() * 55;
+    const int minH = fontMetrics().height() * 24;
+    setMinimumSize(minW, minH);
     setupUi();
 
     m_original = m_app;

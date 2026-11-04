@@ -241,7 +241,9 @@ void CalendarPage::setupSplitter(QVBoxLayout* layout) {
 }
 
 void CalendarPage::setupAgendaPanel(QWidget* panel) {
-    panel->setMinimumSize(280, 200);
+    const int panelMinWidth = fontMetrics().averageCharWidth() * 32;
+    const int panelMinHeight = fontMetrics().height() * 10;
+    panel->setMinimumSize(panelMinWidth, panelMinHeight);
     auto* panelLayout = new QVBoxLayout(panel);
     panelLayout->setContentsMargins(16, 16, 16, 16);
     panelLayout->setSpacing(10);
