@@ -104,6 +104,7 @@ Goal: small but pretty — calm, modern, consistent.
 - Never commit build output, `*.user` files or IDE folders; keep `.gitignore` current.
 - No blocking the GUI thread with `sleep` or `processEvents()` loops.
 - No deprecated Qt5-era APIs.
+- Never run the app binary in verification without an isolated HOME/XDG (Linux: `HOME=/tmp/... XDG_DATA_HOME=/tmp/... XDG_CONFIG_HOME=/tmp/...`, Windows: isolated `%LOCALAPPDATA%`). Verification must never touch the user's real database or settings.
 
 ## 12. Cross-platform rules (Windows + Linux)
 - OS-specific code (`Q_OS_WIN`, `Q_OS_LINUX`, native headers) is allowed only in `src/platform/` behind a small interface. Everything else uses Qt abstractions.

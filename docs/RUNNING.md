@@ -19,13 +19,13 @@ To install the exact Qt version used by CI (Qt 6.8.2):
 
 ```bash
 # Install aqtinstall via pip
-python3 -m pip install aqtinstall
+python3 -m pip install aqtinstall==3.2.0
 
 # Linux x86_64:
-python3 -m aqt install-qt linux desktop 6.8.2 gcc_64 -m qtsvg
+python3 -m aqt install-qt linux desktop 6.8.2 linux_gcc_64
 
 # Windows x64:
-python -m aqt install-qt windows desktop 6.8.2 win64_msvc2022_64 -m qtsvg
+python -m aqt install-qt windows desktop 6.8.2 win64_msvc2022_64
 ```
 
 Set `QT_PREFIX_PATH` in your environment to point to the installed kit (e.g., `~/Qt/6.8.2/gcc_64` or `C:\Qt\6.8.2\msvc2022_64`).
@@ -92,17 +92,29 @@ ctest --preset dev-windows --output-on-failure
 
 ## 4. Where Data Lives
 
-JobPrep stores all user data in standard OS application data directories (`QStandardPaths::AppDataLocation`):
+JobPrep stores all user data in standard OS application data directories (`QStandardPaths::AppDataLocation` with organization `JobPrep` and application `JobPrep`):
 
 - **SQLite Database**:
-  - Linux: `${XDG_DATA_HOME:-~/.local/share}/JobPrep/jobprep.sqlite`
-  - Windows: `%LOCALAPPDATA%\JobPrep\jobprep.sqlite`
+  - Linux: `${XDG_DATA_HOME:-~/.local/share}/JobPrep/JobPrep/jobprep.sqlite`
+  - Windows: `%LOCALAPPDATA%\JobPrep\JobPrep\jobprep.sqlite`
 - **Application Settings**:
   - Linux: `${XDG_CONFIG_HOME:-~/.config}/JobPrep/JobPrep.conf`
   - Windows: Registry `HKEY_CURRENT_USER\Software\JobPrep\JobPrep`
 - **Automatic Safety Backups**:
-  - Linux: `${XDG_DATA_HOME:-~/.local/share}/JobPrep/backups/pre-restore-<timestamp>.json`
-  - Windows: `%LOCALAPPDATA%\JobPrep\backups\pre-restore-<timestamp>.json`
+  - Linux: `${XDG_DATA_HOME:-~/.local/share}/JobPrep/JobPrep/backups/pre-restore-<timestamp>.json`
+  - Windows: `%LOCALAPPDATA%\JobPrep\JobPrep\backups\pre-restore-<timestamp>.json`
+
+### Trying It Without Touching Your Data
+
+To test or demo the application in complete isolation without reading or writing to your real database and configuration:
+
+```bash
+# Linux (isolated temporary HOME and XDG folders):
+HOME=/tmp/jp-isolated XDG_DATA_HOME=/tmp/jp-isolated/.local/share XDG_CONFIG_HOME=/tmp/jp-isolated/.config ./build/dev-linux/jobprep
+
+# Windows (PowerShell with isolated local app data folder):
+$env:LOCALAPPDATA = "$env:TEMP\jp-isolated"; .\build\dev-windows\jobprep.exe
+```
 
 ---
 
@@ -145,7 +157,15 @@ This writes only to `${XDG_DATA_HOME:-$HOME/.local/share}/applications/jobprep.d
 
 ## 8. Keyboard Shortcuts
 
-JobPrep includes comprehensive keyboard navigation across all pages and dialogs. See [SPEC.md §3.7](file:///home/tony/projects/JobPrep/docs/SPEC.md#37-global) for the complete list of shortcuts (Ctrl+1..4, Ctrl+N, Ctrl+F, Ctrl+S, Esc).
+JobPrep includes comprehensive keyboard navigation across all pages and dialogs. Key shortcuts include:
+- `Ctrl+1` .. `Ctrl+4`: Switch to Home (1), Study (2), Jobs (3), Calendar (4)
+- `Ctrl+,`: Open Preferences / Settings
+- `Ctrl+N`: New item for current page (+ Application on Jobs, + Interview on Calendar, + Topic on Study)
+- `Ctrl+F`: Focus search field
+- `Ctrl+S`: Save edits in detail panel or modal dialogs
+- `Esc`: Close open modal dialog, dismiss details panel, or clear active search filter
+
+See [SPEC.md §3.7](file:///home/tony/projects/JobPrep/docs/SPEC.md#37-global) for full shortcut specifications and focus handling rules.
 
 ---
 
