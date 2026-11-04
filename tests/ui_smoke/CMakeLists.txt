@@ -19,6 +19,7 @@ set_tests_properties(ui_smoke PROPERTIES
 add_executable(tst_MonthView tst_MonthView.cpp)
 target_link_libraries(tst_MonthView PRIVATE
     jobprep_core
+    jobprep_test_helpers
     Qt6::Test
 )
 jobprep_apply_warnings(tst_MonthView)

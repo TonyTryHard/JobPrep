@@ -18,7 +18,6 @@
 #include <QSpinBox>
 #include <QStyleHints>
 #include <QTemporaryDir>
-#include <QTemporaryFile>
 #include <QTest>
 #include <QVBoxLayout>
 #include "app/AppContext.h"
@@ -339,18 +338,23 @@ void tst_PageSettings::testWeeklyGoalDashboardInstantUpdate() {
 }
 
 void tst_PageSettings::testWeeklyGoalPersistence() {
-    QTemporaryFile tempFile;
-    QVERIFY(tempFile.open());
-    const QString filePath = tempFile.fileName();
-    tempFile.close();
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString filePath = tempDir.filePath(u"settings.ini"_s);
 
     {
         auto qsettings = std::make_unique<QSettings>(filePath, QSettings::IniFormat);
+        QSettings* qs = qsettings.get(); // CI-DIAG
         SettingsService svc(std::move(qsettings));
         QCOMPARE(svc.weeklyGoalMinutes(), 360);  // default
 
         svc.setWeeklyGoalMinutes(540);
         QCOMPARE(svc.weeklyGoalMinutes(), 540);
+
+        qs->sync(); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG testWeeklyGoalPersistence first scope status:" // CI-DIAG
+                          << static_cast<int>(qs->status()) // CI-DIAG
+                          << "size:" << QFileInfo(filePath).size(); // CI-DIAG
     }
 
     // CI-DIAG: File inspection after first scope ends

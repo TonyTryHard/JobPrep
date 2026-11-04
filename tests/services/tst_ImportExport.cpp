@@ -11,7 +11,6 @@
 #include <QSqlRecord>
 #include <QStandardPaths>
 #include <QTemporaryDir>
-#include <QTemporaryFile>
 #include <QTest>
 #include <QTimeZone>
 #include <QTimer>
@@ -311,11 +310,20 @@ void tst_ImportExport::testIcsExportFormatDetails() {
     const QString vevent103 = content.mid(idx103, end103 - idx103);
     QVERIFY(!vevent103.contains(u"LOCATION:"_s));
 
-    // Write to /tmp/throwaway_sample.ics
-    QFile f(u"/tmp/throwaway_sample.ics"_s);
+    // Write to a temporary file, read back, and compare bytes
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString sampleIcsPath = tempDir.filePath(u"sample.ics"_s);
+    QFile f(sampleIcsPath);
     QVERIFY(f.open(QIODevice::WriteOnly));
     f.write(ics);
     f.close();
+
+    QFile readBack(sampleIcsPath);
+    QVERIFY(readBack.open(QIODevice::ReadOnly));
+    const QByteArray readBytes = readBack.readAll();
+    readBack.close();
+    QCOMPARE(readBytes, ics);
 }
 
 void tst_ImportExport::testIcsEmptyListProducesValidCalendar() {
@@ -945,9 +953,9 @@ void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHom
     QCoreApplication::setApplicationName(u"JobPrep"_s);
     QStandardPaths::setTestModeEnabled(false);
 
-    const QString customXdg = u"/tmp/jp-c07"_s;
-    QDir(customXdg).removeRecursively();
-    QDir().mkpath(customXdg);
+    QTemporaryDir customXdgDir;
+    QVERIFY(customXdgDir.isValid());
+    const QString customXdg = customXdgDir.path();
     qputenv("XDG_DATA_HOME", customXdg.toLocal8Bit());
 
     const QString prodSafetyDir =
@@ -968,7 +976,6 @@ void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHom
     }
 
     qunsetenv("XDG_DATA_HOME");
-    QDir(customXdg).removeRecursively();
     QStandardPaths::setTestModeEnabled(true);
     QCoreApplication::setOrganizationName(origOrg);
     QCoreApplication::setApplicationName(origApp);

@@ -3,6 +3,7 @@ add_library(jobprep_test_helpers STATIC
     MessageCapture.h
     TestDatabase.cpp
     TestDatabase.h
+    TestSettingsScope.h
 )
 
 target_include_directories(jobprep_test_helpers PUBLIC

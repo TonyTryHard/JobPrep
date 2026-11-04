@@ -1,12 +1,12 @@
-#include <QTemporaryFile>
-#include <QSignalSpy>
-#include <QTest>
+#include <QCoreApplication>
+#include <QDebug>
+#include <QFile>
+#include <QFileInfo>
 #include <QSettings>
-#include <QCoreApplication> // CI-DIAG
-#include <QDebug> // CI-DIAG
-#include <QFile> // CI-DIAG
-#include <QFileInfo> // CI-DIAG
-#include <QTextStream> // CI-DIAG
+#include <QSignalSpy>
+#include <QTemporaryDir>
+#include <QTest>
+#include <QTextStream>
 #include "services/SettingsService.h"
 
 using namespace Qt::StringLiterals;
@@ -16,6 +16,7 @@ class tst_SettingsService : public QObject {
     Q_OBJECT
 
 private slots:
+    void initTestCase();
     void defaultLeadMinutesReturns1440And60();
     void sanitizingRemovesNonPositiveDuplicatesAndSortsDescending();
     void emptyOrInvalidStoredValueFallsBackToDefault();
@@ -26,11 +27,15 @@ private slots:
     void testWeeklyGoalSurvivesRestart();
 };
 
+void tst_SettingsService::initTestCase() {
+    QCoreApplication::setOrganizationName(u"JobPrepTest"_s);
+    QCoreApplication::setApplicationName(u"JobPrepTest_SettingsService"_s);
+}
+
 void tst_SettingsService::defaultLeadMinutesReturns1440And60() {
-    QTemporaryFile temp;
-    QVERIFY(temp.open());
-    const QString path = temp.fileName();
-    temp.close();
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString path = tempDir.filePath(u"settings.ini"_s);
 
     auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
     SettingsService svc(std::move(qsettings));
@@ -40,10 +45,9 @@ void tst_SettingsService::defaultLeadMinutesReturns1440And60() {
 }
 
 void tst_SettingsService::sanitizingRemovesNonPositiveDuplicatesAndSortsDescending() {
-    QTemporaryFile temp;
-    QVERIFY(temp.open());
-    const QString path = temp.fileName();
-    temp.close();
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString path = tempDir.filePath(u"settings.ini"_s);
 
     auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
     SettingsService svc(std::move(qsettings));
@@ -55,10 +59,9 @@ void tst_SettingsService::sanitizingRemovesNonPositiveDuplicatesAndSortsDescendi
 }
 
 void tst_SettingsService::emptyOrInvalidStoredValueFallsBackToDefault() {
-    QTemporaryFile temp;
-    QVERIFY(temp.open());
-    const QString path = temp.fileName();
-    temp.close();
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString path = tempDir.filePath(u"settings.ini"_s);
 
     auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
     SettingsService svc(std::move(qsettings));
@@ -69,10 +72,9 @@ void tst_SettingsService::emptyOrInvalidStoredValueFallsBackToDefault() {
 }
 
 void tst_SettingsService::signalEmittedOncePerRealChange() {
-    QTemporaryFile temp;
-    QVERIFY(temp.open());
-    const QString path = temp.fileName();
-    temp.close();
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString path = tempDir.filePath(u"settings.ini"_s);
 
     auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
     SettingsService svc(std::move(qsettings));
@@ -96,10 +98,9 @@ void tst_SettingsService::signalEmittedOncePerRealChange() {
 }
 
 void tst_SettingsService::testLeadMinutesSanitizing() {
-    QTemporaryFile temp;
-    QVERIFY(temp.open());
-    const QString path = temp.fileName();
-    temp.close();
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString path = tempDir.filePath(u"settings.ini"_s);
 
     auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
     SettingsService svc(std::move(qsettings));
@@ -114,13 +115,13 @@ void tst_SettingsService::testLeadMinutesSanitizing() {
 }
 
 void tst_SettingsService::testTrayHintShownKey() {
-    QTemporaryFile temp;
-    QVERIFY(temp.open());
-    const QString path = temp.fileName();
-    temp.close();
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString path = tempDir.filePath(u"settings.ini"_s);
 
     {
         auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        QSettings* qs = qsettings.get(); // CI-DIAG
         SettingsService svc(std::move(qsettings));
         QCOMPARE(svc.trayHintShown(), false);
 
@@ -133,6 +134,11 @@ void tst_SettingsService::testTrayHintShownKey() {
         // Setting same value does not emit
         svc.setTrayHintShown(true);
         QCOMPARE(spy.count(), 1);
+
+        qs->sync(); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG testTrayHintShownKey first scope status:" // CI-DIAG
+                          << static_cast<int>(qs->status()) // CI-DIAG
+                          << "size:" << QFileInfo(path).size(); // CI-DIAG
     }
 
     // CI-DIAG: File inspection after first scope ends
@@ -181,17 +187,22 @@ void tst_SettingsService::testToDayOfWeekNormalization() {
 }
 
 void tst_SettingsService::testWeeklyGoalSurvivesRestart() {
-    QTemporaryFile temp;
-    QVERIFY(temp.open());
-    const QString path = temp.fileName();
-    temp.close();
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString path = tempDir.filePath(u"settings.ini"_s);
 
     {
         auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        QSettings* qs = qsettings.get(); // CI-DIAG
         SettingsService svc(std::move(qsettings));
         QCOMPARE(svc.weeklyGoalMinutes(), 360);
         svc.setWeeklyGoalMinutes(480);
         QCOMPARE(svc.weeklyGoalMinutes(), 480);
+
+        qs->sync(); // CI-DIAG
+        qInfo().noquote() << "CI-DIAG testWeeklyGoalSurvivesRestart first scope status:" // CI-DIAG
+                          << static_cast<int>(qs->status()) // CI-DIAG
+                          << "size:" << QFileInfo(path).size(); // CI-DIAG
     }
 
     {

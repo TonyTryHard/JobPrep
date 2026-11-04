@@ -12,10 +12,8 @@
 #include <QTableView>
 #include <QTableWidget>
 #include <QTest>
-#include <QCoreApplication> // CI-DIAG
-#include <QDebug> // CI-DIAG
-#include <QSettings> // CI-DIAG
 #include <QVBoxLayout>
+#include "TestSettingsScope.h"
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
 #include "data/InterviewRepository.h"
@@ -69,9 +67,13 @@ private slots:
     void testChecklistStartupContrastDarkAndLight();
     void testChecklistAddFocusScrollAndOverflowSizing();
     void testGeneralStartupContrastAllPagesBothThemes();
+
+private:
+    std::unique_ptr<JobPrep::Tests::TestSettingsScope> m_settingsScope;
 };
 
 void tst_StudyRegression::initTestCase() {
+    m_settingsScope = std::make_unique<JobPrep::Tests::TestSettingsScope>(u"StudyRegression"_s);
 }
 
 void tst_StudyRegression::testRealMouseClickSelectionAcrossColumns() {
@@ -855,19 +857,6 @@ void tst_StudyRegression::testChecklistStartupContrastDarkAndLight() {
         }
 
         App::AppContext ctx(u":memory:"_s);
-        { // CI-DIAG
-            QSettings probe; // CI-DIAG
-            probe.sync(); // CI-DIAG
-            qInfo().noquote() << "CI-DIAG StudyRegression before line 855" // CI-DIAG
-                              << "org:" << QCoreApplication::organizationName() // CI-DIAG
-                              << "app:" << QCoreApplication::applicationName() // CI-DIAG
-                              << "arg0:" << QCoreApplication::arguments().value(0) // CI-DIAG
-                              << "fileName:" << probe.fileName() // CI-DIAG
-                              << "format:" << static_cast<int>(probe.format()) // CI-DIAG
-                              << "status:" << static_cast<int>(probe.status()) // CI-DIAG
-                              << "writable:" << probe.isWritable() // CI-DIAG
-                              << "value:" << probe.value(u"ui/themeMode"_s); // CI-DIAG
-        } // CI-DIAG
         QCOMPARE(ctx.settings().themeMode(), modeStr);
 
         Track track;

@@ -2,6 +2,7 @@
 #include <QLineEdit>
 #include <QSignalSpy>
 #include <QVBoxLayout>
+#include "TestSettingsScope.h"
 #include "services/SettingsService.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/theme/Tokens.h"
@@ -37,6 +38,7 @@ class tst_MonthView : public QObject {
     Q_OBJECT
 
 private slots:
+    void initTestCase();
     void gridStartsOnMondayFirstAndSundayFirst();
     void february2028Grid();
     void monthBeginningOnFirstWeekday();
@@ -50,7 +52,14 @@ private slots:
     void doubleClickEmitsDayActivated();
     void markersOnTrailingDimmedDay();
     void dayRectNullOutsideGrid();
+
+private:
+    std::unique_ptr<JobPrep::Tests::TestSettingsScope> m_settingsScope;
 };
+
+void tst_MonthView::initTestCase() {
+    m_settingsScope = std::make_unique<JobPrep::Tests::TestSettingsScope>(u"MonthView"_s);
+}
 
 void tst_MonthView::gridStartsOnMondayFirstAndSundayFirst() {
     CalendarFixture fixture;
