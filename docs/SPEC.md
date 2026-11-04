@@ -160,6 +160,8 @@ CREATE TABLE reminders_sent (key TEXT PRIMARY KEY, sent_at TEXT NOT NULL);
 
 `key` format: `interview:<id>:<leadMinutes>`, `followup:<appId>:<yyyy-MM-dd>`, `overdue:<appId>:<yyyy-MM-dd>`.
 
+**Date storage and legacy timestamp presentation**: Dates are stored as ISO-8601 text (date-only as `yyyy-MM-dd`; date-times as local time without offset `yyyy-MM-ddTHH:mm:ss`, whole seconds). In the UI, any system timestamp (`updated_at`, `created_at`, `changed_at`) earlier than `2013-01-01` UTC (e.g. 1970 Unix epoch timestamps stored before the M6 D1 fix) is displayed as `"—"` (em dash, U+2014). This rule is strictly display-only: stored data in SQLite is never modified, no database migration or data repair is run, table sorting continues to sort by the real underlying chronological timestamp, and export/backup/ICS operations preserve the exact stored values unchanged. User-entered dates (applied date, follow-up next action date, topic target date, interview date/time) are never masked.
+
 ## 6. Computed values (StatsService)
 
 - **Week** always means the current week starting on the configured first day of week (default Monday).
@@ -530,4 +532,7 @@ Kanban for applications, per-company contacts directory, salary comparison chart
   - **Font Metrics & Elimination of Fixed Pixel Sizes (F5):** Replaced hard-coded pixel heights in `HomePage.cpp` (`todayCard`, `upcomingCard`, empty states), `CalendarPage.cpp` (agenda panel), `TopicDetailPanel.cpp` (message label), and `ApplicationDialog.cpp` with dynamic metrics derived from `fontMetrics().height()` and `averageCharWidth()`.
   - **Safety Backup Test Portability Guard (F7):** Hardened `tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHome` with cross-platform checks ensuring resolved production backup paths are strictly within temporary directories, skipping safely on Windows where environment-based redirection of `AppDataLocation` is unsupported without touching user data.
   - **HiDpi Test Hardening (F4):** Expanded `tst_HiDpi.cpp` to verify `widgetText` on all violations, added `QGroupBox` title text advance clipping check, and initialized offscreen platform virtual screen to 1920x1080 to prevent artificial window clamping at 2x scaling. Verified zero clipping violations across 1.0, 1.5, and 2.0 scales.
+- 1.22 — Legacy timestamp UI presentation cutoff (2013-01-01):
+  In the UI, any system timestamp earlier than 2013-01-01 UTC is displayed as `"—"` (em dash, U+2014). The rule is strictly presentation-only: existing stored data is not altered, no database migration or data repair is run, table sorting remains chronological by the underlying stored `QDateTime`, and JSON backup/restore and CSV/ICS exports retain exact stored values.
+
 
