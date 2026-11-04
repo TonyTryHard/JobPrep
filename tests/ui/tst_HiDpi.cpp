@@ -155,13 +155,22 @@ QList<ClippingViolation> tst_HiDpi::checkClipping(QWidget* root, const QString& 
             continue;
         }
 
+        const QString widgetText = [&]() {
+            if (label) return label->text();
+            if (btn) return btn->text();
+            if (grp) return grp->title();
+            if (combo) return combo->currentText();
+            if (lineEdit) return lineEdit->text();
+            return QString();
+        }();
+
         // 1. widget->width() >= widget->minimumSizeHint().width() and height
         const QSize minHint = w->minimumSizeHint();
         if (minHint.isValid()) {
             if (minHint.width() > 0 && w->width() < minHint.width()) {
                 violations.append({className,
                                    w->objectName(),
-                                   {},
+                                   widgetText,
                                    contextDescription,
                                    QString(u"width (%1) < minimumSizeHint.width (%2)"_s)
                                        .arg(w->width())
@@ -170,7 +179,7 @@ QList<ClippingViolation> tst_HiDpi::checkClipping(QWidget* root, const QString& 
             if (minHint.height() > 0 && w->height() < minHint.height()) {
                 violations.append({className,
                                    w->objectName(),
-                                   {},
+                                   widgetText,
                                    contextDescription,
                                    QString(u"height (%1) < minimumSizeHint.height (%2)"_s)
                                        .arg(w->height())
@@ -225,6 +234,20 @@ QList<ClippingViolation> tst_HiDpi::checkClipping(QWidget* root, const QString& 
                                        QString(u"button text advance (%1) > contentsRect.width (%2)"_s)
                                            .arg(adv)
                                            .arg(btn->contentsRect().width())});
+                }
+            }
+        } else if (grp && !elide) {
+            const QString title = stripMnemonic(grp->title());
+            if (!title.isEmpty()) {
+                const int adv = grp->fontMetrics().horizontalAdvance(title);
+                if (adv > grp->contentsRect().width()) {
+                    violations.append({className,
+                                       grp->objectName(),
+                                       title,
+                                       contextDescription,
+                                       QString(u"groupbox title advance (%1) > contentsRect.width (%2)"_s)
+                                           .arg(adv)
+                                           .arg(grp->contentsRect().width())});
                 }
             }
         }
@@ -305,7 +328,7 @@ void tst_HiDpi::testDialogsHiDpi() {
             }
             dlg.show();
             JobPrep::UiTest::activateWindow(&dlg);
-            QApplication::processEvents();
+            QTest::qWait(50);
 
             auto* tabWidget = dlg.findChild<QTabWidget*>();
             const int tabCount = tabWidget ? tabWidget->count() : 1;
@@ -313,7 +336,7 @@ void tst_HiDpi::testDialogsHiDpi() {
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
                 dlg.resize(size);
-                QApplication::processEvents();
+                QTest::qWait(20);
                 for (int t = 0; t < tabCount; ++t) {
                     if (tabWidget) {
                         tabWidget->setCurrentIndex(t);
@@ -343,6 +366,7 @@ void tst_HiDpi::testDialogsHiDpi() {
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
                 dlg.resize(size);
+                dlg.layout()->activate();
                 QApplication::processEvents();
                 const QString desc = QString(u"InterviewDialog | %1 | %2x%3"_s)
                                          .arg(themeName)
@@ -365,6 +389,7 @@ void tst_HiDpi::testDialogsHiDpi() {
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
                 dlg.resize(size);
+                dlg.layout()->activate();
                 QApplication::processEvents();
                 const QString desc = QString(u"FollowUpDialog | %1 | %2x%3"_s)
                                          .arg(themeName)
@@ -387,6 +412,7 @@ void tst_HiDpi::testDialogsHiDpi() {
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
                 dlg.resize(size);
+                dlg.layout()->activate();
                 QApplication::processEvents();
                 const QString desc = QString(u"SessionDialog | %1 | %2x%3"_s)
                                          .arg(themeName)
@@ -409,6 +435,7 @@ void tst_HiDpi::testDialogsHiDpi() {
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
                 dlg.resize(size);
+                dlg.layout()->activate();
                 QApplication::processEvents();
                 const QString desc = QString(u"TrackDialog | %1 | %2x%3"_s)
                                          .arg(themeName)
@@ -499,5 +526,13 @@ void tst_HiDpi::testScreenshotsHiDpi() {
     }
 }
 
-QTEST_MAIN(tst_HiDpi)
+int main(int argc, char* argv[]) {
+    const QByteArray platform = qgetenv("QT_QPA_PLATFORM");
+    if (platform.isEmpty() || platform == "offscreen") {
+        qputenv("QT_QPA_PLATFORM", "offscreen:size=1920x1080");
+    }
+    QApplication app(argc, argv);
+    tst_HiDpi tc;
+    return QTest::qExec(&tc, argc, argv);
+}
 #include "tst_HiDpi.moc"
