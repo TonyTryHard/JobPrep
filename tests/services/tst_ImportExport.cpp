@@ -957,9 +957,28 @@ void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHom
     QVERIFY(customXdgDir.isValid());
     const QString customXdg = customXdgDir.path();
     qputenv("XDG_DATA_HOME", customXdg.toLocal8Bit());
+    qputenv("LOCALAPPDATA", customXdg.toLocal8Bit());
 
     const QString prodSafetyDir =
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + u"/backups"_s;
+
+    // Safety guard: NEVER write safety backups to the real user location during tests.
+    // The resolved production directory MUST be isolated inside the temporary directory.
+    if (!prodSafetyDir.startsWith(customXdg)) {
+#ifdef Q_OS_WIN
+        // On Windows without shell folder redirection, AppDataLocation cannot be redirected
+        // via environment variables alone. Skip the write to avoid touching real %LOCALAPPDATA%.
+        qunsetenv("XDG_DATA_HOME");
+        qunsetenv("LOCALAPPDATA");
+        QStandardPaths::setTestModeEnabled(true);
+        QCoreApplication::setOrganizationName(origOrg);
+        QCoreApplication::setApplicationName(origApp);
+        QSKIP("QStandardPaths::AppDataLocation cannot be redirected via environment on Windows; skipping to protect user data.");
+#else
+        QFAIL(qPrintable(QString(u"Safety violation: resolved path '%1' is not under temp dir '%2'"_s)
+                             .arg(prodSafetyDir, customXdg)));
+#endif
+    }
 
     TestDatabase testDb(u"tst_prod_path"_s);
     QVERIFY(testDb.open(u":memory:"_s));
@@ -976,6 +995,7 @@ void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHom
     }
 
     qunsetenv("XDG_DATA_HOME");
+    qunsetenv("LOCALAPPDATA");
     QStandardPaths::setTestModeEnabled(true);
     QCoreApplication::setOrganizationName(origOrg);
     QCoreApplication::setApplicationName(origApp);
