@@ -353,8 +353,7 @@ void tst_HiDpi::testDialogsHiDpi() {
                                              .arg(themeName)
                                              .arg(size.width())
                                              .arg(size.height());
-                    QWidget* targetWidget = tabWidget ? tabWidget->currentWidget() : &dlg;
-                    allViolations.append(checkClipping(targetWidget, desc));
+                    allViolations.append(checkClipping(&dlg, desc));
                 }
             }
             dlg.close();

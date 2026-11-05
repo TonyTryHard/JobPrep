@@ -66,14 +66,17 @@ ApplicationDialog::ApplicationDialog(JobPrep::Data::ApplicationRepository& apps,
     setObjectName(u"ApplicationDialog"_s);
     setWindowTitle(mode == Create ? tr("Add Application") : tr("Edit Application"));
     setModal(true);
-    const int minW = fontMetrics().averageCharWidth() * 55;
-    const int minH = fontMetrics().height() * 24;
-    setMinimumSize(minW, minH);
     setupUi();
 
     m_original = m_app;
     loadFrom(m_app);
     updateDirtyState();
+
+    const int tabW = m_tabs->tabBar()->sizeHint().width() + layout()->contentsMargins().left() +
+                     layout()->contentsMargins().right();
+    const int minW = std::max(layout()->minimumSize().width(), tabW);
+    const int minH = layout()->minimumSize().height();
+    setMinimumSize(minW, minH);
 }
 
 void ApplicationDialog::setupUi() {

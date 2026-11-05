@@ -25,6 +25,9 @@ public:
     void setActionText(const QString& actionText);
     void setSecondaryActionText(const QString& actionText);
 
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
+
 signals:
     void actionClicked();
     void secondaryActionClicked();

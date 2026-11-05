@@ -88,6 +88,60 @@ void EmptyState::setSecondaryActionText(const QString& actionText) {
     m_secondaryActionBtn->setVisible(!actionText.isEmpty());
 }
 
+QSize EmptyState::sizeHint() const {
+    return minimumSizeHint();
+}
+
+QSize EmptyState::minimumSizeHint() const {
+    int w = 0;
+    int h = 0;
+    const int spacing = m_layout ? m_layout->spacing() : 8;
+    const QMargins margins = m_layout ? m_layout->contentsMargins() : QMargins(16, 16, 16, 16);
+
+    if (!m_iconName.isEmpty()) {
+        const QSize iconSz = (m_iconLabel && m_iconLabel->minimumSize().isValid() && !m_iconLabel->minimumSize().isEmpty())
+                                 ? m_iconLabel->minimumSize()
+                                 : QSize(48, 48);
+        w = std::max(w, iconSz.width());
+        h += (h > 0 ? spacing : 0) + iconSz.height();
+    }
+
+    if (m_titleLabel && !m_titleLabel->text().isEmpty()) {
+        const int titleW = m_titleLabel->sizeHint().width();
+        w = std::max(w, titleW);
+        const int titleH = m_titleLabel->sizeHint().height();
+        h += (h > 0 ? spacing : 0) + titleH;
+    }
+
+    if (m_descLabel && !m_descLabel->text().isEmpty()) {
+        const int descW = m_descLabel->sizeHint().width();
+        w = std::max(w, descW);
+        const int descH = m_descLabel->sizeHint().height();
+        h += (h > 0 ? spacing : 0) + descH;
+    }
+
+    const bool hasAction = m_actionBtn && !m_actionBtn->text().isEmpty();
+    const bool hasSec = m_secondaryActionBtn && !m_secondaryActionBtn->text().isEmpty();
+    if (hasAction || hasSec) {
+        int btnW = 0;
+        int btnH = 0;
+        if (hasAction) {
+            btnW += m_actionBtn->sizeHint().width();
+            btnH = std::max(btnH, m_actionBtn->sizeHint().height());
+        }
+        if (hasSec) {
+            btnW += (btnW > 0 ? 8 : 0) + m_secondaryActionBtn->sizeHint().width();
+            btnH = std::max(btnH, m_secondaryActionBtn->sizeHint().height());
+        }
+        w = std::max(w, btnW);
+        h += (h > 0 ? spacing : 0) + btnH;
+    }
+
+    w += margins.left() + margins.right();
+    h += margins.top() + margins.bottom();
+    return QSize(w, h);
+}
+
 void EmptyState::changeEvent(QEvent* event) {
     if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange) {
         updateIcon();
@@ -110,8 +164,8 @@ void EmptyState::updateIcon() {
     const QIcon icon = Theme::IconProvider::icon(m_iconName, iconColor);
     const QPixmap px = icon.pixmap(48, 48);
     m_iconLabel->setPixmap(px);
-    // Lock minimum to the actual pixmap size so layouts cannot shrink the icon below it.
-    m_iconLabel->setMinimumSize(px.size());
+    // Lock minimum to 48x48 logical pixels so layouts cannot shrink the icon below it.
+    m_iconLabel->setMinimumSize(QSize(48, 48));
     m_iconLabel->setVisible(true);
 }
 
