@@ -117,7 +117,7 @@ Comment=Job application and interview preparation tracker
 Exec=${EXEC_LINE}
 Icon=${ICON_PATH}
 Terminal=false
-Categories=Office;Utility;
+Categories=Office;
 StartupWMClass=jobprep
 "
 
