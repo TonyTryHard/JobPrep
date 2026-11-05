@@ -120,6 +120,10 @@ $env:LOCALAPPDATA = "$env:TEMP\jp-isolated"; .\build\dev-windows\jobprep.exe
 
 ## 5. Backup and Restore
 
+- **Safety Rule**: Before trying a restore on real data, copy `jobprep.sqlite` first:
+  ```bash
+  cp ~/.local/share/JobPrep/JobPrep/jobprep.sqlite ~/.local/share/JobPrep/JobPrep/jobprep.sqlite.manual-bak
+  ```
 - **Backup**: Exporting a backup creates a single portable JSON file containing all study tracks, topics, sessions, applications, interviews, and stage histories.
 - **Restore**: Restoring replaces the current database with the backup archive after automatically creating a timestamped pre-restore safety copy in the `backups/` directory.
 
@@ -178,8 +182,17 @@ See [SPEC.md §3.7](file:///home/tony/projects/JobPrep/docs/SPEC.md#37-global) f
     ```
 - **Linux: Missing System Tray (GNOME Desktop)**:
   - JobPrep checks `QSystemTrayIcon::isSystemTrayAvailable()`. If the desktop lacks a tray area, reminders automatically fall back to styled in-app banners/toasts, and the "Close to tray" preference is cleanly disabled with an explanatory tooltip.
-- **Linux: Wayland vs X11 Issues**:
-  - If encountering issues on a Wayland compositor, set `QT_QPA_PLATFORM=xcb` before running.
+- **Linux: Wayland vs X11 Plugins**:
+  - The desktop session on modern Linux distributions (such as Ubuntu with GNOME) often defaults to Wayland. Qt applications use the `xcb` plugin through XWayland unless the Qt Wayland module (`qt6-wayland`) is installed.
+  - To test which platform plugin is available or force a specific backend:
+    ```bash
+    # Test if native Wayland plugin is available:
+    QT_QPA_PLATFORM=wayland ./build/dev-linux/jobprep
+    # (If qt6-wayland is not installed, Qt fails with: qt.qpa.plugin: Could not find the Qt platform plugin "wayland")
+
+    # Run via X11 / XWayland (default when wayland plugin is missing):
+    QT_QPA_PLATFORM=xcb ./build/dev-linux/jobprep
+    ```
 - **Windows: `Qt6Core.dll was not found`**:
   - Add the Qt binary directory to your `PATH`:
     ```cmd
