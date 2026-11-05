@@ -53,6 +53,7 @@ private slots:
     void testDevicePixelRatio();
     void testPagesHiDpi();
     void testDialogsHiDpi();
+    void testDialogsFitSmallScreen();
     void testScreenshotsHiDpi();
 
 private:
@@ -512,6 +513,175 @@ void tst_HiDpi::testDialogsHiDpi() {
     QCOMPARE(allViolations.count(), 0);
 }
 
+void tst_HiDpi::testDialogsFitSmallScreen() {
+    constexpr int kMaxSmallScreenHeight = 648;
+    auto* screen = QGuiApplication::primaryScreen();
+    const QRect avail = screen ? screen->availableGeometry() : QRect(0, 0, 1280, 720);
+    qInfo("primaryScreen availableGeometry: %dx%d (at %d,%d)",
+          avail.width(), avail.height(), avail.x(), avail.y());
+
+    auto findButtonRowBottom = [](QWidget* dlg) -> QPoint {
+        auto* btnBox = dlg->findChild<QDialogButtonBox*>();
+        if (btnBox) {
+            return btnBox->mapToGlobal(QPoint(0, btnBox->height()));
+        }
+        int maxY = 0;
+        QWidget* bottomBtn = nullptr;
+        for (auto* btn : dlg->findChildren<QPushButton*>()) {
+            if (!btn->isVisibleTo(dlg)) continue;
+            const int y = btn->mapTo(dlg, QPoint(0, btn->height())).y();
+            if (y > maxY) {
+                maxY = y;
+                bottomBtn = btn;
+            }
+        }
+        if (bottomBtn) {
+            return bottomBtn->mapToGlobal(QPoint(0, bottomBtn->height()));
+        }
+        return dlg->mapToGlobal(QPoint(0, dlg->height()));
+    };
+
+    auto& win = m_fix->window();
+    auto& ctx = m_fix->context();
+
+    // 1. ApplicationDialog
+    {
+        JobPrep::Ui::Dialogs::ApplicationDialog dlg(ctx.applications(),
+                                                    ctx.interviews(),
+                                                    JobPrep::Ui::Dialogs::ApplicationDialog::Create,
+                                                    &win);
+        dlg.show();
+        JobPrep::UiTest::activateWindow(&dlg);
+        QCoreApplication::processEvents();
+
+        auto* tabWidget = dlg.findChild<QTabWidget*>();
+        for (int t = 0; t < (tabWidget ? tabWidget->count() : 1); ++t) {
+            if (tabWidget) tabWidget->setCurrentIndex(t);
+            QCoreApplication::processEvents();
+            const QSize sh = dlg.sizeHint();
+            const QSize msh = dlg.minimumSizeHint();
+            const bool fits = msh.height() <= kMaxSmallScreenHeight;
+            qInfo("SMALL_SCREEN_CHECK: ApplicationDialog tab=%d sizeHint=(%d,%d) minSizeHint=(%d,%d) fits648=%s",
+                  t, sh.width(), sh.height(), msh.width(), msh.height(), fits ? "YES" : "NO");
+        }
+
+        const QPoint btnBottomGlobal = findButtonRowBottom(&dlg);
+        qInfo("ApplicationDialog btnBottomGlobal.y=%d avail.bottom=%d", btnBottomGlobal.y(), avail.bottom());
+        QVERIFY2(dlg.minimumSizeHint().height() <= kMaxSmallScreenHeight,
+                 qPrintable(QString("ApplicationDialog minimumSizeHint.height %1 > %2")
+                                .arg(dlg.minimumSizeHint().height()).arg(kMaxSmallScreenHeight)));
+        QVERIFY2(btnBottomGlobal.y() <= avail.bottom(),
+                 qPrintable(QString("ApplicationDialog button bottom %1 > available bottom %2")
+                                .arg(btnBottomGlobal.y()).arg(avail.bottom())));
+        dlg.close();
+    }
+
+    // 2. InterviewDialog
+    {
+        JobPrep::Ui::Dialogs::InterviewDialog dlg(ctx.applications(),
+                                                  ctx.interviews(),
+                                                  JobPrep::Ui::Dialogs::InterviewDialog::Create,
+                                                  &win);
+        dlg.show();
+        JobPrep::UiTest::activateWindow(&dlg);
+        QCoreApplication::processEvents();
+
+        const QSize sh = dlg.sizeHint();
+        const QSize msh = dlg.minimumSizeHint();
+        const bool fits = msh.height() <= kMaxSmallScreenHeight;
+        qInfo("SMALL_SCREEN_CHECK: InterviewDialog sizeHint=(%d,%d) minSizeHint=(%d,%d) fits648=%s",
+              sh.width(), sh.height(), msh.width(), msh.height(), fits ? "YES" : "NO");
+
+        const QPoint btnBottomGlobal = findButtonRowBottom(&dlg);
+        qInfo("InterviewDialog btnBottomGlobal.y=%d avail.bottom=%d", btnBottomGlobal.y(), avail.bottom());
+        QVERIFY2(msh.height() <= kMaxSmallScreenHeight,
+                 qPrintable(QString("InterviewDialog minimumSizeHint.height %1 > %2")
+                                .arg(msh.height()).arg(kMaxSmallScreenHeight)));
+        QVERIFY2(btnBottomGlobal.y() <= avail.bottom(),
+                 qPrintable(QString("InterviewDialog button bottom %1 > available bottom %2")
+                                .arg(btnBottomGlobal.y()).arg(avail.bottom())));
+        dlg.close();
+    }
+
+    // 3. FollowUpDialog
+    {
+        JobPrep::Ui::Dialogs::FollowUpDialog dlg(ctx.applications(),
+                                                 QDate(2026, 11, 1),
+                                                 &win);
+        dlg.show();
+        JobPrep::UiTest::activateWindow(&dlg);
+        QCoreApplication::processEvents();
+
+        const QSize sh = dlg.sizeHint();
+        const QSize msh = dlg.minimumSizeHint();
+        const bool fits = msh.height() <= kMaxSmallScreenHeight;
+        qInfo("SMALL_SCREEN_CHECK: FollowUpDialog sizeHint=(%d,%d) minSizeHint=(%d,%d) fits648=%s",
+              sh.width(), sh.height(), msh.width(), msh.height(), fits ? "YES" : "NO");
+
+        const QPoint btnBottomGlobal = findButtonRowBottom(&dlg);
+        qInfo("FollowUpDialog btnBottomGlobal.y=%d avail.bottom=%d", btnBottomGlobal.y(), avail.bottom());
+        QVERIFY2(msh.height() <= kMaxSmallScreenHeight,
+                 qPrintable(QString("FollowUpDialog minimumSizeHint.height %1 > %2")
+                                .arg(msh.height()).arg(kMaxSmallScreenHeight)));
+        QVERIFY2(btnBottomGlobal.y() <= avail.bottom(),
+                 qPrintable(QString("FollowUpDialog button bottom %1 > available bottom %2")
+                                .arg(btnBottomGlobal.y()).arg(avail.bottom())));
+        dlg.close();
+    }
+
+    // 4. SessionDialog
+    {
+        JobPrep::Ui::Dialogs::SessionDialog dlg(ctx.sessions(),
+                                                ctx.topics(),
+                                                &win);
+        dlg.show();
+        JobPrep::UiTest::activateWindow(&dlg);
+        QCoreApplication::processEvents();
+
+        const QSize sh = dlg.sizeHint();
+        const QSize msh = dlg.minimumSizeHint();
+        const bool fits = msh.height() <= kMaxSmallScreenHeight;
+        qInfo("SMALL_SCREEN_CHECK: SessionDialog sizeHint=(%d,%d) minSizeHint=(%d,%d) fits648=%s",
+              sh.width(), sh.height(), msh.width(), msh.height(), fits ? "YES" : "NO");
+
+        const QPoint btnBottomGlobal = findButtonRowBottom(&dlg);
+        qInfo("SessionDialog btnBottomGlobal.y=%d avail.bottom=%d", btnBottomGlobal.y(), avail.bottom());
+        QVERIFY2(msh.height() <= kMaxSmallScreenHeight,
+                 qPrintable(QString("SessionDialog minimumSizeHint.height %1 > %2")
+                                .arg(msh.height()).arg(kMaxSmallScreenHeight)));
+        QVERIFY2(btnBottomGlobal.y() <= avail.bottom(),
+                 qPrintable(QString("SessionDialog button bottom %1 > available bottom %2")
+                                .arg(btnBottomGlobal.y()).arg(avail.bottom())));
+        dlg.close();
+    }
+
+    // 5. TrackDialog
+    {
+        JobPrep::Ui::Dialogs::TrackDialog dlg(ctx.tracks(),
+                                              ctx.topics(),
+                                              &win);
+        dlg.show();
+        JobPrep::UiTest::activateWindow(&dlg);
+        QCoreApplication::processEvents();
+
+        const QSize sh = dlg.sizeHint();
+        const QSize msh = dlg.minimumSizeHint();
+        const bool fits = msh.height() <= kMaxSmallScreenHeight;
+        qInfo("SMALL_SCREEN_CHECK: TrackDialog sizeHint=(%d,%d) minSizeHint=(%d,%d) fits648=%s",
+              sh.width(), sh.height(), msh.width(), msh.height(), fits ? "YES" : "NO");
+
+        const QPoint btnBottomGlobal = findButtonRowBottom(&dlg);
+        qInfo("TrackDialog btnBottomGlobal.y=%d avail.bottom=%d", btnBottomGlobal.y(), avail.bottom());
+        QVERIFY2(msh.height() <= kMaxSmallScreenHeight,
+                 qPrintable(QString("TrackDialog minimumSizeHint.height %1 > %2")
+                                .arg(msh.height()).arg(kMaxSmallScreenHeight)));
+        QVERIFY2(btnBottomGlobal.y() <= avail.bottom(),
+                 qPrintable(QString("TrackDialog button bottom %1 > available bottom %2")
+                                .arg(btnBottomGlobal.y()).arg(avail.bottom())));
+        dlg.close();
+    }
+}
+
 void tst_HiDpi::testScreenshotsHiDpi() {
     const QString dir = qEnvironmentVariable("JOBPREP_REPORT_IMG_DIR");
     if (dir.isEmpty()) {
@@ -579,8 +749,14 @@ void tst_HiDpi::testScreenshotsHiDpi() {
 
 int main(int argc, char* argv[]) {
     const QByteArray platform = qgetenv("QT_QPA_PLATFORM");
-    if (platform.isEmpty() || platform == "offscreen") {
-        qputenv("QT_QPA_PLATFORM", "offscreen:size=1920x1080");
+    if (platform.isEmpty() || platform == "offscreen" || platform == "offscreen:size=1920x1080") {
+        const QString cfgPath = QDir::tempPath() + u"/jobprep_offscreen_1080p.json"_s;
+        QFile cfg(cfgPath);
+        if (cfg.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            cfg.write("{\"screens\":[{\"name\":\"Screen0\",\"x\":0,\"y\":0,\"width\":1920,\"height\":1080}]}");
+            cfg.close();
+            qputenv("QT_QPA_PLATFORM", QByteArray("offscreen:configfile=") + cfgPath.toLocal8Bit());
+        }
     }
     QApplication app(argc, argv);
     tst_HiDpi tc;

@@ -132,7 +132,6 @@ void HomePage::setupUi() {
     m_todayView->setItemDelegate(m_todayDelegate);
     m_todayView->setModel(m_todayModel);
     m_todayView->setFocusPolicy(Qt::StrongFocus);
-    m_todayView->setMinimumHeight(QFontMetrics(font()).height() * 7);
 
     m_todayEmptyState = new Widgets::EmptyState(
         u"calendar"_s, tr("Nothing planned for today"),
@@ -164,7 +163,6 @@ void HomePage::setupUi() {
     m_upcomingView->setItemDelegate(m_upcomingDelegate);
     m_upcomingView->setModel(m_upcomingModel);
     m_upcomingView->setFocusPolicy(Qt::StrongFocus);
-    m_upcomingView->setMinimumHeight(QFontMetrics(font()).height() * 6);
 
     m_upcomingEmptyState = new Widgets::EmptyState(
         u"calendar"_s, tr("No upcoming interviews"),

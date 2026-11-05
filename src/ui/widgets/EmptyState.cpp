@@ -44,24 +44,24 @@ void EmptyState::setupUi() {
     m_descLabel->setWordWrap(true);
     m_layout->addWidget(m_descLabel);
 
-    auto* btnLayout = new QHBoxLayout();
-    btnLayout->setSpacing(8);
-    btnLayout->setAlignment(Qt::AlignCenter);
+    m_btnLayout = new QHBoxLayout();
+    m_btnLayout->setSpacing(8);
+    m_btnLayout->setAlignment(Qt::AlignCenter);
 
     m_actionBtn = new QPushButton(this);
     m_actionBtn->setObjectName(u"EmptyStateActionBtn"_s);
     m_actionBtn->setProperty("primary", true);
     m_actionBtn->setVisible(false);
     connect(m_actionBtn, &QPushButton::clicked, this, &EmptyState::actionClicked);
-    btnLayout->addWidget(m_actionBtn);
+    m_btnLayout->addWidget(m_actionBtn);
 
     m_secondaryActionBtn = new QPushButton(this);
     m_secondaryActionBtn->setObjectName(u"EmptyStateSecondaryActionBtn"_s);
     m_secondaryActionBtn->setVisible(false);
     connect(m_secondaryActionBtn, &QPushButton::clicked, this, &EmptyState::secondaryActionClicked);
-    btnLayout->addWidget(m_secondaryActionBtn);
+    m_btnLayout->addWidget(m_secondaryActionBtn);
 
-    m_layout->addLayout(btnLayout);
+    m_layout->addLayout(m_btnLayout);
 }
 
 void EmptyState::setIcon(const QString& iconName) {
@@ -98,10 +98,10 @@ QSize EmptyState::minimumSizeHint() const {
     const int spacing = m_layout ? m_layout->spacing() : 8;
     const QMargins margins = m_layout ? m_layout->contentsMargins() : QMargins(16, 16, 16, 16);
 
-    if (!m_iconName.isEmpty()) {
-        const QSize iconSz = (m_iconLabel && m_iconLabel->minimumSize().isValid() && !m_iconLabel->minimumSize().isEmpty())
+    if (!m_iconName.isEmpty() && m_iconLabel) {
+        const QSize iconSz = (m_iconLabel->minimumSize().isValid() && !m_iconLabel->minimumSize().isEmpty())
                                  ? m_iconLabel->minimumSize()
-                                 : QSize(48, 48);
+                                 : m_iconLabel->sizeHint();
         w = std::max(w, iconSz.width());
         h += (h > 0 ? spacing : 0) + iconSz.height();
     }
@@ -125,12 +125,13 @@ QSize EmptyState::minimumSizeHint() const {
     if (hasAction || hasSec) {
         int btnW = 0;
         int btnH = 0;
+        const int btnSpacing = m_btnLayout ? m_btnLayout->spacing() : spacing;
         if (hasAction) {
             btnW += m_actionBtn->sizeHint().width();
             btnH = std::max(btnH, m_actionBtn->sizeHint().height());
         }
         if (hasSec) {
-            btnW += (btnW > 0 ? 8 : 0) + m_secondaryActionBtn->sizeHint().width();
+            btnW += (btnW > 0 ? btnSpacing : 0) + m_secondaryActionBtn->sizeHint().width();
             btnH = std::max(btnH, m_secondaryActionBtn->sizeHint().height());
         }
         w = std::max(w, btnW);

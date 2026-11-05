@@ -4,6 +4,7 @@
 
 class QLabel;
 class QPushButton;
+class QHBoxLayout;
 class QVBoxLayout;
 
 namespace JobPrep::Ui::Widgets {
@@ -46,6 +47,7 @@ private:
     QLabel* m_descLabel{nullptr};
     QPushButton* m_actionBtn{nullptr};
     QPushButton* m_secondaryActionBtn{nullptr};
+    QHBoxLayout* m_btnLayout{nullptr};
     QVBoxLayout* m_layout{nullptr};
 };
 

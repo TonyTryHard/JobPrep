@@ -12,6 +12,9 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScreen>
+#include <QGuiApplication>
 #include <QShortcut>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -51,6 +54,30 @@ constexpr int kMaxSalary = 100000000;
 /// The date edits are optional, so they need a valid but "unset" sentinel.
 const QDate kUnsetDate(2000, 1, 1);
 
+class TabScrollArea : public QScrollArea {
+public:
+    explicit TabScrollArea(QWidget* parent = nullptr) : QScrollArea(parent) {
+        setWidgetResizable(true);
+        setFrameShape(QFrame::NoFrame);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    }
+
+    QSize sizeHint() const override {
+        if (widget()) {
+            return widget()->sizeHint();
+        }
+        return QScrollArea::sizeHint();
+    }
+
+    QSize minimumSizeHint() const override {
+        if (widget()) {
+            return QSize(widget()->minimumSizeHint().width(),
+                         QScrollArea::minimumSizeHint().height());
+        }
+        return QScrollArea::minimumSizeHint();
+    }
+};
+
 }  // namespace
 
 ApplicationDialog::ApplicationDialog(JobPrep::Data::ApplicationRepository& apps,
@@ -72,18 +99,18 @@ ApplicationDialog::ApplicationDialog(JobPrep::Data::ApplicationRepository& apps,
     loadFrom(m_app);
     updateDirtyState();
 
-    const int tabW = m_tabs->tabBar()->sizeHint().width() + layout()->contentsMargins().left() +
-                     layout()->contentsMargins().right();
-    const int minW = std::max(layout()->minimumSize().width(), tabW);
-    const int minH = layout()->minimumSize().height();
-    setMinimumSize(minW, minH);
+    auto* screen = parentWidget() ? parentWidget()->screen() : QGuiApplication::primaryScreen();
+    const QRect avail = screen ? screen->availableGeometry() : QRect(0, 0, 1280, 720);
+    resize(sizeHint().boundedTo(avail.size() * 0.9));
 
-    qInfo("// CI-DIAG ApplicationDialog constructor: tabSizeHint=(%d,%d) tabMinHint=(%d,%d) usesScroll=%d layMin=(%d,%d) minW=%d minH=%d",
+    qInfo("// CI-DIAG ApplicationDialog constructor: tabSizeHint=(%d,%d) tabMinHint=(%d,%d) usesScroll=%d layMin=(%d,%d) dlgMin=(%d,%d) dlgMinHint=(%d,%d) dlgSizeHint=(%d,%d)",
           m_tabs->tabBar()->sizeHint().width(), m_tabs->tabBar()->sizeHint().height(),
           m_tabs->tabBar()->minimumSizeHint().width(), m_tabs->tabBar()->minimumSizeHint().height(),
           m_tabs->tabBar()->usesScrollButtons() ? 1 : 0,
           layout()->minimumSize().width(), layout()->minimumSize().height(),
-          minW, minH); // CI-DIAG
+          minimumSize().width(), minimumSize().height(),
+          minimumSizeHint().width(), minimumSizeHint().height(),
+          sizeHint().width(), sizeHint().height()); // CI-DIAG
 }
 
 void ApplicationDialog::showEvent(QShowEvent* event) { // CI-DIAG
@@ -105,6 +132,8 @@ void ApplicationDialog::setupUi() {
 
     m_tabs = new QTabWidget(this);
     m_tabs->setObjectName(u"ApplicationDialogTabs"_s);
+    m_tabs->tabBar()->setUsesScrollButtons(false);
+    m_tabs->tabBar()->setExpanding(false);
     layout->addWidget(m_tabs, 1);
 
     setupOverviewTab();
@@ -136,7 +165,9 @@ void ApplicationDialog::setupUi() {
 }
 
 void ApplicationDialog::setupOverviewTab() {
-    auto* page = new QWidget(m_tabs);
+    auto* scroll = new TabScrollArea(m_tabs);
+    scroll->setObjectName(u"OverviewScrollArea"_s);
+    auto* page = new QWidget(scroll);
     auto* form = new QFormLayout(page);
     form->setSpacing(12);
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -249,7 +280,8 @@ void ApplicationDialog::setupOverviewTab() {
     m_contactEmailEdit->setObjectName(u"FieldContactEmail"_s);
     form->addRow(tr("Contact email"), m_contactEmailEdit);
 
-    m_tabs->addTab(page, tr("Overview"));
+    scroll->setWidget(page);
+    m_tabs->addTab(scroll, tr("Overview"));
 
     connect(m_companyEdit, &QLineEdit::textChanged, this, &ApplicationDialog::onFormChanged);
     connect(m_positionEdit, &QLineEdit::textChanged, this, &ApplicationDialog::onFormChanged);
@@ -293,7 +325,9 @@ void ApplicationDialog::setupOverviewTab() {
 }
 
 void ApplicationDialog::setupNotesTab() {
-    auto* page = new QWidget(m_tabs);
+    auto* scroll = new TabScrollArea(m_tabs);
+    scroll->setObjectName(u"NotesScrollArea"_s);
+    auto* page = new QWidget(scroll);
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     m_notesEdit = new QTextEdit(page);
@@ -301,13 +335,16 @@ void ApplicationDialog::setupNotesTab() {
     m_notesEdit->setPlaceholderText(tr("Recruiter feedback, interview topics, links..."));
     m_notesEdit->setTabChangesFocus(true);
     layout->addWidget(m_notesEdit);
-    m_tabs->addTab(page, tr("Notes"));
+    scroll->setWidget(page);
+    m_tabs->addTab(scroll, tr("Notes"));
     connect(m_notesEdit, &QTextEdit::textChanged, this, &ApplicationDialog::onFormChanged);
 }
 
 void ApplicationDialog::setupInterviewsTab() {
-    m_interviewsPage = new QWidget(m_tabs);
-    auto* page = m_interviewsPage;
+    auto* scroll = new TabScrollArea(m_tabs);
+    scroll->setObjectName(u"InterviewsScrollArea"_s);
+    m_interviewsPage = scroll;
+    auto* page = new QWidget(scroll);
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(12);
@@ -358,7 +395,8 @@ void ApplicationDialog::setupInterviewsTab() {
     buttons->addStretch(1);
     layout->addLayout(buttons);
 
-    m_tabs->addTab(page, tr("Interviews"));
+    scroll->setWidget(page);
+    m_tabs->addTab(scroll, tr("Interviews"));
 
     connect(m_addInterviewBtn, &QPushButton::clicked, this, &ApplicationDialog::onAddInterview);
     connect(m_editInterviewBtn, &QPushButton::clicked, this, &ApplicationDialog::onEditInterview);
@@ -374,8 +412,10 @@ void ApplicationDialog::setupInterviewsTab() {
 }
 
 void ApplicationDialog::setupTimelineTab() {
-    m_timelinePage = new QWidget(m_tabs);
-    auto* page = m_timelinePage;
+    auto* scroll = new TabScrollArea(m_tabs);
+    scroll->setObjectName(u"TimelineScrollArea"_s);
+    m_timelinePage = scroll;
+    auto* page = new QWidget(scroll);
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
 
@@ -402,7 +442,8 @@ void ApplicationDialog::setupTimelineTab() {
     m_timelineStack->setCurrentWidget(m_timelineEmptyState);
 
     layout->addWidget(m_timelineStack, 1);
-    m_tabs->addTab(page, tr("Timeline"));
+    scroll->setWidget(page);
+    m_tabs->addTab(scroll, tr("Timeline"));
 
     QWidget::setTabOrder(m_timelineTable, m_saveBtn);
 }
