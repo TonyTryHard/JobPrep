@@ -25,7 +25,7 @@ void EmptyState::setupUi() {
     m_layout = new QVBoxLayout(this);
     m_layout->setContentsMargins(16, 16, 16, 16);
     m_layout->setSpacing(8);
-    m_layout->setAlignment(Qt::AlignCenter);
+    m_layout->setAlignment(Qt::AlignVCenter);
 
     m_iconLabel = new QLabel(this);
     m_iconLabel->setObjectName(u"EmptyStateIcon"_s);
@@ -108,7 +108,10 @@ void EmptyState::updateIcon() {
     }
     const QColor iconColor = palette().color(QPalette::PlaceholderText);
     const QIcon icon = Theme::IconProvider::icon(m_iconName, iconColor);
-    m_iconLabel->setPixmap(icon.pixmap(48, 48));
+    const QPixmap px = icon.pixmap(48, 48);
+    m_iconLabel->setPixmap(px);
+    // Lock minimum to the actual pixmap size so layouts cannot shrink the icon below it.
+    m_iconLabel->setMinimumSize(px.size());
     m_iconLabel->setVisible(true);
 }
 

@@ -93,6 +93,7 @@ public:
     void setFlushCallback(FlushCallback callback);
     void setIsEmptyCallback(IsEmptyCallback callback);
     void setReminderService(Services::ReminderService* reminderService);
+    void setSafetyBackupDir(const QString& dir);
 
     // Operations (C8)
     bool isRestoring() const;
@@ -124,6 +125,7 @@ private:
     Data::ApplicationRepository& m_applications;
     Data::InterviewRepository& m_interviews;
     Services::ReminderService* m_reminderService{nullptr};
+    QString m_safetyBackupDir;
 
     std::unique_ptr<IFileChooser> m_fileChooser;
     std::unique_ptr<IMessagePresenter> m_presenter;

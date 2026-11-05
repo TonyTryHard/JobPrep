@@ -413,14 +413,17 @@ void tst_UiSmoke::testApplicationIcon() {
         fprintf(stdout, "ICON_SIZE: %dx%d\n", s.width(), s.height());
     }
     fflush(stdout);
-    QVERIFY(sizes.contains(QSize(16, 16)));
-    QVERIFY(sizes.contains(QSize(32, 32)));
+    const qreal dpr = QGuiApplication::primaryScreen() ? QGuiApplication::primaryScreen()->devicePixelRatio() : 1.0;
+    const QSize expected16(qRound(16 * dpr), qRound(16 * dpr));
+    const QSize expected32(qRound(32 * dpr), qRound(32 * dpr));
+    QVERIFY(sizes.contains(expected16));
+    QVERIFY(sizes.contains(expected32));
     QVERIFY(sizes.contains(QSize(256, 256)));
 
     const QPixmap pm32 = appIcon.pixmap(32, 32);
     QVERIFY(!pm32.isNull());
-    QCOMPARE(pm32.width(), 32);
-    QCOMPARE(pm32.height(), 32);
+    QCOMPARE(pm32.width(), qRound(32 * dpr));
+    QCOMPARE(pm32.height(), qRound(32 * dpr));
 }
 
 void tst_UiSmoke::testZeroWarnings() {

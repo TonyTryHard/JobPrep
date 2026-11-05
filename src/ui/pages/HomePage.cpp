@@ -148,7 +148,6 @@ void HomePage::setupUi() {
     todayLayout->addWidget(m_todayEmptyState);
 
     auto* todayCard = createCard(tr("Today"), todayContainer);
-    todayCard->setMinimumHeight(QFontMetrics(font()).height() * 15);
     leftCol->addWidget(todayCard, 1);
 
     // Upcoming container
@@ -186,7 +185,6 @@ void HomePage::setupUi() {
     QWidget::setTabOrder(m_todayView, m_upcomingView);
 
     auto* upcomingCard = createCard(tr("Upcoming interviews"), upcomingContainer);
-    upcomingCard->setMinimumHeight(QFontMetrics(font()).height() * 14);
     leftCol->addWidget(upcomingCard, 1);
 
     columnsLayout->addLayout(leftCol, 1);

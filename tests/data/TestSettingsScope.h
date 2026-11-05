@@ -22,6 +22,23 @@ public:
             : u"%1_%2"_s.arg(appPrefix).arg(QCoreApplication::applicationPid());
         QCoreApplication::setOrganizationName(u"JobPrepTest"_s);
         QCoreApplication::setApplicationName(appName);
+        m_origXdgData = qgetenv("XDG_DATA_HOME");
+        m_origXdgConfig = qgetenv("XDG_CONFIG_HOME");
+        qputenv("XDG_DATA_HOME", m_tempDir.filePath(u"data"_s).toLocal8Bit());
+        qputenv("XDG_CONFIG_HOME", m_tempDir.filePath(u"config"_s).toLocal8Bit());
+    }
+
+    ~TestSettingsScope() {
+        if (m_origXdgData.isEmpty()) {
+            qunsetenv("XDG_DATA_HOME");
+        } else {
+            qputenv("XDG_DATA_HOME", m_origXdgData);
+        }
+        if (m_origXdgConfig.isEmpty()) {
+            qunsetenv("XDG_CONFIG_HOME");
+        } else {
+            qputenv("XDG_CONFIG_HOME", m_origXdgConfig);
+        }
     }
 
     QString path() const { return m_tempDir.path(); }
@@ -29,6 +46,8 @@ public:
 
 private:
     QTemporaryDir m_tempDir;
+    QByteArray m_origXdgData;
+    QByteArray m_origXdgConfig;
 };
 
 }  // namespace JobPrep::Tests

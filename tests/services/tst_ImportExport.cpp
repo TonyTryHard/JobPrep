@@ -948,8 +948,28 @@ void tst_ImportExport::testRestoreSafetyBackupCreatedPrunedAndAbortsWhenReadOnly
 }
 
 void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHome() {
+    // RAII guard: restores organization/application name, test mode and env vars
+    // even if QSKIP or QFAIL fires early.
     const QString origOrg = QCoreApplication::organizationName();
     const QString origApp = QCoreApplication::applicationName();
+    const bool origTestMode = QStandardPaths::isTestModeEnabled();
+    const QByteArray origXdg = qgetenv("XDG_DATA_HOME");
+    const QByteArray origLocalAppData = qgetenv("LOCALAPPDATA");
+    struct Guard {
+        const QString& org;
+        const QString& app;
+        bool testMode;
+        QByteArray xdg;
+        QByteArray localAppData;
+        ~Guard() {
+            QCoreApplication::setOrganizationName(org);
+            QCoreApplication::setApplicationName(app);
+            QStandardPaths::setTestModeEnabled(testMode);
+            if (xdg.isEmpty()) qunsetenv("XDG_DATA_HOME"); else qputenv("XDG_DATA_HOME", xdg);
+            if (localAppData.isEmpty()) qunsetenv("LOCALAPPDATA"); else qputenv("LOCALAPPDATA", localAppData);
+        }
+    } guard{origOrg, origApp, origTestMode, origXdg, origLocalAppData};
+
     QCoreApplication::setOrganizationName(u"JobPrep"_s);
     QCoreApplication::setApplicationName(u"JobPrep"_s);
     QStandardPaths::setTestModeEnabled(false);
@@ -965,20 +985,19 @@ void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHom
 
     // Safety guard: NEVER write safety backups to the real user location during tests.
     // The resolved production directory MUST be isolated inside the temporary directory.
+    // On platforms where the env-var redirect did not take effect (e.g. Windows where
+    // AppDataLocation uses SHGetFolderPath, unaffected by LOCALAPPDATA), skip rather than
+    // writing to real user data.  The runtime check is portable; no Q_OS_* preprocessor guard.
     if (!prodSafetyDir.startsWith(customXdg)) {
-#ifdef Q_OS_WIN
-        // On Windows without shell folder redirection, AppDataLocation cannot be redirected
-        // via environment variables alone. Skip the write to avoid touching real %LOCALAPPDATA%.
-        qunsetenv("XDG_DATA_HOME");
-        qunsetenv("LOCALAPPDATA");
-        QStandardPaths::setTestModeEnabled(true);
-        QCoreApplication::setOrganizationName(origOrg);
-        QCoreApplication::setApplicationName(origApp);
-        QSKIP("QStandardPaths::AppDataLocation cannot be redirected via environment on Windows; skipping to protect user data.");
-#else
-        QFAIL(qPrintable(QString(u"Safety violation: resolved path '%1' is not under temp dir '%2'"_s)
-                             .arg(prodSafetyDir, customXdg)));
-#endif
+        // Verify the redirect did not take effect for the data location.
+        const bool xdgTookEffect =
+            QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
+                .startsWith(customXdg);
+        QVERIFY2(!xdgTookEffect,
+                 qPrintable(QString(u"XDG redirect took effect but safety dir '%1' is "
+                                    "not under '%2'"_s).arg(prodSafetyDir, customXdg)));
+        QSKIP("AppDataLocation cannot be redirected via environment on this platform; "
+              "skipping to protect user data.");
     }
 
     TestDatabase testDb(u"tst_prod_path"_s);
@@ -994,12 +1013,7 @@ void tst_ImportExport::testRestoreSafetyBackupProductionPathWithCustomXdgDataHom
     if (QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation).startsWith(customXdg)) {
         QVERIFY(res.safetyBackupPath.startsWith(customXdg));
     }
-
-    qunsetenv("XDG_DATA_HOME");
-    qunsetenv("LOCALAPPDATA");
-    QStandardPaths::setTestModeEnabled(true);
-    QCoreApplication::setOrganizationName(origOrg);
-    QCoreApplication::setApplicationName(origApp);
+    // Guard destructor restores everything.
 }
 
 void tst_ImportExport::testRestoreRemindersSentWiped() {

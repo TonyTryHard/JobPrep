@@ -274,7 +274,13 @@ void tst_HiDpi::testPagesHiDpi() {
         for (const QSize& size : sizes) {
             win.resize(size);
             QApplication::processEvents();
-            const QString sizeName = QString(u"%1x%2"_s).arg(size.width()).arg(size.height());
+            // Use the actual window size after resize (may be clamped by layout minimum).
+            const QSize actualSize = win.size();
+            qInfo("testPagesHiDpi: requested %dx%d, actual %dx%d (layout min %dx%d)",
+                  size.width(), size.height(),
+                  actualSize.width(), actualSize.height(),
+                  win.minimumSizeHint().width(), win.minimumSizeHint().height());
+            const QString sizeName = QString(u"%1x%2"_s).arg(actualSize.width()).arg(actualSize.height());
 
             // 5 main pages: 0=Home, 1=Study, 2=Jobs, 3=Calendar, 4=Settings
             for (int pageIdx = 0; pageIdx < 5; ++pageIdx) {
@@ -336,18 +342,19 @@ void tst_HiDpi::testDialogsHiDpi() {
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
                 dlg.resize(size);
-                QTest::qWait(20);
                 for (int t = 0; t < tabCount; ++t) {
                     if (tabWidget) {
                         tabWidget->setCurrentIndex(t);
-                        QApplication::processEvents();
                     }
+                    dlg.layout()->activate();
+                    QCoreApplication::processEvents();
                     const QString desc = QString(u"ApplicationDialog tab %1 | %2 | %3x%4"_s)
                                              .arg(t)
                                              .arg(themeName)
                                              .arg(size.width())
                                              .arg(size.height());
-                    allViolations.append(checkClipping(&dlg, desc));
+                    QWidget* targetWidget = tabWidget ? tabWidget->currentWidget() : &dlg;
+                    allViolations.append(checkClipping(targetWidget, desc));
                 }
             }
             dlg.close();

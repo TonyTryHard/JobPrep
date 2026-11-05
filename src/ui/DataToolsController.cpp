@@ -151,6 +151,10 @@ void DataToolsController::setReminderService(Services::ReminderService* reminder
     m_reminderService = reminderService;
 }
 
+void DataToolsController::setSafetyBackupDir(const QString& dir) {
+    m_safetyBackupDir = dir;
+}
+
 QDateTime DataToolsController::now() const {
     return m_clock ? m_clock() : QDateTime::currentDateTime();
 }
@@ -272,8 +276,9 @@ void DataToolsController::restoreJson(QWidget* parent) {
         m_fileChooser->getOpenFileName(parent, tr("Restore Database from Backup"), QString(), filter);
     if (path.isEmpty()) return;
 
-    const QString safetyDir =
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + u"/backups"_s;
+    const QString safetyDir = m_safetyBackupDir.isEmpty()
+        ? QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + u"/backups"_s
+        : m_safetyBackupDir;
 
     const QString confirmMsg =
         tr("Restoring from '%1' will REPLACE all current data.\n\n"

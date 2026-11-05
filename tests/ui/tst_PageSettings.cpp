@@ -1566,6 +1566,8 @@ void tst_PageSettings::testDataRestoreJsonWithSeams() {
     controller.setFileChooser(std::move(chooser));
     controller.setMessagePresenter(std::move(presenter));
     controller.setBusyIndicator(std::move(busy));
+    const QString safetyDir = temp.filePath(u"safety_backups"_s);
+    controller.setSafetyBackupDir(safetyDir);
 
     // 1. Chooser cancelled -> nothing done
     rawChooser->openPathToReturn = QString();

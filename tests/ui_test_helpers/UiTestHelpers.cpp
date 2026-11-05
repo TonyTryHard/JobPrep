@@ -70,6 +70,8 @@ void isolateSettings(QTemporaryDir& tempDir) {
     const QString uniqueAppName = u"JobPrepTest_%1"_s.arg(QCoreApplication::applicationPid());
     QCoreApplication::setOrganizationName(u"JobPrepTest"_s);
     QCoreApplication::setApplicationName(uniqueAppName);
+    qputenv("XDG_DATA_HOME", tempDir.filePath(u"data"_s).toLocal8Bit());
+    qputenv("XDG_CONFIG_HOME", tempDir.filePath(u"config"_s).toLocal8Bit());
 }
 
 void applyTestFontFamily() {
