@@ -348,11 +348,48 @@ void tst_HiDpi::testDialogsHiDpi() {
                     }
                     dlg.layout()->activate();
                     QCoreApplication::processEvents();
-                    const QString desc = QString(u"ApplicationDialog tab %1 | %2 | %3x%4"_s)
+
+                    // CI-DIAG start
+                    QString tabWidths;
+                    auto* bar = tabWidget ? tabWidget->tabBar() : nullptr;
+                    if (bar) {
+                        for (int i = 0; i < bar->count(); ++i) {
+                            if (i > 0) tabWidths += u","_s;
+                            tabWidths += QString::number(bar->tabRect(i).width());
+                        }
+                    }
+                    QString scrollBtnVis;
+                    for (auto* btn : dlg.findChildren<QToolButton*>()) {
+                        scrollBtnVis += QString(u"%1:visToDlg=%2 "_s)
+                                            .arg(btn->objectName().isEmpty() ? btn->metaObject()->className() : qPrintable(btn->objectName()))
+                                            .arg(btn->isVisibleTo(&dlg) ? 1 : 0);
+                    }
+                    qInfo("// CI-DIAG testDialogsHiDpi: dlg=ApplicationDialog tab=%d theme=%s "
+                          "requested=(%d,%d) actual=(%d,%d) minSize=(%d,%d) minSizeHint=(%d,%d) layMin=(%d,%d) "
+                          "tabWidgetW=%d tabBarW=%d tabBarSizeHint=(%d,%d) tabBarMinHint=(%d,%d) usesScroll=%d "
+                          "tabRects=[%s] scrollBtns=[%s] style=%s",
+                          t, qPrintable(themeName),
+                          size.width(), size.height(),
+                          dlg.width(), dlg.height(),
+                          dlg.minimumSize().width(), dlg.minimumSize().height(),
+                          dlg.minimumSizeHint().width(), dlg.minimumSizeHint().height(),
+                          dlg.layout()->minimumSize().width(), dlg.layout()->minimumSize().height(),
+                          tabWidget ? tabWidget->width() : -1,
+                          bar ? bar->width() : -1,
+                          bar ? bar->sizeHint().width() : -1, bar ? bar->sizeHint().height() : -1,
+                          bar ? bar->minimumSizeHint().width() : -1, bar ? bar->minimumSizeHint().height() : -1,
+                          bar ? (bar->usesScrollButtons() ? 1 : 0) : -1,
+                          qPrintable(tabWidths), qPrintable(scrollBtnVis.trimmed()),
+                          qPrintable(QApplication::style() ? QApplication::style()->name() : u"none"_s));
+                    // CI-DIAG end
+
+                    const QString desc = QString(u"ApplicationDialog tab %1 | %2 | req %3x%4 actual %5x%6"_s)
                                              .arg(t)
                                              .arg(themeName)
                                              .arg(size.width())
-                                             .arg(size.height());
+                                             .arg(size.height())
+                                             .arg(dlg.width())
+                                             .arg(dlg.height());
                     allViolations.append(checkClipping(&dlg, desc));
                 }
             }
@@ -374,10 +411,12 @@ void tst_HiDpi::testDialogsHiDpi() {
                 dlg.resize(size);
                 dlg.layout()->activate();
                 QApplication::processEvents();
-                const QString desc = QString(u"InterviewDialog | %1 | %2x%3"_s)
+                const QString desc = QString(u"InterviewDialog | %1 | req %2x%3 actual %4x%5"_s)
                                          .arg(themeName)
                                          .arg(size.width())
-                                         .arg(size.height());
+                                         .arg(size.height())
+                                         .arg(dlg.width())
+                                         .arg(dlg.height());
                 allViolations.append(checkClipping(&dlg, desc));
             }
             dlg.close();
@@ -397,10 +436,12 @@ void tst_HiDpi::testDialogsHiDpi() {
                 dlg.resize(size);
                 dlg.layout()->activate();
                 QApplication::processEvents();
-                const QString desc = QString(u"FollowUpDialog | %1 | %2x%3"_s)
+                const QString desc = QString(u"FollowUpDialog | %1 | req %2x%3 actual %4x%5"_s)
                                          .arg(themeName)
                                          .arg(size.width())
-                                         .arg(size.height());
+                                         .arg(size.height())
+                                         .arg(dlg.width())
+                                         .arg(dlg.height());
                 allViolations.append(checkClipping(&dlg, desc));
             }
             dlg.close();
@@ -420,10 +461,12 @@ void tst_HiDpi::testDialogsHiDpi() {
                 dlg.resize(size);
                 dlg.layout()->activate();
                 QApplication::processEvents();
-                const QString desc = QString(u"SessionDialog | %1 | %2x%3"_s)
+                const QString desc = QString(u"SessionDialog | %1 | req %2x%3 actual %4x%5"_s)
                                          .arg(themeName)
                                          .arg(size.width())
-                                         .arg(size.height());
+                                         .arg(size.height())
+                                         .arg(dlg.width())
+                                         .arg(dlg.height());
                 allViolations.append(checkClipping(&dlg, desc));
             }
             dlg.close();
@@ -443,10 +486,12 @@ void tst_HiDpi::testDialogsHiDpi() {
                 dlg.resize(size);
                 dlg.layout()->activate();
                 QApplication::processEvents();
-                const QString desc = QString(u"TrackDialog | %1 | %2x%3"_s)
+                const QString desc = QString(u"TrackDialog | %1 | req %2x%3 actual %4x%5"_s)
                                          .arg(themeName)
                                          .arg(size.width())
-                                         .arg(size.height());
+                                         .arg(size.height())
+                                         .arg(dlg.width())
+                                         .arg(dlg.height());
                 allViolations.append(checkClipping(&dlg, desc));
             }
             dlg.close();

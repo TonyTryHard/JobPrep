@@ -77,7 +77,26 @@ ApplicationDialog::ApplicationDialog(JobPrep::Data::ApplicationRepository& apps,
     const int minW = std::max(layout()->minimumSize().width(), tabW);
     const int minH = layout()->minimumSize().height();
     setMinimumSize(minW, minH);
+
+    qInfo("// CI-DIAG ApplicationDialog constructor: tabSizeHint=(%d,%d) tabMinHint=(%d,%d) usesScroll=%d layMin=(%d,%d) minW=%d minH=%d",
+          m_tabs->tabBar()->sizeHint().width(), m_tabs->tabBar()->sizeHint().height(),
+          m_tabs->tabBar()->minimumSizeHint().width(), m_tabs->tabBar()->minimumSizeHint().height(),
+          m_tabs->tabBar()->usesScrollButtons() ? 1 : 0,
+          layout()->minimumSize().width(), layout()->minimumSize().height(),
+          minW, minH); // CI-DIAG
 }
+
+void ApplicationDialog::showEvent(QShowEvent* event) { // CI-DIAG
+    QDialog::showEvent(event); // CI-DIAG
+    qInfo("// CI-DIAG ApplicationDialog showEvent: tabSizeHint=(%d,%d) tabMinHint=(%d,%d) usesScroll=%d layMin=(%d,%d) dlgMin=(%d,%d) dlgMinHint=(%d,%d) dlgSize=(%d,%d)",
+          m_tabs->tabBar()->sizeHint().width(), m_tabs->tabBar()->sizeHint().height(),
+          m_tabs->tabBar()->minimumSizeHint().width(), m_tabs->tabBar()->minimumSizeHint().height(),
+          m_tabs->tabBar()->usesScrollButtons() ? 1 : 0,
+          layout()->minimumSize().width(), layout()->minimumSize().height(),
+          minimumSize().width(), minimumSize().height(),
+          minimumSizeHint().width(), minimumSizeHint().height(),
+          width(), height()); // CI-DIAG
+} // CI-DIAG
 
 void ApplicationDialog::setupUi() {
     auto* layout = new QVBoxLayout(this);
