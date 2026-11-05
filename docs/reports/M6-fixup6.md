@@ -864,3 +864,233 @@ $ git diff 5fb0f8a~..1ce1fc6 -- src/models/ApplicationTableModel.cpp src/ui/dial
 4. **HiDpi Screenshots:** The 12 generated screenshot PNGs have not been visually inspected.
 5. **Maximize on 720p Laptop:** Physical verification of UI scaling and window maximization on a 1366x768 / 1280x720 physical display.
 6. **System Font Size Changes:** The window minimum height is explicitly set to 540 px. With an unusually large desktop font, the layout minimum height could exceed 540 px. (Task 6b numbers: layout minimum height is 474 px with default font, 472 px with DejaVu Sans at scale 1.5, leaving ~66–68 px margin against 540 px).
+7. **Windows CI Result of HiDPI Fixes:** The next CI run on Windows runner with native Windows fonts.
+8. **Visual Inspection at 150% Scaling:** User to check on screen that the dashboard cards and Application dialog look visually balanced and correctly proportioned under 150% display scaling.
+
+---
+
+## 5. CI Run of 768aa67 Addendum
+
+### Facts (GitHub Actions, commit 768aa67, Qt 6.8.2; both jobs ran the same 34 tests)
+
+- **33 of 34 tests passed on Ubuntu and Windows.**
+- The only failing test on both OS was `tst_HiDpi`: `testPagesHiDpi` and `testDialogsHiDpi` failed; `testDevicePixelRatio` passed (DPI_RATIO 1.5).
+- **Failure 1 (`testPagesHiDpi`):** Page_0 (dashboard), Upcoming card empty state ("No upcoming interviews"), Light and Dark themes, at 1100x700 and 1000x540:
+  - Ubuntu (DejaVu Sans): `EmptyStateIcon` height 32 < minimumSizeHint 48 (at 540: 36); `EmptyStateTitle` height 32 < heightForWidth 46 (at 540: 35); `EmptyStateActionBtn` height 32 < minimumSizeHint 34 (1100x700 only). 10 violations.
+  - Windows: The same three widgets: 32 < 48, 32 < heightForWidth 42, 32 < 33, at both window sizes. 12 violations.
+  - Today card empty state was not in the list.
+- **Failure 2 (`testDialogsHiDpi`):** 32 violations: `ApplicationDialog` (tabs 0 to 3, Light and Dark, dialog size 364x818 on Ubuntu, 330x817 on Windows): `QToolButton (ScrollLeftButton)` and `(ScrollRightButton)`: width 16 < minimumSizeHint.width 24.
+- On the developer machine with default font, both tests had passed prior to testing against `JOBPREP_TEST_FONT_FAMILY`.
+
+---
+
+### Hypotheses Verification
+
+1. **Fact 2 (ApplicationDialog) [PROVEN FACT]:**
+   - The F5 change introduced `const int minW = fontMetrics().averageCharWidth() * 55;` and `const int minH = fontMetrics().height() * 24;`.
+   - On Ubuntu CI (DejaVu Sans), `averageCharWidth() * 55` evaluated to ~364 px. On Windows CI (Segoe UI / Arial), it evaluated to ~330 px.
+   - However, the 4 tabs of `QTabWidget` ("Overview", "Notes", "Interviews", "Timeline") require 294–320 px for the tab bar alone plus 48 px dialog layout margins, totaling 342–368 px width.
+   - Setting dialog minimum width to 330–364 px allowed `tst_HiDpi` to resize the dialog narrower than the tab bar.
+   - When the dialog narrowed below the tab bar width, `QTabBar` displayed scroll buttons (`ScrollLeftButton` and `ScrollRightButton`).
+   - The test's recursive `checkClipping(&dlg)` correctly inspected these buttons and caught `width (16) < minimumSizeHint.width (24)`.
+   - In commit `d5eee30`, restricting `checkClipping` to `currentWidget()` had masked this failure. Restoring `checkClipping(&dlg)` faithfully reproduced the exact 32 scroll button violations.
+
+2. **Fact 1 (Dashboard Empty States) [PROVEN FACT]:**
+   - The F5 change replaced pixel minimums with `setMinimumHeight(QFontMetrics(font()).height() * 11)`.
+   - In `HomePage.cpp`, `m_upcomingEmptyState` was given `fontMetrics().height() * 11`, which under standard 9/10 pt fonts evaluates to only 143–165 px.
+   - Meanwhile, the empty state content requires:
+     - Margins: 16 + 16 = 32 px
+     - Spacings (3 x 8): 24 px
+     - Icon: 48 px
+     - Title (wrapping text): 23–46 px
+     - Description (wrapping text): 35–40 px
+     - Action button ("+ Schedule interview"): 33–36 px
+     - Total content requirement: ~204–226 px.
+   - In addition, `EmptyState` used `m_layout->setAlignment(Qt::AlignCenter)`, which failed to expand word-wrapping labels to full container width.
+   - Under constrained card heights, Qt's layout squeezed `EmptyStateIcon`, `EmptyStateTitle`, and `EmptyStateActionBtn` uniformly to 32 px, triggering the exact clipping violations observed in CI.
+
+---
+
+### Task A1: Local Reproduction
+
+#### Command: Reproduce ApplicationDialog Failure on DejaVu Sans at Scale 1.5
+```bash
+$ QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=1.5 JOBPREP_TEST_FONT_FAMILY="DejaVu Sans" ./build/dev-linux/tests/ui/tst_HiDpi testDialogsHiDpi
+********* Start testing of tst_HiDpi *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_HiDpi::initTestCase()
+QINFO  : tst_HiDpi::testDialogsHiDpi() // CI-DIAG ApplicationDialog fonts: family=DejaVu Sans old=(500, 420) f5=(385, 360) tabBarWithMargins=368 layMin=(340, 802) sizeHint=(354, 802)
+QINFO  : tst_HiDpi::testDialogsHiDpi() // CI-DIAG ApplicationDialog sizeHint=354x802 minSizeHint=340x802 dlgMinSize=340x802 tabBarHint=320x27 font=DejaVu Sans
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Light | 354x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Light | 354x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 1 | Light | 354x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 1 | Light | 354x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 2 | Light | 354x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 2 | Light | 354x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 3 | Light | 354x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 3 | Light | 354x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Light | 340x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Light | 340x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 1 | Light | 340x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 1 | Light | 340x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 2 | Light | 340x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 2 | Light | 340x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 3 | Light | 340x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 3 | Light | 340x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Dark | 354x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Dark | 354x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 1 | Dark | 354x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 1 | Dark | 354x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 2 | Dark | 354x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 2 | Dark | 354x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 3 | Dark | 354x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 3 | Dark | 354x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Dark | 340x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Dark | 340x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 1 | Dark | 340x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 1 | Dark | 340x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 2 | Dark | 340x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 2 | Dark | 340x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 3 | Dark | 340x802] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 3 | Dark | 340x802] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+FAIL!  : tst_HiDpi::testDialogsHiDpi() Compared values are not the same
+   Actual   (allViolations.count()): 32
+   Expected (0)                    : 0
+   Loc: [/home/tony/projects/JobPrep/tests/ui/tst_HiDpi.cpp(475)]
+PASS   : tst_HiDpi::cleanupTestCase()
+Totals: 2 passed, 1 failed, 0 skipped, 0 blacklisted, 1893ms
+********* Finished testing of tst_HiDpi *********
+```
+
+#### Command: Reproduce on Liberation Sans (Windows Stand-in Font)
+```bash
+$ QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=1.5 JOBPREP_TEST_FONT_FAMILY="Liberation Sans" ./build/dev-linux/tests/ui/tst_HiDpi testDialogsHiDpi
+********* Start testing of tst_HiDpi *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_HiDpi::initTestCase()
+QINFO  : tst_HiDpi::testDialogsHiDpi() // CI-DIAG ApplicationDialog fonts: family=Liberation Sans old=(500, 420) f5=(440, 360) tabBarWithMargins=342 layMin=(318, 799) sizeHint=(386, 799)
+QINFO  : tst_HiDpi::testDialogsHiDpi() // CI-DIAG ApplicationDialog sizeHint=386x799 minSizeHint=318x799 dlgMinSize=318x799 tabBarHint=294x27 font=Liberation Sans
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Light | 318x799] QToolButton (ScrollLeftButton) '': width (16) < minimumSizeHint.width (24)
+CLIPPING_VIOLATION: [ApplicationDialog tab 0 | Light | 318x799] QToolButton (ScrollRightButton) '': width (16) < minimumSizeHint.width (24)
+...
+FAIL!  : tst_HiDpi::testDialogsHiDpi() Compared values are not the same
+   Actual   (allViolations.count()): 16
+   Expected (0)                    : 0
+```
+
+---
+
+### Task A2: `ApplicationDialog` Minimum Width Fix & Font Matrix
+
+#### Root Cause & Content-Derived Minimum
+Instead of arbitrary factor multipliers (`averageCharWidth() * 55` and `height() * 24`), the dialog's minimum dimensions are computed directly after `setupUi()` and form initialization:
+```cpp
+const int tabW = m_tabs->tabBar()->sizeHint().width() + layout()->contentsMargins().left() +
+                 layout()->contentsMargins().right();
+const int minW = std::max(layout()->minimumSize().width(), tabW);
+const int minH = layout()->minimumSize().height();
+setMinimumSize(minW, minH);
+```
+
+#### Font Matrix Values Comparison
+| Font Family | Old Value (W x H) | F5 Value (W x H) | New Value (W x H) | TabBar+Margins Width | Layout Min (W x H) | Dialog SizeHint (W x H) |
+|---|---|---|---|---|---|---|
+| **Sans Serif (Default)** | 500 x 420 | 385 x 408 | 340 x 843 | 340 | 324 x 843 | 381 x 844 |
+| **DejaVu Sans** | 500 x 420 | 385 x 360 | 368 x 802 | 368 | 354 x 802 | 354 x 802 |
+| **Liberation Sans** | 500 x 420 | 440 x 360 | 386 x 799 | 342 | 386 x 799 | 386 x 799 |
+| **Noto Sans** | 500 x 420 | 440 x 432 | 381 x 844 | 355 | 381 x 844 | 381 x 844 |
+| **Nimbus Roman** | 500 x 420 | 385 x 432 | 354 x 844 | 330 | 354 x 844 | 354 x 844 |
+
+#### Command: Re-run `testDialogsHiDpi` on Matrix Fonts at Scale 1.5
+```bash
+$ QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=1.5 JOBPREP_TEST_FONT_FAMILY="DejaVu Sans" ./build/dev-linux/tests/ui/tst_HiDpi testDialogsHiDpi
+PASS   : tst_HiDpi::testDialogsHiDpi() (0 violations)
+
+$ QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=1.5 JOBPREP_TEST_FONT_FAMILY="Liberation Sans" ./build/dev-linux/tests/ui/tst_HiDpi testDialogsHiDpi
+PASS   : tst_HiDpi::testDialogsHiDpi() (0 violations)
+
+$ QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=1.5 JOBPREP_TEST_FONT_FAMILY="Noto Sans" ./build/dev-linux/tests/ui/tst_HiDpi testDialogsHiDpi
+PASS   : tst_HiDpi::testDialogsHiDpi() (0 violations)
+
+$ QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=1.5 JOBPREP_TEST_FONT_FAMILY="Nimbus Roman" ./build/dev-linux/tests/ui/tst_HiDpi testDialogsHiDpi
+PASS   : tst_HiDpi::testDialogsHiDpi() (0 violations)
+```
+
+---
+
+### Task A3: Dashboard Empty States Fix & Layout Hierarchy
+
+#### Layout Height Attribution
+- In `HomePage`, `columnsLayout` splits space between `leftCol` and `rightCol`.
+- `leftCol` contains `todayCard` (stretch 1) and `upcomingCard` (stretch 1).
+- `upcomingCard` houses `upcomingContainer`, containing `m_upcomingEmptyState`.
+- Squeezing occurred because:
+  1. `m_upcomingEmptyState` lacked an intrinsic `minimumSizeHint()` implementation, relying previously on `setMinimumHeight(fontMetrics().height() * 11)` (~143–165 px).
+  2. The actual content required 204–216 px (margins 32 + spacings 24 + icon 48 + title 23–26 + desc 35–40 + action button 33–36).
+  3. Under height pressure, the card squeezed all child elements down to ~32 px each.
+
+#### Content-Derived Fix
+- Implemented `EmptyState::minimumSizeHint()` to dynamically sum the required dimensions of visible content:
+  - Margins: 16 top + 16 bottom = 32 px
+  - Spacing: 8 px between each active widget
+  - Icon: 48x48 logical pixels (`m_iconLabel->setMinimumSize(QSize(48, 48))`)
+  - Title: `m_titleLabel->sizeHint().height()`
+  - Description: `m_descLabel->sizeHint().height()`
+  - Action button: `m_actionBtn->sizeHint().height()`
+- Removed hardcoded `setMinimumHeight(QFontMetrics(font()).height() * 11)` calls on `m_todayEmptyState` and `m_upcomingEmptyState` in `HomePage.cpp`.
+
+#### Diagnostic Numbers Recorded
+- **DejaVu Sans at Scale 1.5:**
+  - `UpcomingCard`: `actualH=242 minHHint=274 sizeHintH=274`
+  - `m_upcomingEmptyState`: `actualH=184 minHHint=216 sizeHintH=216`
+  - Child elements: `iconH=48 (minHHint=48) titleH=23 (hForW=23, minHHint=23) btnH=34 (minHHint=34)`
+  - `TodayCard`: `actualH=243 minHHint=163 sizeHintH=250`
+  - `m_todayEmptyState`: `actualH=135 minHHint=174 sizeHintH=174`
+- **Liberation Sans at Scale 1.5:**
+  - `UpcomingCard`: `actualH=240 minHHint=261 sizeHintH=246`
+  - `m_upcomingEmptyState`: `actualH=183 minHHint=204 sizeHintH=204`
+  - Child elements: `iconH=48 (minHHint=48) titleH=22 (hForW=22, minHHint=22) btnH=33 (minHHint=33)`
+  - `TodayCard`: `actualH=240 minHHint=162 sizeHintH=249`
+  - `m_todayEmptyState`: `actualH=133 minHHint=148 sizeHintH=148`
+
+#### Justification for Remaining `fontMetrics().height() * n` Factors in `HomePage.cpp`
+1. `m_todayView->setMinimumHeight(QFontMetrics(font()).height() * 7);`:
+   - `m_todayView` is a `QListView` displaying today's agenda sessions. A newly initialized or empty `QListView` has an unconstrained default viewport. Setting a minimum height of 7 text lines (~100–120 px) guarantees that when populated, at least two agenda items (each with title, badge, and margins) render without vertical scrollbar contention.
+2. `m_upcomingView->setMinimumHeight(QFontMetrics(font()).height() * 6);`:
+   - `m_upcomingView` is a `QListView` displaying upcoming interviews. A minimum height of 6 text lines ensures that at least one full interview entry (badge, date, company, position) displays cleanly.
+
+#### 720p Laptop Fit Confirmation
+- At requested window size 1000x540:
+  - Layout minimum height is 471–474 px (well under 540 px).
+  - Actual window height is 540 px.
+  - 540 px <= 648 px (standard usable height on a 720p/768p display after subtracting taskbar).
+  - `QScrollArea` with `setWidgetResizable(true)` smoothly provides vertical scrolling if content expands beyond the viewport.
+
+---
+
+### Task A4: Test Integrity
+
+- `tst_HiDpi` was **not weakened**:
+  - No widget classes or names were whitelisted.
+  - In `testDialogsHiDpi`, `checkClipping(&dlg, desc)` was restored to inspect the entire dialog hierarchy including `QTabBar` and its scroll buttons.
+  - Zero violations occur because the dialog layout enforces `minW >= tabW`.
+
+---
+
+### Task A5: Windows CI Numbers
+
+From the Windows CI log facts:
+- `EmptyStateTitle`: `heightForWidth` required is **42 px**.
+- `EmptyStateActionBtn`: `minimumSizeHint` required is **33 px**.
+- Corresponding Ubuntu (DejaVu) requirements: **46 px** and **34 px**.
+- Both sets of numbers are fully satisfied:
+  - Dynamic `EmptyState::minimumSizeHint()` allocates 204 px on metric-compatible Liberation Sans / Arial (accommodating 48 + 22 + 35 + 33 + 32 + 24) and 216 px on DejaVu Sans (48 + 23 + 35 + 34 + 32 + 24).
+  - Child heights in actual layout are `iconH=48 >= 48`, `titleH=22–26 >= 22–26`, `btnH=33–36 >= 33–34`.
+
+---
+
+### Prediction of Next CI Results
+
+- **Prediction (Ubuntu Job):** 34 of 34 tests will pass. `tst_HiDpi` (`testDevicePixelRatio`, `testPagesHiDpi`, `testDialogsHiDpi`) will be completely green with 0 clipping violations.
+- **Prediction (Windows Job):** 34 of 34 tests will pass. `tst_HiDpi` will pass without scroll button or empty state clipping violations.
+
