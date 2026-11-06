@@ -850,15 +850,27 @@ void tst_HiDpi::testScreenshotsHiDpi() {
     updateProgress(u"testScreenshotsHiDpi end"_s); // CI-DIAG
 }
 
+static QString s_cfgToRemove;
+static void removeConfigOnExit() {
+    if (!s_cfgToRemove.isEmpty()) {
+        QFile::remove(s_cfgToRemove);
+    }
+}
+
 int main(int argc, char* argv[]) {
+#if defined(Q_OS_WIN)
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
     updateProgress(u"main start"_s); // CI-DIAG
     const QByteArray platform = qgetenv("QT_QPA_PLATFORM");
+    const QString cfgPath = u"jobprep_offscreen_1080p.json"_s;
     if (platform.isEmpty() || platform == "offscreen" || platform == "offscreen:size=1920x1080") {
-        const QString cfgPath = QDir::tempPath() + u"/jobprep_offscreen_1080p.json"_s;
         QFile cfg(cfgPath);
         if (cfg.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
             cfg.write("{\"screens\":[{\"name\":\"Screen0\",\"x\":0,\"y\":0,\"width\":1920,\"height\":1080}]}");
             cfg.close();
+            s_cfgToRemove = cfgPath;
+            std::atexit(removeConfigOnExit);
             qputenv("QT_QPA_PLATFORM", QByteArray("offscreen:configfile=") + cfgPath.toLocal8Bit());
         }
     }
@@ -866,6 +878,8 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     updateProgress(u"main after QApplication"_s); // CI-DIAG
     tst_HiDpi tc;
-    return QTest::qExec(&tc, argc, argv);
+    const int result = QTest::qExec(&tc, argc, argv);
+    QFile::remove(cfgPath);
+    return result;
 }
 #include "tst_HiDpi.moc"
