@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDate>
+#include <QElapsedTimer> // CI-DIAG
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -13,6 +14,11 @@
 #include <QTest>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <atomic> // CI-DIAG
+#include <chrono> // CI-DIAG
+#include <mutex> // CI-DIAG
+#include <string> // CI-DIAG
+#include <thread> // CI-DIAG
 
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
@@ -35,6 +41,65 @@
 using namespace Qt::StringLiterals;
 using JobPrep::Ui::Theme::ThemeMode;
 
+// CI-DIAG: Watchdog and progress instrumentation for CI hang diagnostics
+static std::mutex s_diagMutex; // CI-DIAG
+static std::string s_lastProgress = "uninitialized"; // CI-DIAG
+static std::chrono::steady_clock::time_point s_lastProgressTime; // CI-DIAG
+static std::atomic<bool> s_watchdogStop{false}; // CI-DIAG
+static std::thread s_watchdogThread; // CI-DIAG
+static QElapsedTimer s_diagTimer; // CI-DIAG
+// CI-DIAG
+static void updateProgress(const QString& msg) { // CI-DIAG
+    const qint64 elapsedMs = s_diagTimer.isValid() ? s_diagTimer.elapsed() : 0; // CI-DIAG
+    const QString fullMsg = QString(u"CI-DIAG progress: %1 t=%2ms"_s).arg(msg).arg(elapsedMs); // CI-DIAG
+    { // CI-DIAG
+        std::lock_guard<std::mutex> lock(s_diagMutex); // CI-DIAG
+        s_lastProgress = fullMsg.toStdString(); // CI-DIAG
+        s_lastProgressTime = std::chrono::steady_clock::now(); // CI-DIAG
+    } // CI-DIAG
+    qInfo("%s", qPrintable(fullMsg)); // CI-DIAG
+    fflush(stderr); // CI-DIAG
+} // CI-DIAG
+// CI-DIAG
+static void startWatchdog() { // CI-DIAG
+    s_diagTimer.start(); // CI-DIAG
+    { // CI-DIAG
+        std::lock_guard<std::mutex> lock(s_diagMutex); // CI-DIAG
+        s_lastProgress = "watchdog started"; // CI-DIAG
+        s_lastProgressTime = std::chrono::steady_clock::now(); // CI-DIAG
+    } // CI-DIAG
+    s_watchdogStop.store(false); // CI-DIAG
+    s_watchdogThread = std::thread([]() { // CI-DIAG
+        while (!s_watchdogStop.load()) { // CI-DIAG
+            std::this_thread::sleep_for(std::chrono::milliseconds(500)); // CI-DIAG
+            if (s_watchdogStop.load()) break; // CI-DIAG
+            std::string lastProg; // CI-DIAG
+            std::chrono::steady_clock::time_point lastTime; // CI-DIAG
+            { // CI-DIAG
+                std::lock_guard<std::mutex> lock(s_diagMutex); // CI-DIAG
+                lastProg = s_lastProgress; // CI-DIAG
+                lastTime = s_lastProgressTime; // CI-DIAG
+            } // CI-DIAG
+            const auto sec = std::chrono::duration_cast<std::chrono::seconds>( // CI-DIAG
+                std::chrono::steady_clock::now() - lastTime).count(); // CI-DIAG
+            if (sec >= 240) { // CI-DIAG
+                fprintf(stderr, "\n=== CI-DIAG WATCHDOG TIMEOUT: 240s without progress ===\n"); // CI-DIAG
+                fprintf(stderr, "Last progress: %s\n", lastProg.c_str()); // CI-DIAG
+                fprintf(stderr, "Watchdog Thread ID: %llu\n", static_cast<unsigned long long>( // CI-DIAG
+                    std::hash<std::thread::id>{}(std::this_thread::get_id()))); // CI-DIAG
+                fflush(stderr); // CI-DIAG
+                std::_Exit(3); // CI-DIAG
+            } // CI-DIAG
+        } // CI-DIAG
+    }); // CI-DIAG
+} // CI-DIAG
+// CI-DIAG
+static void stopWatchdog() { // CI-DIAG
+    s_watchdogStop.store(true); // CI-DIAG
+    if (s_watchdogThread.joinable()) { // CI-DIAG
+        s_watchdogThread.join(); // CI-DIAG
+    } // CI-DIAG
+} // CI-DIAG
 struct ClippingViolation {
     QString widgetClass;
     QString objectName;
@@ -63,6 +128,8 @@ private:
 };
 
 void tst_HiDpi::initTestCase() {
+    startWatchdog(); // CI-DIAG
+    updateProgress(u"initTestCase start"_s); // CI-DIAG
     JobPrep::UiTest::applyTestFontFamily();
     JobPrep::UiTest::installWarningFilter();
     JobPrep::UiTest::isolateSettings(m_settingsDir);
@@ -91,14 +158,19 @@ void tst_HiDpi::initTestCase() {
     interview.durationMin = 60;
     interview.notes = u"Focus on concurrency and memory model"_s;
     ctx.interviews().insert(interview);
+    updateProgress(u"initTestCase end"_s); // CI-DIAG
 }
 
 void tst_HiDpi::cleanupTestCase() {
+    updateProgress(u"cleanupTestCase start"_s); // CI-DIAG
     m_fix.reset();
     JobPrep::UiTest::uninstallWarningFilter();
+    updateProgress(u"cleanupTestCase end"_s); // CI-DIAG
+    stopWatchdog(); // CI-DIAG
 }
 
 void tst_HiDpi::testDevicePixelRatio() {
+    updateProgress(u"testDevicePixelRatio start"_s); // CI-DIAG
     QScreen* screen = QGuiApplication::primaryScreen();
     QVERIFY(screen != nullptr);
     const qreal dpr = screen->devicePixelRatio();
@@ -107,6 +179,7 @@ void tst_HiDpi::testDevicePixelRatio() {
     // When QT_SCALE_FACTOR=1.5 is set, screen->devicePixelRatio() is 1.5
     // Allow small epsilon for floating point comparison
     QVERIFY(qAbs(dpr - 1.5) < 0.05 || qAbs(dpr - 1.0) < 0.05 || qAbs(dpr - 2.0) < 0.05);
+    updateProgress(u"testDevicePixelRatio end"_s); // CI-DIAG
 }
 
 static QString stripMnemonic(const QString& raw) {
@@ -257,6 +330,7 @@ QList<ClippingViolation> tst_HiDpi::checkClipping(QWidget* root, const QString& 
 }
 
 void tst_HiDpi::testPagesHiDpi() {
+    updateProgress(u"testPagesHiDpi start"_s); // CI-DIAG
     auto& win = m_fix->window();
     win.show();
     JobPrep::UiTest::activateWindow(&win);
@@ -285,6 +359,7 @@ void tst_HiDpi::testPagesHiDpi() {
 
             // 5 main pages: 0=Home, 1=Study, 2=Jobs, 3=Calendar, 4=Settings
             for (int pageIdx = 0; pageIdx < 5; ++pageIdx) {
+                updateProgress(QString(u"testPagesHiDpi page=%1 theme=%2 size=%3"_s).arg(pageIdx).arg(themeName, sizeName)); // CI-DIAG
                 win.pageStack()->setCurrentIndex(pageIdx);
                 QApplication::processEvents();
                 const QString pageName = QString(u"Page_%1"_s).arg(pageIdx);
@@ -310,6 +385,7 @@ void tst_HiDpi::testPagesHiDpi() {
 }
 
 void tst_HiDpi::testDialogsHiDpi() {
+    updateProgress(u"testDialogsHiDpi start"_s); // CI-DIAG
     auto& win = m_fix->window();
     auto& ctx = m_fix->context();
 
@@ -324,6 +400,7 @@ void tst_HiDpi::testDialogsHiDpi() {
 
         // 1. ApplicationDialog (with all tabs)
         {
+            updateProgress(QString(u"testDialogsHiDpi dialog=ApplicationDialog theme=%1 open"_s).arg(themeName)); // CI-DIAG
             JobPrep::Ui::Dialogs::ApplicationDialog dlg(ctx.applications(),
                                                         ctx.interviews(),
                                                         JobPrep::Ui::Dialogs::ApplicationDialog::Edit,
@@ -344,6 +421,8 @@ void tst_HiDpi::testDialogsHiDpi() {
             for (const auto& size : dlgSizes) {
                 dlg.resize(size);
                 for (int t = 0; t < tabCount; ++t) {
+                    updateProgress(QString(u"testDialogsHiDpi dialog=ApplicationDialog theme=%1 size=%2 tab=%3"_s) // CI-DIAG
+                                       .arg(themeName, size == dlg.sizeHint() ? u"sizeHint"_s : u"minSizeHint"_s).arg(t)); // CI-DIAG
                     if (tabWidget) {
                         tabWidget->setCurrentIndex(t);
                     }
@@ -400,6 +479,7 @@ void tst_HiDpi::testDialogsHiDpi() {
 
         // 2. InterviewDialog
         {
+            updateProgress(QString(u"testDialogsHiDpi dialog=InterviewDialog theme=%1 open"_s).arg(themeName)); // CI-DIAG
             JobPrep::Ui::Dialogs::InterviewDialog dlg(ctx.applications(),
                                                       ctx.interviews(),
                                                       JobPrep::Ui::Dialogs::InterviewDialog::Create,
@@ -409,6 +489,8 @@ void tst_HiDpi::testDialogsHiDpi() {
             QApplication::processEvents();
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
+                updateProgress(QString(u"testDialogsHiDpi dialog=InterviewDialog theme=%1 size=%2"_s) // CI-DIAG
+                                   .arg(themeName, size == dlg.sizeHint() ? u"sizeHint"_s : u"minSizeHint"_s)); // CI-DIAG
                 dlg.resize(size);
                 dlg.layout()->activate();
                 QApplication::processEvents();
@@ -426,6 +508,7 @@ void tst_HiDpi::testDialogsHiDpi() {
 
         // 3. FollowUpDialog
         {
+            updateProgress(QString(u"testDialogsHiDpi dialog=FollowUpDialog theme=%1 open"_s).arg(themeName)); // CI-DIAG
             JobPrep::Ui::Dialogs::FollowUpDialog dlg(ctx.applications(),
                                                      QDate(2026, 11, 1),
                                                      &win);
@@ -434,6 +517,8 @@ void tst_HiDpi::testDialogsHiDpi() {
             QApplication::processEvents();
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
+                updateProgress(QString(u"testDialogsHiDpi dialog=FollowUpDialog theme=%1 size=%2"_s) // CI-DIAG
+                                   .arg(themeName, size == dlg.sizeHint() ? u"sizeHint"_s : u"minSizeHint"_s)); // CI-DIAG
                 dlg.resize(size);
                 dlg.layout()->activate();
                 QApplication::processEvents();
@@ -451,6 +536,7 @@ void tst_HiDpi::testDialogsHiDpi() {
 
         // 4. SessionDialog
         {
+            updateProgress(QString(u"testDialogsHiDpi dialog=SessionDialog theme=%1 open"_s).arg(themeName)); // CI-DIAG
             JobPrep::Ui::Dialogs::SessionDialog dlg(ctx.sessions(),
                                                     ctx.topics(),
                                                     &win);
@@ -459,6 +545,8 @@ void tst_HiDpi::testDialogsHiDpi() {
             QApplication::processEvents();
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
+                updateProgress(QString(u"testDialogsHiDpi dialog=SessionDialog theme=%1 size=%2"_s) // CI-DIAG
+                                   .arg(themeName, size == dlg.sizeHint() ? u"sizeHint"_s : u"minSizeHint"_s)); // CI-DIAG
                 dlg.resize(size);
                 dlg.layout()->activate();
                 QApplication::processEvents();
@@ -476,6 +564,7 @@ void tst_HiDpi::testDialogsHiDpi() {
 
         // 5. TrackDialog
         {
+            updateProgress(QString(u"testDialogsHiDpi dialog=TrackDialog theme=%1 open"_s).arg(themeName)); // CI-DIAG
             JobPrep::Ui::Dialogs::TrackDialog dlg(ctx.tracks(),
                                                   ctx.topics(),
                                                   &win);
@@ -484,6 +573,8 @@ void tst_HiDpi::testDialogsHiDpi() {
             QApplication::processEvents();
             const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
             for (const auto& size : dlgSizes) {
+                updateProgress(QString(u"testDialogsHiDpi dialog=TrackDialog theme=%1 size=%2"_s) // CI-DIAG
+                                   .arg(themeName, size == dlg.sizeHint() ? u"sizeHint"_s : u"minSizeHint"_s)); // CI-DIAG
                 dlg.resize(size);
                 dlg.layout()->activate();
                 QApplication::processEvents();
@@ -514,6 +605,7 @@ void tst_HiDpi::testDialogsHiDpi() {
 }
 
 void tst_HiDpi::testDialogsFitSmallScreen() {
+    updateProgress(u"testDialogsFitSmallScreen start"_s); // CI-DIAG
     constexpr int kMaxSmallScreenHeight = 648;
     auto* screen = QGuiApplication::primaryScreen();
     const QRect avail = screen ? screen->availableGeometry() : QRect(0, 0, 1280, 720);
@@ -546,6 +638,7 @@ void tst_HiDpi::testDialogsFitSmallScreen() {
 
     // 1. ApplicationDialog
     {
+        updateProgress(u"testDialogsFitSmallScreen dialog=ApplicationDialog open"_s); // CI-DIAG
         JobPrep::Ui::Dialogs::ApplicationDialog dlg(ctx.applications(),
                                                     ctx.interviews(),
                                                     JobPrep::Ui::Dialogs::ApplicationDialog::Create,
@@ -556,6 +649,7 @@ void tst_HiDpi::testDialogsFitSmallScreen() {
 
         auto* tabWidget = dlg.findChild<QTabWidget*>();
         for (int t = 0; t < (tabWidget ? tabWidget->count() : 1); ++t) {
+            updateProgress(QString(u"testDialogsFitSmallScreen dialog=ApplicationDialog tab=%1"_s).arg(t)); // CI-DIAG
             if (tabWidget) tabWidget->setCurrentIndex(t);
             QCoreApplication::processEvents();
             const QSize sh = dlg.sizeHint();
@@ -578,6 +672,7 @@ void tst_HiDpi::testDialogsFitSmallScreen() {
 
     // 2. InterviewDialog
     {
+        updateProgress(u"testDialogsFitSmallScreen dialog=InterviewDialog"_s); // CI-DIAG
         JobPrep::Ui::Dialogs::InterviewDialog dlg(ctx.applications(),
                                                   ctx.interviews(),
                                                   JobPrep::Ui::Dialogs::InterviewDialog::Create,
@@ -605,6 +700,7 @@ void tst_HiDpi::testDialogsFitSmallScreen() {
 
     // 3. FollowUpDialog
     {
+        updateProgress(u"testDialogsFitSmallScreen dialog=FollowUpDialog"_s); // CI-DIAG
         JobPrep::Ui::Dialogs::FollowUpDialog dlg(ctx.applications(),
                                                  QDate(2026, 11, 1),
                                                  &win);
@@ -631,6 +727,7 @@ void tst_HiDpi::testDialogsFitSmallScreen() {
 
     // 4. SessionDialog
     {
+        updateProgress(u"testDialogsFitSmallScreen dialog=SessionDialog"_s); // CI-DIAG
         JobPrep::Ui::Dialogs::SessionDialog dlg(ctx.sessions(),
                                                 ctx.topics(),
                                                 &win);
@@ -657,6 +754,7 @@ void tst_HiDpi::testDialogsFitSmallScreen() {
 
     // 5. TrackDialog
     {
+        updateProgress(u"testDialogsFitSmallScreen dialog=TrackDialog"_s); // CI-DIAG
         JobPrep::Ui::Dialogs::TrackDialog dlg(ctx.tracks(),
                                               ctx.topics(),
                                               &win);
@@ -680,9 +778,11 @@ void tst_HiDpi::testDialogsFitSmallScreen() {
                                 .arg(btnBottomGlobal.y()).arg(avail.bottom())));
         dlg.close();
     }
+    updateProgress(u"testDialogsFitSmallScreen end"_s); // CI-DIAG
 }
 
 void tst_HiDpi::testScreenshotsHiDpi() {
+    updateProgress(u"testScreenshotsHiDpi start"_s); // CI-DIAG
     const QString dir = qEnvironmentVariable("JOBPREP_REPORT_IMG_DIR");
     if (dir.isEmpty()) {
         QSKIP("JOBPREP_REPORT_IMG_DIR is not set");
@@ -715,6 +815,7 @@ void tst_HiDpi::testScreenshotsHiDpi() {
 
         // 5 main pages
         for (const auto& p : pages) {
+            updateProgress(QString(u"testScreenshotsHiDpi page=%1 theme=%2"_s).arg(QString::fromLatin1(p.name), themeName)); // CI-DIAG
             win.pageStack()->setCurrentIndex(p.pageIdx);
             QApplication::processEvents();
             const QImage img = win.grab().toImage();
@@ -725,6 +826,7 @@ void tst_HiDpi::testScreenshotsHiDpi() {
 
         // Application dialog
         {
+            updateProgress(QString(u"testScreenshotsHiDpi dialog=ApplicationDialog theme=%1"_s).arg(themeName)); // CI-DIAG
             JobPrep::Ui::Dialogs::ApplicationDialog dlg(m_fix->context().applications(),
                                                         m_fix->context().interviews(),
                                                         JobPrep::Ui::Dialogs::ApplicationDialog::Edit,
@@ -745,9 +847,11 @@ void tst_HiDpi::testScreenshotsHiDpi() {
             QApplication::processEvents();
         }
     }
+    updateProgress(u"testScreenshotsHiDpi end"_s); // CI-DIAG
 }
 
 int main(int argc, char* argv[]) {
+    updateProgress(u"main start"_s); // CI-DIAG
     const QByteArray platform = qgetenv("QT_QPA_PLATFORM");
     if (platform.isEmpty() || platform == "offscreen" || platform == "offscreen:size=1920x1080") {
         const QString cfgPath = QDir::tempPath() + u"/jobprep_offscreen_1080p.json"_s;
@@ -758,7 +862,9 @@ int main(int argc, char* argv[]) {
             qputenv("QT_QPA_PLATFORM", QByteArray("offscreen:configfile=") + cfgPath.toLocal8Bit());
         }
     }
+    updateProgress(u"main before QApplication"_s); // CI-DIAG
     QApplication app(argc, argv);
+    updateProgress(u"main after QApplication"_s); // CI-DIAG
     tst_HiDpi tc;
     return QTest::qExec(&tc, argc, argv);
 }
