@@ -137,6 +137,7 @@ jobs:
 
       - name: Run quality gate (Linux)
         if: runner.os == 'Linux'
+        timeout-minutes: 15
         env:
           CMAKE_BUILD_PARALLEL_LEVEL: 2
           QT_QPA_PLATFORM: offscreen
@@ -145,6 +146,7 @@ jobs:
 
       - name: Run quality gate (Windows)
         if: runner.os == 'Windows'
+        timeout-minutes: 30
         env:
           CMAKE_BUILD_PARALLEL_LEVEL: 2
           QT_QPA_PLATFORM: offscreen
