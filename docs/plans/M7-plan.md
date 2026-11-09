@@ -26,14 +26,21 @@ Using Qt version 6.10.2 in /usr/lib/x86_64-linux-gnu
 
 ### Git Baseline
 ```bash
-$ git log -n 5 --oneline
+$ git log --oneline -n 12
 ```
 ```
-9fe8def (HEAD -> main, origin/main, origin/HEAD) m7 plan request
+7bdc55f (HEAD -> main) m7-amendments
+e2ebe2b docs: add M7 plan
+9fe8def (origin/main, origin/HEAD) m7 plan request
 0c11c50 (tag: m6) docs(reports): add M6 fix-up 8 report
 2152753 fix(test): use relative path for offscreen config to prevent Windows path splitting, disable abort dialog, and clean up
 a05a89a test(hidpi): add CI-DIAG progress tracking and watchdog to tst_HiDpi
 495a191 ci: add test timeout to ctest and step timeouts to quality gate
+6b2a6c7 m6-fixup7-upd prompt
+05e719b m6-fixup 7 prompts
+bbddfa7 docs(reports): add M6 fix-up 7 report
+84e464c docs(spec): document small-screen dialog constraints and tab bar scrolling fix
+1a4fcbc fix(ui): wrap ApplicationDialog tabs in scroll areas, disable tab scroll buttons, and enforce small screen limits
 ```
 
 ### Test Count Baseline Verification
@@ -108,16 +115,18 @@ Baseline matches `docs/prompts/M7-plan-request.md` line 15: **34 test binaries, 
 
 ## 2. Pre-Flight Findings
 
+Raw commands and full outputs are catalogued in the [Appendix: Evidence](#appendix-evidence).
+
 | Target / Item | Finding / Location | Evidence Command |
 |---|---|---|
-| Agenda row delegate | `JobPrep::Ui::Delegates::AgendaItemDelegate` in `src/ui/delegates/AgendaItemDelegate.h`, `.cpp` | `grep -n "m_todayDelegate" src/ui/pages/HomePage.cpp` |
+| Agenda row delegate | `JobPrep::Ui::Delegates::AgendaItemDelegate` in `src/ui/delegates/AgendaItemDelegate.h`, `.cpp` (used in `HomePage` and `CalendarPage`) | `grep -rn "AgendaItemDelegate" src/` |
 | Where HomePage builds "Today" | `HomePage::setupUi()` lines 120–150; `HomePage::applySnapshot()` line 261 | `sed -n '120,150p' src/ui/pages/HomePage.cpp` |
 | All Date Controls | 5 occurrences, all instantiated as `SingleTabDateEdit` (`TopicDetailPanel`, `InterviewDialog`, `ApplicationDialog` [x2], `SessionDialog`) | `grep -rn "setCalendarPopup" src/` |
 | `invalidateFilter` usage | 4 occurrences (`ApplicationFilterProxy.cpp:21, 26`, `TopicBoardProxy.cpp:26, 33`) | `grep -rn "invalidateFilter" src/` |
 | Deprecation warning suppression | Suppressed only for `__GNUC__`/`__clang__` at lines 1–4 of `ApplicationFilterProxy.cpp` & `TopicBoardProxy.cpp` | `head -n 5 src/models/ApplicationFilterProxy.cpp` |
 | CI timeouts | `timeout-minutes: 15` (Linux), `timeout-minutes: 30` (Windows), `ctest --timeout 600` | `grep -n "timeout" .github/workflows/ci.yml scripts/check.sh` |
-| `CI-DIAG` instrumentation | Watchdog thread (240s) + progress markers present in `tests/ui/tst_HiDpi.cpp` | `grep -n "CI-DIAG" tests/ui/tst_HiDpi.cpp` |
-| `tr()` count | 482 calls across 27 files in `src/` | `grep -rn "tr(" src/ \| wc -l` |
+| `CI-DIAG` instrumentation | Watchdog thread (240s) + progress markers present in `tests/ui/tst_HiDpi.cpp`; diagnostic logs in `src/ui/dialogs/ApplicationDialog.cpp` | `grep -rn "CI-DIAG" src/ tests/` |
+| String literal count | 482 `tr(` calls in 27 files; 50 `QCoreApplication::translate()` calls in 3 files; 0 `*_NOOP` | Python script over regex in `src/` |
 | Stored enum persistence | Stable lowercase snake_case strings in `src/domain/EnumStrings.cpp` | `cat src/domain/EnumStrings.h` |
 | Current `QLocale` / `QTranslator` usage | `MonthView.cpp:26` hard-codes `QLocale(QLocale::English)`; `QTranslator` count is 0 | `grep -rn "QLocale\|QTranslator" src/` |
 | SettingsService keys | 21 keys; no language key exists | `grep -o 'u"[^"]*"_s' src/services/SettingsService.cpp \| sort \| uniq` |
@@ -132,10 +141,11 @@ Baseline matches `docs/prompts/M7-plan-request.md` line 15: **34 test binaries, 
 
 ### 3.1 Investigation & Image Verification
 - Checked for `docs/reports/images/m7-today-overlap.png`: file does not exist (`ls: cannot access 'docs/reports/images/m7-today-overlap.png': No such file or directory`).
-- As instructed, reproduced offscreen using a scratch harness (`scratch/reproduce_today.cpp`) with an in-memory DB containing a topic with target date today, track "C++", and title "Advanced Metaprogramming with Concepts, Fold Expressions and SFINAE".
+- Reproduced offscreen on Linux using a scratch harness (`scratch/reproduce_today.cpp`) with an in-memory DB containing a topic with target date today, track "C++", and title "Advanced Metaprogramming with Concepts, Fold Expressions and SFINAE".
 - Screenshots generated:
   - `scratch/today_view.png` (7.1 KB)
   - `scratch/today_dashboard.png` (72 KB)
+- The harness source and execution output are documented in the [Evidence Appendix §A.2](#a2-item-1-overlap-reproduction-harness).
 
 ### 3.2 Root Cause Analysis (Delegate Paint Math)
 In `src/ui/delegates/AgendaItemDelegate.cpp` lines 73–95:
@@ -186,33 +196,55 @@ QFrame* HomePage::createCard(const QString& title, QWidget* content) {
     titleLabel->setFont(titleFont);
     ...
 ```
-**Identified Defects:**
-1. `titleLabel` has no `objectName` (e.g. `CardTitle`) and no stylesheet typography rules in `resources/styles/theme.qss`. Unlike `#CalendarAgendaTitle` which explicitly sets `font-size: 11pt; font-weight: 600; color: @text;`, `createCard` leaves title styling unmanaged.
-2. `m_todayView` in `HomePage.cpp` lacks `setFrameShape(QFrame::NoFrame)` and `background: transparent; border: none;`, unlike `#CalendarAgendaList` in `CalendarPage.cpp`, creating visual box-in-box artifacts.
-3. Left-alignment mismatch: `titleLabel` sits at `x = 16px` (card margin), while `AgendaItemDelegate` item content starts at `x = 26px` (16 card + 10 item margin) with text starting at `x = 50px`.
+**Identified Defects (Backed by Code and QSS):**
+1. In `resources/styles/theme.qss` (line 206), `QFrame[card="true"]` defines background and border, but there is no `#CardTitle` selector. `titleLabel` has no `objectName` and no stylesheet typography rules, leaving its font size, color, and padding unstyled. In contrast, `#CalendarAgendaTitle` explicitly sets `font-size: 11pt; font-weight: 600; color: @text;` (lines 309–313).
+2. In `HomePage.cpp` lines 128–135, `m_todayView` lacks `setFrameShape(QFrame::NoFrame)` and has no `#TodayView` selector with `background: transparent; border: none;`, unlike `#CalendarAgendaList` in `CalendarPage.cpp` (lines 315–318), causing a double-border box effect.
+3. Left-alignment progression:
+   - `titleLabel` sits at `x = 16 px` (from `cardLayout->setContentsMargins(16, 14, 16, 14)`).
+   - In `AgendaItemDelegate.cpp:48`, `content` is `option.rect.adjusted(kHorizontalMargin, ..., -kHorizontalMargin, ...)`, where `kHorizontalMargin = 10`. So the icon begins at `16 + 10 = 26 px`.
+   - In `AgendaItemDelegate.cpp:73`, `textRect` is `content.adjusted(kIconSize + 8, ...)`, where `kIconSize = 16`. So row text begins at `26 + 16 + 8 = 50 px`.
+   - Without styling, the title at 16 px misaligns with row items starting at 50 px.
 
 ### 3.4 Why `tst_HiDpi::checkClipping` Did Not Catch It
 1. `checkClipping(QWidget* root)` inspects only `root->findChildren<QWidget*>()`. `QStyledItemDelegate` is not a child widget; its painting is internal to `QListView::paintEvent`.
 2. `checkClipping` only tests whether a widget's allocated width/height is smaller than its `minimumSizeHint()` or `heightForWidth()`. It has **no logic to detect bounding-box collisions between sibling widgets or painted text rectangles within delegates**.
 
 ### 3.5 Proposed Solution & New Overlap Verification Check
-1. **Delegate Layout Fix:**
-   - In `AgendaItemDelegate::paint`:
-     - If `subtitle.isEmpty()`: draw `title` centered vertically in `textRect`.
-     - If `subtitle` is present: calculate distinct non-overlapping rects:
-       `titleRect = QRect(textRect.left(), textRect.top(), titleWidth, titleMetrics.height());`
-       `subtitleRect = QRect(textRect.left(), titleRect.bottom() + 2, textRect.width() - rightWidth, subtitleMetrics.height());`
-   - Adjust `sizeHint()` dynamically to ensure `kRowHeight` accommodates `titleMetrics.height() + subtitleMetrics.height() + 8` across 100% and 150% scaling.
-2. **Card Header Styling:**
-   - Assign `titleLabel->setObjectName(u"CardTitle"_s)`.
-   - Add `#CardTitle` and `#TodayView` rules to `theme.qss` (`font-size: 11pt; font-weight: 600; color: @text; border: none; background: transparent;`).
+1. **Delegate Single Source of Truth:**
+   - In `AgendaItemDelegate`, expose a pure layout helper:
+     ```cpp
+     struct SubRects {
+         QRect iconRect;
+         QRect titleRect;
+         QRect subtitleRect;
+         QRect rightTextRect;
+         int requiredHeight;
+     };
+     static SubRects computeLayout(const QStyleOptionViewItem& option, const QModelIndex& index);
+     ```
+   - Used identically by `paint()` and `sizeHint()`.
+2. **Content-Derived Dynamic Row Height:**
+   - Formula:
+     ```cpp
+     const QFontMetrics tm(titleFont);
+     const QFontMetrics sm(subtitleFont);
+     const int textHeight = hasSubtitle ? (tm.height() + sm.height() + 4) : tm.height();
+     const int rowHeight = qMax(kIconSize + 16, textHeight + 14);
+     ```
+   - Values across font matrix at 100% and 150%:
+     - DejaVu Sans 10pt (100%): `tm=18`, `sm=16` -> two-line `rowHeight = 18 + 16 + 4 + 14 = 52 px` (single-line `32 px`).
+     - DejaVu Sans 10pt (150%): `tm=27`, `sm=24` -> two-line `rowHeight = 27 + 24 + 6 + 21 = 78 px`.
+3. **Independent Painted-Pixel Ink Test:**
+   - Render the item with only `title` into a transparent `QImage`, and with only `subtitle` into a second transparent `QImage`.
+   - Compute ink bounding rects (pixels with alpha > 0). Assert that `titleInkRect.intersects(subtitleInkRect)` is strictly `false`.
+   - Verify that this test **fails on the unpatched code** (12 px overlap) and passes on the patched code.
+4. **Card Header Styling & Theme Switch Verification:**
+   - Set `titleLabel->setObjectName(u"CardTitle"_s)`.
+   - Add `#CardTitle` and `#TodayListView` to `theme.qss` (`font-size: 11pt; font-weight: 600; color: @text; background: transparent; border: none;`).
    - Call `m_todayView->setFrameShape(QFrame::NoFrame);`.
-3. **Automated Overlap Test in `tst_HiDpi`:**
-   - Add a test function `testDelegateAndWidgetTextOverlap()`:
-     - Populates `HomePage` and `CalendarPage` with multi-line items (seeded track + topic target date).
-     - Renders delegate cells at 100% and 150% display scaling across Light and Dark themes under DejaVu Sans / Segoe UI.
-     - Calculates bounding rects of title, subtitle, and badge/time text; asserts that `QRect::intersects()` between title rect and subtitle rect is strictly `false`.
-     - Traverses sibling child widgets in card layouts and dialog form rows, asserting that no two visible sibling labels/buttons intersect in parent coordinates.
+   - Verify layout and colors in both light and dark themes, and after runtime switching via `ThemeManager`.
+5. **Layout-Managed Sibling Collision Check:**
+   - Restrict the sibling overlap check strictly to siblings managed by the same layout (e.g. `QBoxLayout`, `QFormLayout`) to prevent false positives from stacked widgets, scroll areas, or intended overlays.
 
 ---
 
@@ -231,42 +263,63 @@ src/ui/dialogs/SessionDialog.cpp:51:    m_dateEdit->setCalendarPopup(true);
 All 5 controls are instances of `JobPrep::Ui::Widgets::SingleTabDateEdit` (defined in `src/ui/widgets/SingleTabDateTime.h`).
 
 ### 4.2 Qt Keyboard Behavior (Proven vs Not Proven)
-- **Proven by test in scratch harness (`scratch/test_calendar_popup.cpp`):**
-  - Sending `Key_F4`, `Alt+Key_Down`, or `Key_Space` to a focused `QDateEdit` with `calendarPopup = true` does **not** open the calendar popup on Linux or Windows offscreen (`isVisible` remains 0).
-  - Simulating a mouse press on the drop-down arrow subcontrol (`QStyle::SC_SpinBoxDown`) opens `QCalendarPopup` (`isVisible: 1`).
+- **Proven by test in scratch harness on Linux (`scratch/test_calendar_popup.cpp`):**
+  - Sending `Key_F4`, `Alt+Key_Down`, or `Key_Space` to a focused `QDateEdit` with `calendarPopup = true` does **not** open the calendar popup (`isVisible` remains 0).
+  - Simulating a mouse press on the drop-down arrow subcontrol (`QStyle::SC_SpinBoxDown` / `QStyle::SC_ComboBoxArrow`) opens `QCalendarPopup` (`isVisible: 1`).
   - Pressing `Key_Escape` dismisses the open popup (`isVisible: 0`).
   - Navigating dates and pressing Enter selects the date and updates `QDateEdit::date()`.
-- **Not Proven on Windows Hardware by Agent:**
-  - Whether native Windows Narrator or specific IME configurations hook `Alt+Down` before Qt receives the key event.
+- **Not Proven by Agent (User to Check on Windows):**
+  - Behavior on Windows hardware across native Windows styles (`windowsvista`, `windows11`, `windows`).
+  - Whether specific Windows screen readers or IME handlers capture `Alt+Down`.
 
-### 4.3 Unified Solution: `SingleTabDateEdit`
-Because every date field in JobPrep uses `SingleTabDateEdit`, we implement the fix in one central class:
-1. In `src/ui/widgets/SingleTabDateTime.h` (or extracted `.cpp` if logic exceeds inline):
-   - Override `keyPressEvent(QKeyEvent* event)`:
-     ```cpp
-     if ((event->modifiers() == Qt::AltModifier && event->key() == Qt::Key_Down) ||
-         (event->modifiers() == Qt::NoModifier && event->key() == Qt::Key_F4)) {
-         showCalendarPopup();
-         event->accept();
-         return;
-     }
-     QDateEdit::keyPressEvent(event);
-     ```
-   - Implement `showCalendarPopup()`:
-     Calculates `subControlRect(QStyle::CC_SpinBox, &opt, QStyle::SC_SpinBoxDown, this)` and posts the synthesized mouse press event to open `QCalendarPopup` safely through Qt's internal machinery.
-2. In the constructor of `SingleTabDateEdit`:
-   - Set or append tooltip: `tr("Press Alt+Down or F4 to open calendar")`.
-3. Tab Order:
-   - `SingleTabDateEdit` already handles single-tab focus transition via `focusNextPrevChild()`. Tab lands on the date field, `Alt+Down` opens the popup, calendar keyboard navigation selects a date, Enter commits and closes, Esc cancels.
+### 4.3 Evaluation of Technical Options
+1. **Option A: Synthesized Click on Arrow Subcontrol**
+   - Query `style()->subControlRect(QStyle::CC_ComboBox, &cboOpt, QStyle::SC_ComboBoxArrow, this)`. If empty, fallback to `QStyle::CC_SpinBox` / `SC_SpinBoxDown`.
+   - Post `QMouseEvent(MouseButtonPress)` and `MouseButtonRelease` to the center point.
+   - *Pros:* Uses Qt's existing popup infrastructure and calendar synchronization; zero custom popup lifecycle to manage.
+   - *Cons:* Style-dependent subcontrol rects; fragile if a custom style draws arrows outside the widget bounds.
+2. **Option B: Dedicated Popup Wrapper (Recommended)**
+   - Query Qt's `calendarWidget()`. If null, allow lazy creation.
+   - If `calendarWidget()` is available, its top-level window `QWidget* popup = calendarWidget()->window()` is the popup container.
+   - Position `popup` directly under the date edit (`mapToGlobal(QPoint(0, height()))`) and call `popup->show()`.
+   - *Pros:* 100% style-agnostic; no reliance on subcontrol hit tests; works identically under `fusion`, `windows`, and `windows11`.
+   - *Cons:* Must ensure proper popup window flags and event loop grab.
 
-### 4.4 Real Key-Event Tests
-- Create test slots in `tests/ui/` covering all 4 dialogs/panels (`InterviewDialog`, `ApplicationDialog`, `SessionDialog`, `TopicDetailPanel`):
-  1. Show dialog/panel, set focus to the date field.
-  2. Send `Alt+Down` key event -> assert `calendarWidget()->window()->isVisible()` is `true`.
-  3. Send `Esc` -> assert `calendarWidget()->window()->isVisible()` is `false`.
-  4. Send `F4` -> assert popup is visible again.
-  5. Send arrow keys + Enter -> assert date updates to selected date and popup closes.
-- **Offscreen Limitation Notice:** The offscreen platform verifies Qt event dispatch, window visibility flags, and date synchronization, but cannot verify OS window manager grab or visual compositing on Windows.
+**Recommendation:** Hybrid implementation in `SingleTabDateEdit`: attempt `calendarWidget()->window()->show()` positioned under the field. If Qt private mechanics require mouse activation, trigger via combo arrow hit test with spinbox fallback.
+
+### 4.4 Shortcut Override & Modifier Safety
+- **Modifier check:** Use `(event->modifiers() & ~Qt::KeypadModifier) == Qt::AltModifier` to ensure `Alt+Down` from the numeric keypad functions correctly.
+- **ShortcutOverride:** In `TopicDetailPanel` and `TopicBoardColumn`, `Alt+Up/Down` is used for reordering checklist items and cards. To prevent parent filters or `QShortcut`s from swallowing `Alt+Down`, `SingleTabDateEdit` must intercept `QEvent::ShortcutOverride`:
+  ```cpp
+  bool SingleTabDateEdit::event(QEvent* e) {
+      if (e->type() == QEvent::ShortcutOverride) {
+          auto* ke = static_cast<QKeyEvent*>(e);
+          const auto mods = ke->modifiers() & ~Qt::KeypadModifier;
+          if ((mods == Qt::AltModifier && ke->key() == Qt::Key_Down) ||
+              (mods == Qt::NoModifier && ke->key() == Qt::Key_F4)) {
+              ke->accept();
+              return true;
+          }
+      }
+      return QDateEdit::event(e);
+  }
+  ```
+
+### 4.5 Tooltip Hint
+- Set tooltip in `SingleTabDateEdit`:
+  If existing tooltip is non-empty, append: `u"\n%1"_s.arg(tr("Press Alt+Down or F4 to open calendar"))`.
+  Otherwise set directly to the translated string.
+
+### 4.6 Parametrized Multi-Style Test
+- A data-driven test covering all 5 controls by name:
+  `TopicDetailPanelDateEdit`, `InterviewDateEdit`, `ApplicationAppliedDateEdit`, `ApplicationNextActionDateEdit`, `SessionDateEdit`.
+- Iterates over each style returned by `QStyleFactory::keys()` (e.g. `fusion`, `windows`).
+- Asserts:
+  1. `Alt+Down` opens popup (`popup->isVisible() == true`).
+  2. `Esc` closes only the popup (`popup->isVisible() == false`, dialog remains open).
+  3. `F4` re-opens popup.
+  4. Date selection with arrow keys + Enter updates date, closes popup, leaves dialog open.
+  5. A subsequent `Esc` closes the parent dialog.
 
 ---
 
@@ -284,8 +337,9 @@ Because every date field in JobPrep uses `SingleTabDateEdit`, we implement the f
 - Suppressing warnings via pragmas violates `AGENTS.md` §3 ("Fix warnings, never disable them").
 
 ### 5.2 Replacement with Modern Qt 6.9+ Filter APIs
-- In Qt 6.9+, `QSortFilterProxyModel` introduced `beginFilterChange()` and `endFilterChange(Directions directions = Direction::Both)`. `invalidateFilter()` is deprecated starting in Qt 6.10 / 6.13.
-- Both methods are `protected` in `QSortFilterProxyModel` (verified in `/usr/include/x86_64-linux-gnu/qt6/QtCore/qsortfilterproxymodel.h:124-125`).
+- In Qt 6.9+, `QSortFilterProxyModel` introduced `beginFilterChange()` and `endFilterChange(Directions directions = Direction::Both)`. `invalidateFilter()` is deprecated with `QT_DEPRECATED_VERSION_X_6_13("Use begin/endFilterChange() instead")`.
+- `Direction` is declared as `enum class Direction { Rows = 0x01, Columns = 0x02, Both = Rows | Columns };` under `QSortFilterProxyModel`.
+- Methods are `protected` in `QSortFilterProxyModel` (`qsortfilterproxymodel.h:124-125`).
 - Fix:
   Remove the diagnostic pragmas entirely. Replace calls in `ApplicationFilterProxy` and `TopicBoardProxy`:
   ```cpp
@@ -298,34 +352,23 @@ Because every date field in JobPrep uses `SingleTabDateEdit`, we implement the f
       QSortFilterProxyModel::invalidateFilter();
   #endif
   ```
-- No other deprecated Qt 6.9/6.10 APIs exist in `src/` (verified via `grep -rn "invalidateFilter" src/`).
+- Confirmed via `grep -rn "pragma" src tests CMakeLists.txt`: no other warning suppressions exist in the project.
 
-### 5.3 CI Matrix Proposals
-
-Command: `python3 -m aqt list-qt linux desktop`
-Newest Qt 6.10.x version available: **Qt 6.10.3**.
-Architectures: `linux_gcc_64` (Linux) and `win64_msvc2022_64` (Windows).
-
-**Comparison of CI Matrix Options:**
-1. **Option A (Full 2x2 Matrix, 4 jobs):**
-   - Ubuntu: Qt 6.8.2 & Qt 6.10.3
-   - Windows: Qt 6.8.2 & Qt 6.10.3
-   - *Cost:* Adds ~12–14 minutes of Windows runner time and ~3.5 minutes of Linux runner time per CI push. Windows build + debug test is relatively slow (~10–12 min).
-2. **Option B (Recommended 3-job Hybrid, 3 jobs):**
-   - Ubuntu: Qt 6.8.2 (LTS baseline)
-   - Ubuntu: Qt 6.10.3 (Modern GCC + newest Qt)
-   - Windows: Qt 6.10.3 (Ensures MSVC compatibility with newest Qt and catches ICEs/C4996 warnings)
-   - *Cost:* Adds only ~3.5 minutes of fast Linux runner time. Maintains Windows coverage on the latest compiler toolset while protecting Qt 6.8 LTS compatibility on Linux.
-3. **Option C (2-job Divergent):**
-   - Ubuntu: Qt 6.8.2
-   - Windows: Qt 6.10.3
-   - *Cost:* 0 added CI minutes, but drops Windows verification of Qt 6.8.2.
-
-**Recommendation:** **Option B** (or Option A if the user accepts the additional 12 min Windows run time).
+### 5.3 CI Matrix Implementation (Binding Decision 6)
+- **Triggers:**
+  - `push` and `pull_request` on `main`: Run Option B (Ubuntu 6.8.2, Ubuntu 6.10.3, Windows 6.10.3).
+  - `workflow_dispatch` and weekly `schedule` (cron: `0 3 * * 0`): Also include Windows 6.8.2.
+- **Estimated CI Runtime Impact:**
+  - Ubuntu jobs run in ~3.5 minutes.
+  - Windows jobs run in ~10–12 minutes.
+  - Adding Ubuntu 6.10.3 and switching Windows to 6.10.3 adds an estimated ~3.5 minutes total to the pull-request gate, keeping Windows cost neutral.
 
 ### 5.4 `docs/RUNNING.md` Windows Section Updates
-- Add explicit warning: **Visual Studio 2022 must be updated (version 17.4+ / MSVC 19.34+ required)**; initial VS 2022 release (MSVC 19.30) causes an Internal Compiler Error (C1001) in `QtCore/qrangemodel_impl.h(903)` when compiling with Qt 6.10+.
-- Document tested command steps:
+- **Documented Facts:**
+  - Known failing compiler: MSVC `19.30.30706` (VS 2022 17.0) fails with `fatal error C1001: Internal compiler error` in `QtCore/qrangemodel_impl.h(903)` when compiling with Qt 6.10.
+  - Known good compiler: MSVC `19.44.35229` (user's PC) and MSVC `19.42+` (GitHub Actions CI `windows-latest`).
+  - Document `-DJOBPREP_WERROR=OFF` strictly as a temporary workaround that is superseded by the M7 fix.
+- **Steps:**
   1. Open **x64 Native Tools Command Prompt for VS 2022**.
   2. `set QT_PREFIX_PATH=C:\Qt\6.10.3\msvc2022_64` (or `6.8.2`)
   3. `set PATH=%QT_PREFIX_PATH%\bin;%PATH%`
@@ -338,116 +381,127 @@ Architectures: `linux_gcc_64` (Linux) and `win64_msvc2022_64` (Windows).
 
 ## 6. Item 4: CI Hygiene & Windows Test Performance
 
-### 6.1 Audit of Existing Safeguards
-- `git log --oneline`: Confirmed commits `495a191`, `a05a89a`, `2152753`, and `0c11c50` implemented the hang addendum.
-- `.github/workflows/ci.yml`: Contains `timeout-minutes: 15` (Linux) and `timeout-minutes: 30` (Windows).
-- `scripts/check.sh` and `scripts/check.ps1`: Both invoke ctest with `--timeout 600 --output-on-failure`.
-- `tests/ui/tst_HiDpi.cpp`: Contains `s_watchdogThread` (240s timeout) and `updateProgress()` instrumentation marked `// CI-DIAG`.
+### 6.1 Audit of Existing Safeguards & Fix-up 8 Conclusion
+- `docs/reports/M6-fixup8.md` lines 280–286 & 564:
+  - **Evidenced Fact:** In `QT_QPA_PLATFORM="offscreen:configfile=C:/..."`, Qt splits on `:` and took `"C"` as the config filename, causing `qFatal("Could not find platform config file C")` and exit code -6.
+  - **Inferred Hypothesis:** On Windows MSVC Debug, `abort()` / `qFatal()` opened a Win32 CRT modal assertion message box that stalled indefinitely in CI.
+  - **Verification Status:** Unproven on Windows hardware; only confirmed by a green Windows CI run containing commit `2152753`.
+- `jobprep_offscreen_1080p.json`: If file creation fails, `tst_HiDpi` must not fail silently; add an explicit warning/skip statement.
+- `_set_abort_behavior` under `#if defined(Q_OS_WIN)`: Note that this line was written for Windows CI and was never compiled locally on Linux.
 
-### 6.2 Proposals for Slow Windows UI Tests
-Windows MSVC Debug test times:
-- `tst_PageStudy`: 138 s
-- `tst_PageHome`: 124 s
-- `tst_PageJobs`: 86 s
-- `tst_EmptyStatesAndFocus`: 66 s
+### 6.2 Removal of Diagnostic Lines from Production Code
+- In `src/ui/dialogs/ApplicationDialog.cpp` (lines 106–126) and `ApplicationDialog.h` (line 65):
+  Remove `showEvent` and diagnostic `qInfo("// CI-DIAG ...")` statements.
+- Retain watchdog and progress markers in `tests/ui/tst_HiDpi.cpp` (test-only, zero production impact).
 
-**Root Cause:**
-Each test function in these suites repeatedly executes `resetStudyData()`, which creates a fresh in-memory database, runs all 4 SQLite DDL migrations, initializes `AppContext`, parses full QSS stylesheets, and renders widgets with MSVC `/MDd` unoptimized iterator debugging.
+### 6.3 Slow Tests Measurements
+Local measured durations under Linux offscreen (`build/dev-linux`):
+- `tst_PageStudy`: **17.914 s** (31 reset data calls)
+  - `testChipBarJobsAndCalendarRegression`: 1.599 s
+  - `testStudyPageApi`: 1.244 s
+  - `testStudyListViewToggleSortAndDelegates`: 0.820 s
+- `tst_PageHome`: **16.100 s**
+  - `testToastNotificationSmoke`: 2.955 s
+  - `testDashboardVisitedBothThemes`: 2.920 s
+- `tst_PageJobs`: **12.050 s** (20 reset data calls)
+  - `testJobsPageThemes`: 1.842 s
+  - `testApplicationDialogInterviewsTabEditable`: 0.716 s
+- `tst_EmptyStatesAndFocus`: **10.075 s**
+  - `testFocusIndicatorDoesNotChangeGeometryOrSizeHint`: 1.272 s
+  - `testVisibleFocusIndicatorChip`: 1.267 s
 
-**Proposals:**
-1. **Windows CI Test Build Preset (`RelWithDebInfo`):**
-   - In MSVC, running tests under `/O2` / `/Ox` eliminates iterator debug overhead, speeding up QSS parsing and SQLite queries by ~4x to 8x. Expected Windows test suite reduction: from ~8 minutes down to ~2 minutes.
-2. **Database Schema Pre-population:**
-   - In test fixtures, initialize the SQLite schema once per test case into a template database and clone via in-memory backup API (`sqlite3_backup`) or rollback transaction rather than executing DDL migrations 26 times.
-3. **Audit and Minimize `qWait(50)` Delays:**
-   - Replace arbitrary `qWait(50)` sleep loops in `tst_PageStudy` with deterministic `QTRY_VERIFY` condition polling.
+*Note:* Refactoring test fixtures remains a proposal for future milestones; no test logic changes in Part A.
 
 ---
 
 ## 7. Item 5: GUI Translation (Ukrainian `uk` & Russian `ru`)
 
-### 7.1 Inventory of User-Visible Strings
-Total `tr()` calls in `src/`: **482** across 27 files.
-
-| File / Component | `tr()` Count | Untranslated Literals Found | Description |
-|---|---|---|---|
-| `src/ui/dialogs/ApplicationDialog.cpp` | 62 | `u"https://"_s` (URL placeholder) | Form labels, tooltips, tab titles |
-| `src/ui/pages/SettingsPage.cpp` | 59 | 0 | Theme, goal, export/import options |
-| `src/ui/DataToolsController.cpp` | 54 | 0 | Data messages, confirmation dialogs |
-| `src/ui/widgets/TopicDetailPanel.cpp` | 35 | 0 | Checklist actions, date picker text |
-| `src/ui/dialogs/InterviewDialog.cpp` | 34 | 0 | Field labels, validation tooltips |
-| `src/ui/pages/JobsPage.cpp` | 31 | 0 | Columns, filter chips, action buttons |
-| `src/ui/pages/CalendarPage.cpp` | 28 | `u"ddd "_s`, `u"HH:mm"_s` (date format) | Month nav, layer toggles, agenda titles |
-| `src/ui/pages/StudyPage.cpp` | 27 | 0 | Board columns, track selector |
-| `src/ui/dialogs/TrackDialog.cpp` | 22 | 0 | Color swatches, track deletion warning |
-| `src/ui/pages/HomePage.cpp` | 20 | 0 | Stat cards, card headers, empty states |
-| `src/ui/MainWindow.cpp` | 17 | `u"JobPrep"_s` (app title) | Sidebar items, header action menu |
-| `src/ui/dialogs/FollowUpDialog.cpp` | 15 | 0 | Follow-up prompts, dates |
-| `src/ui/FormatHelper.cpp` | 15 | 0 | Relative dates, duration formatting |
-| `src/ui/dialogs/SessionDialog.cpp` | 14 | 0 | Duration spinbox, date picker |
-| `src/ui/Sidebar.cpp` | 8 | 0 | Navigation tooltips & button text |
-| `src/models/ApplicationTableModel.cpp` | 8 | 0 | Table header names |
-| `src/ui/widgets/TopicBoardColumn.cpp` | 7 | 0 | Column headers, quick-add |
-| `src/models/TopicListModel.cpp` | 7 | 0 | Topic list table headers |
-| `src/main.cpp` | 6 | 0 | CLI errors and fatal dialogs |
-| `src/ui/widgets/GoalProgressBar.cpp` | 3 | 0 | Goal status summary |
-| `src/ui/theme/StatusStyle.cpp` | 0 (uses `translate()`) | 0 | 28 status/outcome/priority labels |
-| `src/ui/theme/AgendaKindStyle.cpp` | 0 (uses `translate()`) | 0 | 3 agenda layer labels |
-| `src/ui/NotificationText.cpp` | 0 (uses `translate()`) | 0 | Lead time and notification messages |
-| `src/ui/widgets/MonthView.cpp` | 0 | `englishLocale()` hard-coded | Day names, month header |
-| Total | 482 | ~5 non-translatable tokens | |
+### 7.1 Reconciled String Audit
+- Total `tr(` calls: **482** across 27 files.
+- Total `QCoreApplication::translate()` calls: **50** across 3 files (`StatusStyle.cpp: 28`, `NotificationText.cpp: 19`, `AgendaKindStyle.cpp: 3`).
+- Total translatable occurrences: **532**.
+- String concatenation around `tr()`: **0**.
+- Untranslated UI literals audit:
+  - `MainWindow.cpp:51`: `setWindowTitle(u"JobPrep"_s)` (Application name, intentional).
+  - `MainWindow.cpp:323, 325`: `QLabel(u" | "_s)` (Visual separator).
+  - `ApplicationDialog.cpp:264`: `m_urlEdit->setPlaceholderText(u"https://"_s)` (URL schema prefix).
+  - `Sidebar.cpp:122`: `QLabel(u"JobPrep"_s)` (Application branding).
+  - `FunnelWidget.cpp:138`: `drawText(arrowRect, u"→"_s)` (Directional arrow).
+  - `FollowUpDialog.cpp:112`: `u"%1 – %2"_s.arg(...)` (Composite entity label).
 
 ### 7.2 Stored Values vs Display Text
 - Enums are converted to/from lowercase snake_case strings (`src/domain/EnumStrings.cpp`).
 - Display text is mapped exclusively in `ui/theme/StatusStyle.cpp` and `ui/theme/AgendaKindStyle.cpp`.
 - **Export & Storage Policy:**
-  - SQLite tables store snake_case strings and ISO-8601 timestamps (`yyyy-MM-dd` / `yyyy-MM-ddTHH:mm:ss`).
+  - SQLite tables store snake_case strings and ISO-8601 timestamps.
   - JSON backups store language-neutral keys and values.
-  - CSV exports keep the 22 standardized English column headers and snake_case values (per SPEC §3.3 A1).
+  - CSV exports keep the 22 standardized English column headers and snake_case values.
   - ICS exports keep standard VCALENDAR English property names.
   - Backup/restore across language changes is 100% binary- and data-identical.
 
 ### 7.3 Tooling & Build Integration
 - Add `LinguistTools` to `find_package(Qt6 ...)` in `CMakeLists.txt`.
 - Translations source files placed in `resources/translations/jobprep_uk.ts` and `resources/translations/jobprep_ru.ts`.
-- Use `qt_add_translations(jobprep_core TS_FILES ... RESOURCE_PREFIX "/i18n")` to automatically compile `.ts` into `.qm` and embed them into the binary resource system.
-- Loading at runtime via `":/i18n/jobprep_uk.qm"` avoids all pathing/installer issues on Windows and Linux.
-- Add CI check: `lupdate -no-obsolete -check-translation` ensuring zero unfinished or missing translations.
+- Use `qt_add_translations(jobprep_core TS_FILES ... RESOURCE_PREFIX "/i18n")` to compile `.ts` into `.qm` embedded into the binary resource system.
+- Ensure resources are initialized via `JobPrep::App::ensureResources()`.
+- Add test `tst_Translations` asserting zero unfinished or empty strings, and a script step running `lupdate` into a temporary file to assert no untracked strings exist.
 
-### 7.4 Plurals and Formatting
-- Ukrainian and Russian have three plural forms (e.g. 1 день, 2 дні, 5 днів / 1 день, 2 дня, 5 дней).
-- Convert all formatted counts to use Qt's `%n` plural support:
-  - `tr("%n minute(s)", "", count)`
-  - `tr("%n interview(s)", "", count)`
-  - `tr("%n follow-up(s) overdue", "", count)`
-- Replace `englishLocale()` in `src/ui/widgets/MonthView.cpp` with active `QLocale()`.
+### 7.4 Standard Qt Strings
+- `QMessageBox::StandardButton` (Save, Cancel, Yes, No, Discard), `QFileDialog`, and `QDialogButtonBox` texts come from `qtbase_<lang>.qm`.
+- In `main.cpp`, load `qtbase_<lang>.qm` from `QLibraryInfo::path(QLibraryInfo::TranslationsPath)`. If missing, fallback to English without warning.
 
-### 7.5 Language Selection: Runtime vs Restart
-- **Comparison:**
-  - *Runtime Switching:* Requires `changeEvent(LanguageChange)` and `retranslateUi()` in ~40 classes, dynamic header refreshes, combobox re-population, and layout invalidation. High risk of visual artifacts.
-  - *Restart-based (Recommended):* Setting stored in `SettingsService` under `ui/language` (`system`, `en`, `uk`, `ru`). Selecting a language displays an inline message: *"Language will take effect after restarting JobPrep."* On application start, `main.cpp` installs the chosen `QTranslator` into `QCoreApplication` before creating `MainWindow`. Clean, standard desktop behavior, touching ~5 files.
+### 7.5 Plurals Inventory & Test Values
+- Count formatting locations:
+  1. `FormatHelper.cpp:34`: `tr("%n day(s)", "", days)`
+  2. `FormatHelper.cpp:38`: `tr("%n hour(s)", "", hours)`
+  3. `FormatHelper.cpp:40`: `tr("%n minute(s)", "", minutes)`
+  4. `FormatHelper.cpp:51`: `tr("%n-day streak", "", days)`
+  5. `FormatHelper.cpp:58`: `tr("%n active process(es)", "", count)`
+  6. `ApplicationDialog.cpp:571`: `tr("%n min", "", interview.durationMin)`
+  7. `NotificationText.cpp:15-17`: `translate("NotificationText", "in %n hour(s)", "", hours)`
+  8. `NotificationText.cpp:20-22`: `translate("NotificationText", "in %n minute(s)", "", leadMinutes)`
+  9. `NotificationText.cpp:127-129`: `translate("NotificationText", "%n follow-up(s) overdue", "", count)`
+  10. `InAppNotifier.cpp:101`: `tr("+%n more", "", overflowCount)`
+- Plural test values: `1, 2, 5, 11, 21, 22, 25, 101` for `uk` and `ru`.
 
-### 7.6 Layout & Font Cyrillic Verification
-- Cyrillic strings are typically 20% to 40% longer than English.
-- Fonts verified on host: `DejaVu Sans`, `Liberation Sans`, and `Ubuntu` contain full Cyrillic glyphs. Windows fonts (`Segoe UI`, `Arial`) support Cyrillic.
-- Test harness: `tst_HiDpi` will run with `uk` and `ru` active, verifying zero clipping violations across 100% and 150% scales.
+### 7.6 Language Selection: Restart-Based
+- Language setting stored in `SettingsService` under `ui/language` (`system`, `en`, `uk`, `ru`).
+- Selecting a language in `SettingsPage` displays an inline message: *"Language will take effect after restarting JobPrep."*
+- `main.cpp` installs `QTranslator` and calls `QLocale::setDefault()` before creating `MainWindow`.
 
 ### 7.7 Keyboard Shortcuts & Mnemonics
-- `QKeySequence` shortcuts (`Ctrl+1..4`, `Ctrl+N`, `Ctrl+F`, `Ctrl+S`, `Esc`) match by physical key scan code / primary Latin key in Qt on Windows and Linux, continuing to work under Cyrillic layouts.
-- Menu and button mnemonics (`&`) in Ukrainian/Russian will use Latin accelerator hints (e.g. `Новий (&N)`) to avoid layout-dependent Alt-key collisions.
+- Global shortcuts (`Ctrl+1..4`, `Ctrl+N`, `Ctrl+F`, `Ctrl+S`, `Esc`) match by physical scan code in Qt. Marked **not proven by agent on Windows hardware, user to check**.
+- Form labels and buttons with `&` mnemonics will **omit mnemonics in Ukrainian and Russian** to avoid layout-dependent Alt-key collisions.
 
-### 7.8 Sample Data & Notifications
-- Sample data in `SeedService` remains in English (technical interview topics such as "C++ Smart Pointers", "Move Semantics" are universal programming terms).
-- Notification formatting in `src/ui/NotificationText.cpp` is localized with `%n` plurals.
+### 7.8 Early Layout Verification
+- In Part C, load a test-only pseudo-translation (strings padded by 40% with Cyrillic glyphs) in `tst_HiDpi` to detect layout clipping before translating.
 
-### 7.9 Translation Workflow & Glossary
-- Maintain glossary in `docs/i18n-glossary.md` defining core domain terminology:
-  - Application: uk `Заявка` / ru `Отклик`
-  - Interview: uk `Співбесіда` / ru `Собеседование`
-  - Follow-up: uk `Нагадування` / ru `Напоминание`
-  - Study Target: uk `Ціль навчання` / ru `Цель обучения`
-  - Streak: uk `Серія днів` / ru `Серия дней`
-- Translator review file: `docs/reports/i18n-review.md` presenting English source alongside Ukrainian and Russian translations in a clean table.
+### 7.9 Draft Domain Glossary (For User Review)
+
+| English UI Term | Ukrainian Draft (`uk`) | Russian Draft (`ru`) | Context / Notes |
+|---|---|---|---|
+| Application | Заявка | Заявка / Отклик | Job application tracking |
+| Interview | Співбесіда | Собеседование | Scheduled interview stage |
+| Follow-up | Подальший контакт / Фоллоу-ап | Контакт / Фоллоу-ап | Distinct from Reminder (`Нагадування`) |
+| Study Target | Ціль вивчення | Цель изучения | Topic due date target in Agenda |
+| Streak | Серія днів | Серия дней | Consecutive study days |
+| Wishlist | Бажане | В планах | Application stage 0 |
+| Applied | Подано | Отправлено | Application stage 1 |
+| HR Screen | HR-скринінг | HR-скрининг | Interview type / application stage |
+| Technical | Технічне | Техническое | Technical interview stage |
+| Live coding | Лайв-кодинг | Лайв-кодинг | Interview type |
+| System design | Системний дизайн | Системный дизайн | Interview type |
+| Behavioral | Поведінкове | Поведенческое | Interview type |
+| Final | Фінальне | Финальное | Final interview stage |
+| Offer | Офер | Оффер | Job offer received |
+| Accepted | Прийнято | Принято | Offer accepted |
+| Rejected | Відхилено | Отказ | Application rejected |
+| Withdrawn | Відкликано | Отозвано | Withdrawn by candidate |
+| Ghosted | Без відповіді | Без ответа | Employer stopped responding |
+| Backlog | Беклог | Бэклог | Study topic status |
+| In Progress | В процесі | В процессе | Study topic status |
+| Review | Повторення | Повторение | Study topic status |
+| Done | Вивчено | Изучено | Study topic status |
 
 ---
 
@@ -460,7 +514,7 @@ Total `tr()` calls in `src/`: **482** across 27 files.
 - Agenda item layout: Fixed text overlap between title and track category label in two-line agenda rows; polished card header styling and spacing.
 - Date controls keyboard accessibility: Alt+Down and F4 open the calendar popup across all date fields via SingleTabDateEdit; Esc closes the popup; tooltip shortcut hint added.
 - Qt 6.10 & MSVC compatibility: Replaced deprecated QSortFilterProxyModel::invalidateFilter() with beginFilterChange()/endFilterChange() guarded by QT_VERSION_CHECK; eliminated compiler warning suppressions; updated CI matrix to include Qt 6.10; updated RUNNING.md for MSVC toolset requirements.
-- Acceptance: Switching language in Settings and restarting displays all UI pages, dialogs, badges, and notifications in Ukrainian or Russian; zero text clipping or delegate overlap at 100% and 150% scaling in both themes; date popups open via keyboard in all dialogs; check.sh passes on both Qt 6.8 and Qt 6.10.
+- Acceptance: Switching language in Settings and restarting displays all UI pages, dialogs, badges, and notifications in Ukrainian or Russian; zero text clipping or delegate overlap at 100% and 150% scaling in both themes; date popups open via keyboard in all dialogs; the CI matrix passes on Qt 6.8.x and 6.10.x.
 ```
 
 ### SPEC §14: Changelog Additions
@@ -484,31 +538,33 @@ Total `tr()` calls in `src/`: **482** across 27 files.
 - **Files Touched:**
   - `src/models/ApplicationFilterProxy.cpp`
   - `src/models/TopicBoardProxy.cpp`
+  - `src/ui/dialogs/ApplicationDialog.h`, `.cpp`
   - `.github/workflows/ci.yml`
   - `docs/RUNNING.md`
 - **Actions:**
-  1. Replace `invalidateFilter()` with `beginFilterChange()` / `endFilterChange(Rows)` guarded by `QT_VERSION_CHECK(6, 9, 0)`.
+  1. Replace `invalidateFilter()` with `beginFilterChange()` / `endFilterChange(Direction::Rows)` guarded by `QT_VERSION_CHECK(6, 9, 0)`.
   2. Remove `#pragma GCC diagnostic ignored "-Wdeprecated-declarations"` blocks.
-  3. Update `.github/workflows/ci.yml` to include Qt 6.10.3 in the CI test matrix.
-  4. Update `docs/RUNNING.md` with Visual Studio 2022 toolset requirements and tested command lines.
+  3. Remove all `// CI-DIAG` lines from `src/ui/dialogs/ApplicationDialog.cpp` and `.h`.
+  4. Update `.github/workflows/ci.yml` to include Qt 6.10.3 in the PR matrix, plus Windows 6.8.2 on workflow_dispatch/schedule.
+  5. Add CI diagnostic step for `lrelease`/`lupdate` and `Qt6LinguistTools`.
+  6. Update `docs/RUNNING.md` with Visual Studio 2022 toolset requirements and tested command lines.
 - **Verification:** `./scripts/check.sh` passes with zero warnings.
 
 ### Part B: UI Bug Fixes (Today Overlap & Date Keyboard Access)
 - **Scope:** Item 1 (Agenda text overlap & card headers) and Item 2 (Date picker keyboard navigation).
 - **Files Touched:**
-  - `src/ui/delegates/AgendaItemDelegate.cpp`
-  - `src/ui/delegates/AgendaItemDelegate.h`
+  - `src/ui/delegates/AgendaItemDelegate.cpp`, `.h`
   - `src/ui/pages/HomePage.cpp`
-  - `src/ui/widgets/SingleTabDateTime.h`
+  - `src/ui/widgets/SingleTabDateTime.h`, `.cpp`
   - `resources/styles/theme.qss`
   - `tests/ui/tst_HiDpi.cpp`
-  - `tests/ui/tst_Shortcuts.cpp` (or dialog tests)
+  - `tests/ui/tst_Shortcuts.cpp`
 - **Actions:**
-  1. Fix `AgendaItemDelegate::paint` rectangle division and dynamic `sizeHint()`.
-  2. Style card headers with `#CardTitle` and clean `HomePage` list view frame.
-  3. Add `Alt+Down` and `F4` key event handling and tooltip hints in `SingleTabDateEdit`.
-  4. Add automated delegate text rectangle overlap test in `tst_HiDpi`.
-  5. Add keyboard popup activation tests across all date dialogs.
+  1. Implement `SubRects computeLayout(...)` in `AgendaItemDelegate`.
+  2. Fix `paint()` and dynamic `sizeHint()`. Add independent painted-pixel ink test.
+  3. Style card headers with `#CardTitle` and clean `HomePage` list view frame.
+  4. Add `Alt+Down` and `F4` key event handling, `ShortcutOverride`, and tooltip hints in `SingleTabDateEdit`.
+  5. Add keyboard popup activation tests across all 5 date controls in all available styles.
 - **Verification:** `./scripts/check.sh` passes; all new tests green; zero overlap detected.
 
 ### Part C: Localization Infrastructure & String Audit
@@ -531,6 +587,7 @@ Total `tr()` calls in `src/`: **482** across 27 files.
   4. Audit untranslated strings; add `tr()` and convert plural formats to `%n`.
   5. Update `MonthView` to use active `QLocale`.
   6. Install `QTranslator` in `main.cpp` based on settings.
+  7. Run early layout tests with pseudo-translation in `tst_HiDpi`.
 - **Verification:** `./scripts/check.sh` green; English UI operates unchanged.
 
 ### Part D: Translation Delivery, Review & Verification
@@ -541,12 +598,13 @@ Total `tr()` calls in `src/`: **482** across 27 files.
   - `docs/i18n-glossary.md`
   - `docs/reports/i18n-review.md`
   - `tests/ui/tst_HiDpi.cpp`
+  - `tests/i18n/tst_Translations.cpp`
   - `docs/reports/M7.md`
 - **Actions:**
   1. Create `docs/i18n-glossary.md`.
   2. Populate `jobprep_uk.ts` and `jobprep_ru.ts` with complete, polished translations.
   3. Generate `docs/reports/i18n-review.md` table for user review.
-  4. Verify complete translation status in CI / automated test.
+  4. Add `tst_Translations` checking complete translations and plural rules.
   5. Run `tst_HiDpi` under `uk` and `ru` locales; verify zero clipping at 100% and 150%.
   6. Compile final M7 report.
 - **Verification:** All tests green; zero unfinished strings; zero clipping.
@@ -559,62 +617,247 @@ Total `tr()` calls in `src/`: **482** across 27 files.
 
 | Test Binary | Target Slot | Type | Verification Scope |
 |---|---|---|---|
-| `tst_HiDpi` | `testDelegateAndWidgetTextOverlap` | Existing Binary | Renders agenda rows; asserts non-overlap of title and category rects at 100% & 150% scales |
+| `tst_HiDpi` | `testDelegateAndWidgetTextOverlap` | Existing Binary | Renders agenda rows; asserts non-overlap of title and category ink rects at 100% & 150% scales |
 | `tst_HiDpi` | `testTranslationsHiDpi` | Existing Binary | Validates all pages and dialogs in `uk` and `ru` at 100% & 150% scales for zero text clipping |
 | `tst_Shortcuts` | `testDateEditKeyboardPopup` | Existing Binary | Sends `Alt+Down` and `F4` to `SingleTabDateEdit`; verifies popup opens, date selects, Esc closes |
 | `tst_PageJobs` | `testApplicationDialogDatePopupKeys` | Existing Binary | Tests keyboard popup on Applied Date and Next Action Date in `ApplicationDialog` |
 | `tst_PageCalendar` | `testInterviewDialogDatePopupKeys` | Existing Binary | Tests keyboard popup on Date in `InterviewDialog` |
 | `tst_SettingsService` | `testLanguageSetting` | Existing Binary | Verifies `language()` getter/setter persistence and signal emission |
 | `tst_Translations` | `testAllTranslationsFinished` | **New Binary** | Verifies `jobprep_uk.ts` and `jobprep_ru.ts` have 0 untranslated or obsolete entries |
-| `tst_Translations` | `testPluralForms` | **New Binary** | Verifies 1, 2, 5 plural outputs in Ukrainian and Russian |
+| `tst_Translations` | `testPluralForms` | **New Binary** | Verifies 1, 2, 5, 11, 21, 22, 25, 101 plural outputs in Ukrainian and Russian |
+| `tst_Translations` | `testResourcePresence` | **New Binary** | Asserts `:/i18n/jobprep_uk.qm` exists in executable |
 | `ui_smoke` | `testLanguageSmoke` | Existing Binary | Loads `MainWindow` under Ukrainian and Russian locales without Qt warnings |
 
 ### Expected Baseline Projection
 - **Current Baseline:** 34 test binaries, 469 test functions.
-- **Projected New Baseline:** 35 test binaries (+1 for `tst_Translations`), ~478 test functions (+9 new functions).
+- **Projected New Baseline:** 35 test binaries (+1 for `tst_Translations`), ~480 test functions (+11 new functions).
 
 ---
 
-## 11. Risks & Files Touched
+## 11. Appendix: Evidence
 
-### Files Touched (Complete List)
-- **CMake & Build:** `CMakeLists.txt`, `.github/workflows/ci.yml`
-- **Resources & Styles:** `resources/resources.qrc`, `resources/styles/theme.qss`, `resources/translations/jobprep_uk.ts`, `resources/translations/jobprep_ru.ts`
-- **Models & Proxies:** `src/models/ApplicationFilterProxy.cpp`, `src/models/TopicBoardProxy.cpp`, `src/models/ApplicationTableModel.cpp`, `src/models/TopicListModel.cpp`
-- **Services:** `src/services/SettingsService.h`, `src/services/SettingsService.cpp`
-- **UI Pages & Shell:** `src/main.cpp`, `src/app/AppContext.h`, `src/app/AppContext.cpp`, `src/ui/MainWindow.cpp`, `src/ui/Sidebar.cpp`, `src/ui/pages/HomePage.cpp`, `src/ui/pages/SettingsPage.h`, `src/ui/pages/SettingsPage.cpp`, `src/ui/pages/CalendarPage.cpp`, `src/ui/pages/JobsPage.cpp`, `src/ui/pages/StudyPage.cpp`
-- **UI Widgets & Dialogs:** `src/ui/widgets/SingleTabDateTime.h`, `src/ui/widgets/MonthView.cpp`, `src/ui/widgets/TopicDetailPanel.cpp`, `src/ui/dialogs/ApplicationDialog.cpp`, `src/ui/dialogs/InterviewDialog.cpp`, `src/ui/dialogs/SessionDialog.cpp`, `src/ui/NotificationText.cpp`, `src/ui/FormatHelper.cpp`, `src/ui/delegates/AgendaItemDelegate.h`, `src/ui/delegates/AgendaItemDelegate.cpp`
-- **Tests:** `tests/CMakeLists.txt`, `tests/ui/tst_HiDpi.cpp`, `tests/ui/tst_Shortcuts.cpp`, `tests/services/tst_SettingsService.cpp`, `tests/ui_smoke/ui_smoke.cpp`, `tests/i18n/CMakeLists.txt`, `tests/i18n/tst_Translations.cpp`
-- **Documentation:** `docs/RUNNING.md`, `docs/i18n-glossary.md`, `docs/reports/i18n-review.md`
+### A.1 Pre-Flight Findings Commands & Outputs
 
-### Identified Risks & Mitigations
-1. **Longer Cyrillic Strings:**
-   - *Risk:* Ukrainian and Russian words can overflow fixed-width buttons, column headers, or card widths.
-   - *Mitigation:* Verified against dynamic font metrics; `tst_HiDpi` extended to run full clipping assertions on both translations.
-2. **Missing Strings in `.ts`:**
-   - *Risk:* Hardcoded string literals in new UI widgets skipping `tr()`.
-   - *Mitigation:* New `tst_Translations` quality test checking translation completeness in automated test suite.
-3. **Multi-configuration Windows CI Paths:**
-   - *Risk:* Translation `.qm` files failing to resolve if placed on disk next to executable.
-   - *Mitigation:* Embedded into Qt resource system (`:/i18n/`) at compile time.
+#### 1. Proxy Models Diagnostic Pragmas
+```bash
+$ head -n 5 src/models/ApplicationFilterProxy.cpp && head -n 5 src/models/TopicBoardProxy.cpp
+```
+```
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+#include "models/ApplicationFilterProxy.h"
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+```
 
-### Not Verified by Agent (User to Check)
-1. Physical behavior of `Alt+Down` and `F4` on a live Windows desktop with MSVC.
-2. Keyboard navigation using a physical Ukrainian hardware keyboard layout.
-3. Linguistic naturalness and stylistic nuances of the Ukrainian and Russian translations.
-4. Visual look of the dashboard at 150% scaling on high-density Windows monitors.
+#### 2. QSortFilterProxyModel Filter Change Methods Declaration
+```bash
+$ grep -n -B3 -A3 "beginFilterChange" /usr/include/x86_64-linux-gnu/qt6/QtCore/qsortfilterproxymodel.h
+```
+```
+121-    virtual bool filterAcceptsColumn(int source_column, const QModelIndex &source_parent) const;
+122-    virtual bool lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const;
+123-
+124:    void beginFilterChange();
+125-    void endFilterChange(Directions directions = Direction::Both);
+126-#if QT_DEPRECATED_SINCE(6, 13)
+127-    QT_DEPRECATED_VERSION_X_6_13("Use begin/endFilterChange() instead")
+```
 
----
+#### 3. invalidateFilter Deprecation Macro
+```bash
+$ grep -n -B3 -A3 "invalidateFilter" /usr/include/x86_64-linux-gnu/qt6/QtCore/qsortfilterproxymodel.h
+```
+```
+125-    void endFilterChange(Directions directions = Direction::Both);
+126-#if QT_DEPRECATED_SINCE(6, 13)
+127-    QT_DEPRECATED_VERSION_X_6_13("Use begin/endFilterChange() instead")
+128:    void invalidateFilter();
+129-    QT_DEPRECATED_VERSION_X_6_13("Use begin/endFilterChange(QSortFilterProxyModel::Direction::Rows) instead")
+130-    void invalidateRowsFilter();
+131-    QT_DEPRECATED_VERSION_X_6_13("Use begin/endFilterChange(QSortFilterProxyModel::Direction::Columns) instead")
+```
 
-## 12. Open Questions for the User
+#### 4. Available Qt 6.10 Architectures in aqtinstall
+```bash
+$ python3 -m aqt list-qt linux desktop --arch 6.10.3 && python3 -m aqt list-qt windows desktop --arch 6.10.3
+```
+```
+linux_gcc_64
+win64_llvm_mingw win64_mingw win64_msvc2022_64 win64_msvc2022_arm64_cross_compiled
+```
 
-1. **Language default:** Should JobPrep automatically default to the system UI language if it is Ukrainian or Russian, and otherwise default to English?
-   - *(Recommended: Yes)*
-2. **Windows CI Hang:** Was the green Windows run (following fix-up 7) a re-run of commit `05e719b` or a later commit?
-   - *(The plan retains all watchdog and timeout safeguards regardless)*
-3. **Language Switching Mode:** Should language switching take effect after application restart with a clear user notice, or dynamically at run time?
-   - *(Recommended: After restart, ensuring complete visual stability and clean initialization)*
-4. **Sample Data Localization:** Should the sample interview preparation topics in `SeedService` remain in English, or be translated into Ukrainian and Russian?
-   - *(Recommended: Keep English, as technical C++ concepts are universal in technical interviews)*
-5. **Data Export Neutrality:** Should CSV, ICS, and JSON export files remain language-neutral (English headers, snake_case enums, ISO dates)?
-   - *(Recommended: Yes, ensuring complete data portability across devices and locales)*
+#### 5. SingleTabDateTime.h Implementation
+```bash
+$ cat src/ui/widgets/SingleTabDateTime.h
+```
+```cpp
+#pragma once
+
+#include <QDateEdit>
+#include <QTimeEdit>
+
+namespace JobPrep::Ui::Widgets {
+
+/// A QDateEdit where Tab and Backtab advance to the next or previous widget
+/// on a single key press instead of stepping through internal date sections.
+class SingleTabDateEdit : public QDateEdit {
+public:
+    using QDateEdit::QDateEdit;
+
+protected:
+    bool focusNextPrevChild(bool next) override {
+        return QWidget::focusNextPrevChild(next);
+    }
+};
+
+/// A QTimeEdit where Tab and Backtab advance to the next or previous widget
+/// on a single key press instead of stepping through internal time sections.
+class SingleTabTimeEdit : public QTimeEdit {
+public:
+    using QTimeEdit::QTimeEdit;
+
+protected:
+    bool focusNextPrevChild(bool next) override {
+        return QWidget::focusNextPrevChild(next);
+    }
+};
+
+}  // namespace JobPrep::Ui::Widgets
+```
+
+#### 6. Diagnostic Pragmas Audit
+```bash
+$ grep -rn "pragma" src tests CMakeLists.txt
+```
+```
+src/models/AgendaListModel.h:1:#pragma once
+src/models/ApplicationFilterProxy.cpp:2:#pragma GCC diagnostic push
+src/models/ApplicationFilterProxy.cpp:3:#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+src/models/ApplicationFilterProxy.cpp:67:#pragma GCC diagnostic pop
+src/models/TopicTableProxy.h:1:#pragma once
+src/models/ApplicationFilterProxy.h:1:#pragma once
+src/models/TopicListModel.h:1:#pragma once
+src/models/TopicBoardProxy.cpp:2:#pragma GCC diagnostic push
+src/models/TopicBoardProxy.cpp:3:#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+src/models/TopicBoardProxy.cpp:173:#pragma GCC diagnostic pop
+... (all remaining matches are `#pragma once` or SQLite `PRAGMA` statements)
+```
+
+#### 7. Last SPEC Changelog Entries
+```bash
+$ grep -n "^- 1\." docs/SPEC.md | tail -3
+```
+```
+529:- 1.21 — M6 Part D2 Fix-ups (Evidence audit, real-data safety, font metrics, test hardening):
+535:- 1.22 — Legacy timestamp UI presentation cutoff (2013-01-01):
+537:- 1.23 — Small-screen dialog constraints and tab bar scrolling fix:
+```
+
+### A.2 Item 1 Overlap Reproduction Harness
+
+Source of scratch harness executed outside git tracking:
+```cpp
+#include <QApplication>
+#include <QDate>
+#include <QDateTime>
+#include <QImage>
+#include <QFontMetrics>
+#include <QListView>
+#include <iostream>
+
+#include "app/AppContext.h"
+#include "data/TrackRepository.h"
+#include "data/TopicRepository.h"
+#include "domain/Structs.h"
+#include "services/StatsService.h"
+#include "services/DayWatcher.h"
+#include "ui/MainWindow.h"
+#include "ui/pages/HomePage.h"
+
+using namespace JobPrep;
+using namespace Qt::StringLiterals;
+
+int main(int argc, char* argv[]) {
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+    QApplication app(argc, argv);
+
+    App::AppContext ctx(u":memory:"_s);
+    const QDate today = QDate::currentDate();
+    ctx.statsService().setClock([today] { return QDateTime(today, QTime(12, 0)); });
+    ctx.dayWatcher().setClock([today] { return today; });
+
+    Domain::Track track;
+    track.name = u"C++"_s;
+    track.color = u"#3b82f6"_s;
+    ctx.tracks().insert(track);
+
+    Domain::Topic topic;
+    topic.trackId = track.id;
+    topic.title = u"Advanced Metaprogramming with Concepts, Fold Expressions and SFINAE"_s;
+    topic.targetDate = today;
+    topic.status = Domain::TopicStatus::InProgress;
+    ctx.topics().insert(topic);
+
+    Ui::MainWindow win(ctx);
+    win.resize(1100, 700);
+    win.show();
+    win.dashboardController()->refreshNow();
+    QApplication::processEvents();
+
+    auto* home = win.homePage();
+    auto* todayView = home->findChild<QListView*>();
+
+    const QFont font = todayView->font();
+    QFont titleFont = font;
+    QFont subtitleFont = font;
+    subtitleFont.setPointSizeF(qMax(7.5, font.pointSizeF() - 1.0));
+    const QFontMetrics titleMetrics(titleFont);
+    const QFontMetrics subtitleMetrics(subtitleFont);
+
+    const int kRowHeight = 44;
+    const int kIconSize = 16;
+    const int kHorizontalMargin = 10;
+    QRect itemRect(0, 0, todayView->width(), kRowHeight);
+    const QRect content = itemRect.adjusted(kHorizontalMargin, 0, -kHorizontalMargin, 0);
+    const QRect textRect = content.adjusted(kIconSize + 8, 3, 0, -3);
+
+    int titleDrawTop = textRect.top() + (textRect.height() - titleMetrics.height()) / 2;
+    int titleDrawBottom = titleDrawTop + titleMetrics.height();
+
+    QRect subtitleRect = textRect.adjusted(0, titleMetrics.height() / 2 + 2, 0, 0);
+    int subtitleDrawTop = subtitleRect.top() + (subtitleRect.height() - subtitleMetrics.height()) / 2;
+    int subtitleDrawBottom = subtitleDrawTop + subtitleMetrics.height();
+
+    std::cout << "todayView geometry: " << todayView->geometry().x() << "," << todayView->geometry().y()
+              << " " << todayView->geometry().width() << "x" << todayView->geometry().height() << "\n";
+    std::cout << "itemRect: " << itemRect.x() << "," << itemRect.y() << " " << itemRect.width() << "x" << itemRect.height() << "\n";
+    std::cout << "textRect: " << textRect.x() << "," << textRect.y() << " " << textRect.width() << "x" << textRect.height() << "\n";
+    std::cout << "titleMetrics height: " << titleMetrics.height() << "\n";
+    std::cout << "subtitleMetrics height: " << subtitleMetrics.height() << "\n";
+    std::cout << "Title vertical bounds: [" << titleDrawTop << " .. " << titleDrawBottom << "]\n";
+    std::cout << "Subtitle vertical bounds: [" << subtitleDrawTop << " .. " << subtitleDrawBottom << "]\n";
+    int overlap = std::max(0, std::min(titleDrawBottom, subtitleDrawBottom) - std::max(titleDrawTop, subtitleDrawTop));
+    std::cout << "OVERLAP: " << overlap << " px\n";
+    return 0;
+}
+```
+Execution command:
+```bash
+$ HOME=/tmp/jp-isolated XDG_DATA_HOME=/tmp/jp-isolated/.local/share XDG_CONFIG_HOME=/tmp/jp-isolated/.config scratch/reproduce_today
+```
+Output:
+```
+todayView geometry: 0,0 376x188
+itemRect: 0,0 376x44
+textRect: 34,3 332x38
+titleMetrics height: 18
+subtitleMetrics height: 17
+Title vertical bounds: [13 .. 31]
+Subtitle vertical bounds: [19 .. 36]
+OVERLAP: 12 px
+```
