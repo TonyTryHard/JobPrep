@@ -231,9 +231,8 @@ QFrame* HomePage::createCard(const QString& title, QWidget* content) {
      const int textHeight = hasSubtitle ? (tm.height() + sm.height() + 4) : tm.height();
      const int rowHeight = qMax(kIconSize + 16, textHeight + 14);
      ```
-   - Values across font matrix at 100% and 150%:
-     - DejaVu Sans 10pt (100%): `tm=18`, `sm=16` -> two-line `rowHeight = 18 + 16 + 4 + 14 = 52 px` (single-line `32 px`).
-     - DejaVu Sans 10pt (150%): `tm=27`, `sm=24` -> two-line `rowHeight = 27 + 24 + 6 + 21 = 78 px`.
+   - Values across font matrix:
+     *Logical vs device pixels:* Under `QT_SCALE_FACTOR=1.5` or high-DPI scaling, Qt Widgets coordinate calculations (`sizeHint()`, font metrics in point sizes, layout rects) operate strictly in **logical** pixels. For DejaVu Sans 10pt at both 100% and 150% scaling, `tm.height()` is 16 logical px and `sm.height()` is 14 logical px. The two-line `rowHeight` in logical pixels is `16 + 14 + 4 + 14 = 48 px` (single-line: `qMax(20 + 16, 16 + 14) = 36 px`). Device pixels (e.g. 72 physical px at DPR 1.5) apply only to device rasterization (`QImage` backing store with `setDevicePixelRatio(dpr)`).
 3. **Independent Painted-Pixel Ink Test:**
    - Render the item with only `title` into a transparent `QImage`, and with only `subtitle` into a second transparent `QImage`.
    - Compute ink bounding rects (pixels with alpha > 0). Assert that `titleInkRect.intersects(subtitleInkRect)` is strictly `false`.
@@ -278,14 +277,14 @@ All 5 controls are instances of `JobPrep::Ui::Widgets::SingleTabDateEdit` (defin
    - Post `QMouseEvent(MouseButtonPress)` and `MouseButtonRelease` to the center point.
    - *Pros:* Uses Qt's existing popup infrastructure and calendar synchronization; zero custom popup lifecycle to manage.
    - *Cons:* Style-dependent subcontrol rects; fragile if a custom style draws arrows outside the widget bounds.
-2. **Option B: Dedicated Popup Wrapper (Recommended)**
+2. **Option B: Dedicated Popup Wrapper**
    - Query Qt's `calendarWidget()`. If null, allow lazy creation.
    - If `calendarWidget()` is available, its top-level window `QWidget* popup = calendarWidget()->window()` is the popup container.
    - Position `popup` directly under the date edit (`mapToGlobal(QPoint(0, height()))`) and call `popup->show()`.
-   - *Pros:* 100% style-agnostic; no reliance on subcontrol hit tests; works identically under `fusion`, `windows`, and `windows11`.
-   - *Cons:* Must ensure proper popup window flags and event loop grab.
+   - *Pros:* Style-agnostic; no reliance on subcontrol hit tests.
+   - *Cons:* Must ensure proper popup window flags, calendar synchronisation, and event loop grab.
 
-**Recommendation:** Hybrid implementation in `SingleTabDateEdit`: attempt `calendarWidget()->window()->show()` positioned under the field. If Qt private mechanics require mouse activation, trigger via combo arrow hit test with spinbox fallback.
+**Decision Rule (Binding):** Prefer the approach that opens **the same popup the mouse opens** (no second popup design). Synthesize a mouse press using the arrow rectangle computed as Qt computes it (`CC_ComboBox`, `SC_ComboBoxArrow`), never `SC_SpinBoxDown`. Use the own-popup approach only if the click approach is proven to fail in a style available in the environment.
 
 ### 4.4 Shortcut Override & Modifier Safety
 - **Modifier check:** Use `(event->modifiers() & ~Qt::KeypadModifier) == Qt::AltModifier` to ensure `Alt+Down` from the numeric keypad functions correctly.
@@ -366,7 +365,7 @@ All 5 controls are instances of `JobPrep::Ui::Widgets::SingleTabDateEdit` (defin
 ### 5.4 `docs/RUNNING.md` Windows Section Updates
 - **Documented Facts:**
   - Known failing compiler: MSVC `19.30.30706` (VS 2022 17.0) fails with `fatal error C1001: Internal compiler error` in `QtCore/qrangemodel_impl.h(903)` when compiling with Qt 6.10.
-  - Known good compiler: MSVC `19.44.35229` (user's PC) and MSVC `19.42+` (GitHub Actions CI `windows-latest`).
+  - Known good compiler: MSVC `19.44.35229` (user's PC) and MSVC `19.51.36260.0` in CI logs (builds with Qt 6.8.2 in CI; with Qt 6.10.3 not yet known until the new matrix has run).
   - Document `-DJOBPREP_WERROR=OFF` strictly as a temporary workaround that is superseded by the M7 fix.
 - **Steps:**
   1. Open **x64 Native Tools Command Prompt for VS 2022**.
@@ -396,10 +395,17 @@ All 5 controls are instances of `JobPrep::Ui::Widgets::SingleTabDateEdit` (defin
 
 ### 6.3 Slow Tests Measurements
 Local measured durations under Linux offscreen (`build/dev-linux`):
-- `tst_PageStudy`: **17.914 s** (31 reset data calls)
+- `tst_PageStudy`: **17.914 s** (21 `resetStudyData` calls)
   - `testChipBarJobsAndCalendarRegression`: 1.599 s
   - `testStudyPageApi`: 1.244 s
   - `testStudyListViewToggleSortAndDelegates`: 0.820 s
+  - *Fixture cost measurement:* `resetStudyData()` was instrumented with `QElapsedTimer`:
+    - `AppContext(":memory:")` creation (SQLite migrations): **~540 ms**
+    - `StudyPage` widget tree creation: **~39 ms**
+    - `show()` + window activation: **~23 ms**
+    - `processEvents()`: **~2 ms**
+    - **Total per reset:** **~605 ms**.
+    - 21 resets × ~605 ms = **~12.7 s** of the 17.9 s total test duration (~71% of runtime). Database migration initialization during `:memory:` resets is confirmed as the primary runtime driver.
 - `tst_PageHome`: **16.100 s**
   - `testToastNotificationSmoke`: 2.955 s
   - `testDashboardVisitedBothThemes`: 2.920 s
@@ -409,8 +415,9 @@ Local measured durations under Linux offscreen (`build/dev-linux`):
 - `tst_EmptyStatesAndFocus`: **10.075 s**
   - `testFocusIndicatorDoesNotChangeGeometryOrSizeHint`: 1.272 s
   - `testVisibleFocusIndicatorChip`: 1.267 s
+  - *Window activation measurement:* Across all 249 calls to `activateWindow()`, 0 calls timed out (`timeouts=0`), taking 102 ms total (average 0.4 ms/call). Slot floor durations are not caused by `qWaitForWindowActive` timeouts.
 
-*Note:* Refactoring test fixtures remains a proposal for future milestones; no test logic changes in Part A.
+*Note:* Refactoring test fixtures remains a proposal for future milestones; no test logic changes in Part A or Part B.
 
 ---
 
@@ -524,7 +531,7 @@ Local measured durations under Linux offscreen (`build/dev-linux`):
 - 1.25 — Date control keyboard popup shortcut (M7):
   SingleTabDateEdit handles Alt+Down and F4 to invoke the calendar popup without requiring mouse clicks; Esc cancels; tooltip displays keyboard shortcut hint.
 - 1.26 — Qt 6.9+ QSortFilterProxyModel filter change modernization (M7):
-  ApplicationFilterProxy and TopicBoardProxy use beginFilterChange() / endFilterChange(Rows) on Qt >= 6.9 and invalidateFilter() on Qt 6.8; eliminated local #pragma GCC diagnostic ignored blocks; updated RUNNING.md requiring Visual Studio 2022 version 17.4+ to prevent Qt 6.10 compiler ICE.
+  ApplicationFilterProxy and TopicBoardProxy use beginFilterChange() / endFilterChange(Rows) on Qt >= 6.9 and invalidateFilter() on Qt 6.8; eliminated local #pragma GCC diagnostic ignored blocks; updated RUNNING.md with MSVC compiler toolset findings (MSVC 19.30 ICE with Qt 6.10, known good MSVC 19.44 / CI toolset).
 - 1.27 — Multi-language GUI localization (Ukrainian and Russian) (M7):
   Integrated Qt Linguist (.ts/.qm) via Qt resource system (:/i18n/); ui/language setting added to SettingsService; language applied at startup with QTranslator; plural rules (%n) implemented for hours, minutes, and counters; exports and database storage retain language-neutral keys.
 ```
@@ -619,9 +626,7 @@ Local measured durations under Linux offscreen (`build/dev-linux`):
 |---|---|---|---|
 | `tst_HiDpi` | `testDelegateAndWidgetTextOverlap` | Existing Binary | Renders agenda rows; asserts non-overlap of title and category ink rects at 100% & 150% scales |
 | `tst_HiDpi` | `testTranslationsHiDpi` | Existing Binary | Validates all pages and dialogs in `uk` and `ru` at 100% & 150% scales for zero text clipping |
-| `tst_Shortcuts` | `testDateEditKeyboardPopup` | Existing Binary | Sends `Alt+Down` and `F4` to `SingleTabDateEdit`; verifies popup opens, date selects, Esc closes |
-| `tst_PageJobs` | `testApplicationDialogDatePopupKeys` | Existing Binary | Tests keyboard popup on Applied Date and Next Action Date in `ApplicationDialog` |
-| `tst_PageCalendar` | `testInterviewDialogDatePopupKeys` | Existing Binary | Tests keyboard popup on Date in `InterviewDialog` |
+| `tst_Shortcuts` | `testDateControlsKeyboardPopup` | Existing Binary | Data-driven test over all five date controls (TopicDetailPanel, InterviewDialog, ApplicationDialog x2, SessionDialog) across all styles in QStyleFactory::keys(); verifies Alt+Down and F4 open mouse-identical popup, Esc closes popup then dialog, arrow+Enter selects date, and ShortcutOverride handles window-level shortcuts |
 | `tst_SettingsService` | `testLanguageSetting` | Existing Binary | Verifies `language()` getter/setter persistence and signal emission |
 | `tst_Translations` | `testAllTranslationsFinished` | **New Binary** | Verifies `jobprep_uk.ts` and `jobprep_ru.ts` have 0 untranslated or obsolete entries |
 | `tst_Translations` | `testPluralForms` | **New Binary** | Verifies 1, 2, 5, 11, 21, 22, 25, 101 plural outputs in Ukrainian and Russian |
@@ -630,7 +635,7 @@ Local measured durations under Linux offscreen (`build/dev-linux`):
 
 ### Expected Baseline Projection
 - **Current Baseline:** 34 test binaries, 469 test functions.
-- **Projected New Baseline:** 35 test binaries (+1 for `tst_Translations`), ~480 test functions (+11 new functions).
+- **Projected New Baseline:** 35 test binaries (+1 for `tst_Translations`), ~477 test functions (+8 new functions).
 
 ---
 
@@ -732,20 +737,30 @@ protected:
 
 #### 6. Diagnostic Pragmas Audit
 ```bash
-$ grep -rn "pragma" src tests CMakeLists.txt
+$ grep -rn "pragma" src tests CMakeLists.txt | grep -v "pragma once"
 ```
 ```
-src/models/AgendaListModel.h:1:#pragma once
-src/models/ApplicationFilterProxy.cpp:2:#pragma GCC diagnostic push
-src/models/ApplicationFilterProxy.cpp:3:#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-src/models/ApplicationFilterProxy.cpp:67:#pragma GCC diagnostic pop
-src/models/TopicTableProxy.h:1:#pragma once
-src/models/ApplicationFilterProxy.h:1:#pragma once
-src/models/TopicListModel.h:1:#pragma once
-src/models/TopicBoardProxy.cpp:2:#pragma GCC diagnostic push
-src/models/TopicBoardProxy.cpp:3:#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-src/models/TopicBoardProxy.cpp:173:#pragma GCC diagnostic pop
-... (all remaining matches are `#pragma once` or SQLite `PRAGMA` statements)
+src/data/Database.h:13:/// Owns the SQLite connection: opens it, applies the pragmas and runs migrations.
+src/data/Database.h:49:    /// Runs a statement without bindings (pragmas, migrations).
+src/data/Database.h:91:    bool readPragma(const QString& pragma, QVariant* value) const;
+src/data/Database.cpp:201:bool Database::readPragma(const QString& pragma, QVariant* value) const {
+src/data/Database.cpp:203:    if (!query.exec(u"PRAGMA "_s + pragma) || !query.next()) {
+src/data/Database.cpp:204:        setError(u"Cannot read PRAGMA %1."_s.arg(pragma));
+```
+
+```bash
+$ grep -rn "PRAGMA" src | head -n 100
+```
+```
+src/services/RestoreService.cpp:470:    if (!q.exec(u"PRAGMA defer_foreign_keys=ON;"_s)) {
+src/data/Migrations.h:22:/// Applies every migration newer than `PRAGMA user_version`; on failure nothing is
+src/data/Migrations.cpp:101:    if (!query.exec(u"PRAGMA user_version"_s) || !query.next()) return 0;
+src/data/Migrations.cpp:129:        const QString version = u"PRAGMA user_version = "_s + QString::number(migration.version);
+src/data/Database.cpp:79:    execute(u"PRAGMA journal_mode=WAL"_s);
+src/data/Database.cpp:80:    execute(u"PRAGMA foreign_keys=ON"_s);
+src/data/Database.cpp:81:    execute(u"PRAGMA busy_timeout=5000"_s);
+src/data/Database.cpp:203:    if (!query.exec(u"PRAGMA "_s + pragma) || !query.next()) {
+src/data/Database.cpp:204:        setError(u"Cannot read PRAGMA %1."_s.arg(pragma));
 ```
 
 #### 7. Last SPEC Changelog Entries
