@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 0'
 
 permissions:
   contents: read
@@ -15,7 +18,7 @@ concurrency:
 
 jobs:
   gate:
-    name: Gate (${{ matrix.os }})
+    name: Gate (${{ matrix.os }}, Qt ${{ matrix.qt-version }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
 
@@ -24,9 +27,15 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            qt-version: '6.8.2'
+            qt-arch: linux_gcc_64
+            qt-target: desktop
+          - os: ubuntu-latest
+            qt-version: '6.10.3'
             qt-arch: linux_gcc_64
             qt-target: desktop
           - os: windows-latest
+            qt-version: '6.10.3'
             qt-arch: win64_msvc2022_64
             qt-target: desktop
 
@@ -63,14 +72,14 @@ jobs:
         uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: ${{ runner.workspace }}/Qt
-          key: qt-6.8.2-${{ matrix.os }}-${{ matrix.qt-arch }}-aqt-3.2.0
+          key: qt-${{ matrix.qt-version }}-${{ matrix.os }}-${{ matrix.qt-arch }}-aqt-3.2.0
 
       - name: Install Qt via aqtinstall
         if: steps.cache-qt.outputs.cache-hit != 'true'
         shell: bash
         run: |
           pip install aqtinstall==3.2.0
-          python -m aqt install-qt ${{ runner.os == 'Windows' && 'windows' || 'linux' }} ${{ matrix.qt-target }} 6.8.2 ${{ matrix.qt-arch }} \
+          python -m aqt install-qt ${{ runner.os == 'Windows' && 'windows' || 'linux' }} ${{ matrix.qt-target }} ${{ matrix.qt-version }} ${{ matrix.qt-arch }} \
             --outputdir "${{ runner.workspace }}/Qt"
 
       - name: Locate Qt prefix (Linux)
@@ -134,6 +143,24 @@ jobs:
           Get-ChildItem -Path "$env:QT_PREFIX_PATH\plugins\platforms" | Select-Object Name
           Write-Host "--- sqldrivers ---"
           Get-ChildItem -Path "$env:QT_PREFIX_PATH\plugins\sqldrivers" | Select-Object Name
+
+      - name: Check Linguist tools availability (Linux) # // CI-DIAG
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "=== Linguist Tools Diagnostics (Linux) ==="
+          ls -la "${QT_PREFIX_PATH}/bin/lrelease"* 2>/dev/null || echo "lrelease not found"
+          ls -la "${QT_PREFIX_PATH}/bin/lupdate"* 2>/dev/null || echo "lupdate not found"
+          ls -la "${QT_PREFIX_PATH}/lib/cmake/Qt6LinguistTools" 2>/dev/null || echo "Qt6LinguistTools cmake dir not found"
+
+      - name: Check Linguist tools availability (Windows) # // CI-DIAG
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "=== Linguist Tools Diagnostics (Windows) ==="
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\bin" -Filter "lrelease*" -ErrorAction SilentlyContinue | Select-Object Name, Length
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\bin" -Filter "lupdate*" -ErrorAction SilentlyContinue | Select-Object Name, Length
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\lib\cmake\Qt6LinguistTools" -ErrorAction SilentlyContinue | Select-Object Name
 
       - name: Run quality gate (Linux)
         if: runner.os == 'Linux'
@@ -261,7 +288,203 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
-          name: test-logs-${{ matrix.os }}
+          name: test-logs-${{ matrix.os }}-qt-${{ matrix.qt-version }}
+          if-no-files-found: ignore
+          path: |
+            build/*/Testing/Temporary/LastTest.log
+            build/*/Testing/Temporary/*.log
+            build/*/Testing/Temporary/LastTestsFailed.log
+            build/*/Testing/Temporary/diag/*.txt
+
+  gate-windows-compat:
+    name: Gate (windows-latest, Qt 6.8.2 compat)
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python for aqtinstall
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.11'
+
+      - name: Set up MSVC environment (Windows)
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+
+      - name: Cache Qt installation
+        id: cache-qt
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ${{ runner.workspace }}/Qt
+          key: qt-6.8.2-windows-latest-win64_msvc2022_64-aqt-3.2.0
+
+      - name: Install Qt via aqtinstall
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          pip install aqtinstall==3.2.0
+          python -m aqt install-qt windows desktop 6.8.2 win64_msvc2022_64 \
+            --outputdir "${{ runner.workspace }}/Qt"
+
+      - name: Locate Qt prefix and set PATH (Windows)
+        shell: pwsh
+        run: |
+          $configFile = Get-ChildItem -Path "$env:RUNNER_WORKSPACE\Qt" -Filter Qt6Config.cmake -Recurse | Select-Object -First 1
+          if (-not $configFile) {
+            Write-Error "Qt6Config.cmake not found under $env:RUNNER_WORKSPACE\Qt"
+            exit 1
+          }
+          $qtPrefix = $configFile.Directory.Parent.Parent.Parent.FullName
+          Write-Host "Found QT_PREFIX_PATH: $qtPrefix"
+          "QT_PREFIX_PATH=$qtPrefix" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$qtPrefix\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Diagnostic information (Windows)
+        shell: pwsh
+        run: |
+          Write-Host "=== Tools & Compiler ==="
+          cmake --version
+          ninja --version
+          & cl.exe 2>&1 | Select-Object -First 1
+          Write-Host "=== Qt Environment ==="
+          Write-Host "QT_PREFIX_PATH: $env:QT_PREFIX_PATH"
+          Write-Host "--- where Qt6Core.dll ---"
+          where.exe Qt6Core.dll
+          Write-Host "--- platforms ---"
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\plugins\platforms" | Select-Object Name
+          Write-Host "--- sqldrivers ---"
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\plugins\sqldrivers" | Select-Object Name
+
+      - name: Check Linguist tools availability (Windows) # // CI-DIAG
+        shell: pwsh
+        run: |
+          Write-Host "=== Linguist Tools Diagnostics (Windows) ==="
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\bin" -Filter "lrelease*" -ErrorAction SilentlyContinue | Select-Object Name, Length
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\bin" -Filter "lupdate*" -ErrorAction SilentlyContinue | Select-Object Name, Length
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\lib\cmake\Qt6LinguistTools" -ErrorAction SilentlyContinue | Select-Object Name
+
+      - name: Run quality gate (Windows)
+        timeout-minutes: 30
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: 2
+          QT_QPA_PLATFORM: offscreen
+          JOBPREP_KEEP_GOING: 1
+          QT_FORCE_STDERR_LOGGING: 1
+          QT_ASSUME_STDERR_HAS_CONSOLE: 1
+          QT_QPA_FONTDIR: C:\Windows\Fonts
+        shell: pwsh
+        run: ./scripts/check.ps1
+
+      - name: Diagnose failed tests (Windows)
+        if: failure()
+        continue-on-error: true
+        env:
+          QT_QPA_FONTDIR: C:\Windows\Fonts
+        shell: pwsh
+        run: |
+          $logdir = "build/dev-windows/Testing/Temporary/diag"
+          New-Item -ItemType Directory -Force -Path $logdir | Out-Null
+          $logFile = "build/dev-windows/Testing/Temporary/LastTestsFailed.log"
+          $testNames = @()
+          if (Test-Path $logFile) {
+            Get-Content $logFile | ForEach-Object {
+              if ($_ -match '^\d+:(.+)$') {
+                $testNames += $Matches[1].Trim()
+              }
+            }
+          } else {
+            Write-Host "LastTestsFailed.log missing"
+            Get-ChildItem -Path "build/dev-windows/tests" -Recurse -Filter "*.exe" | ForEach-Object {
+              if ($_.BaseName -like "tst_*" -or $_.BaseName -eq "ui_smoke") {
+                $testNames += $_.BaseName
+              }
+            }
+          }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:QT_QPA_FONTDIR = "C:\Windows\Fonts"
+          foreach ($name in $testNames) {
+            $exe = Get-ChildItem -Path "build/dev-windows" -Recurse -Filter "$name.exe" | Select-Object -First 1
+            if (-not $exe) {
+              Write-Host "Executable for $name not found"
+              continue
+            }
+            $outFile = "$logdir/$name.txt"
+            $proc = Start-Process -FilePath $exe.FullName -ArgumentList @("-o", "$outFile,txt") -PassThru -NoNewWindow
+            $finished = $proc.WaitForExit(150000)
+            if (-not $finished) {
+              $proc.Kill()
+              $proc.WaitForExit()
+              Write-Host "TIMEOUT"
+            }
+            $code = $proc.ExitCode
+            Write-Host "=== TEST: $name ==="
+            Write-Host ('{0} (0x{0:X8})' -f $code)
+            if (Test-Path $outFile) {
+              $rawLines = @(Get-Content $outFile)
+              $lines = @($rawLines | Where-Object { $_ -match 'CI-DIAG' -or $_ -notmatch '^\s*(QINFO|INFO)\s*:' })
+              if ($lines.Count -le 300) {
+                $lines | ForEach-Object { Write-Host $_ }
+              } else {
+                $printIndices = [System.Collections.Generic.HashSet[int]]::new()
+                for ($i = 0; $i -lt $lines.Count; $i++) {
+                  $line = $lines[$i]
+                  if ($line -match 'FAIL!|XFAIL|QWARN|Totals:') {
+                    $null = $printIndices.Add($i)
+                    if ($line -match 'FAIL!') {
+                      for ($j = 1; $j -le 8; $j++) {
+                        if ($i + $j -lt $lines.Count) {
+                          $null = $printIndices.Add($i + $j)
+                        }
+                      }
+                    }
+                  }
+                }
+                $sortedIndices = $printIndices | Sort-Object
+                foreach ($idx in $sortedIndices) {
+                  Write-Host $lines[$idx]
+                }
+              }
+            } else {
+              Write-Host "(no output file produced)"
+            }
+          }
+
+      - name: Registry write probe (Windows)
+        if: failure()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "USERNAME: $env:USERNAME"
+          Write-Host "whoami: $(whoami)"
+          try {
+            Write-Host "HKCU\Software Name: $((Get-Item HKCU:\Software).Name)"
+          } catch {
+            Write-Host "Get-Item HKCU:\Software Exception: $_"
+          }
+          $probeKey = "HKCU:\Software\JobPrepProbe"
+          try {
+            New-Item -Path $probeKey -Force | Out-Null
+            Write-Host "Created key $probeKey successfully"
+            Set-ItemProperty -Path $probeKey -Name "TestValue" -Value "Probe123"
+            Write-Host "Wrote property TestValue successfully"
+            $readVal = (Get-ItemProperty -Path $probeKey -Name "TestValue").TestValue
+            Write-Host "Read back value: $readVal"
+            Remove-Item -Path $probeKey -Recurse -Force
+            Write-Host "Deleted key $probeKey successfully"
+          } catch {
+            Write-Host "Registry write probe Exception: $_"
+          }
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: test-logs-windows-latest-qt-6.8.2
           if-no-files-found: ignore
           path: |
             build/*/Testing/Temporary/LastTest.log
