@@ -8,7 +8,7 @@ JobPrep is an offline desktop application built with C++20 and Qt 6 Widgets for 
 
 - **C++20 Compiler**:
   - Linux: GCC 11+ or Clang 13+
-  - Windows: MSVC 2022 (Visual Studio 2022 17.0+) or MinGW-w64 (GCC 11+)
+  - Windows: MSVC 2022 (known good: MSVC `19.44.35229` reported on user's PC, MSVC on CI `windows-latest` runner; known failing with Qt 6.10: MSVC `19.30.30706` due to internal compiler error C1001 in `QtCore/qrangemodel_impl.h(903)`) or MinGW-w64 (GCC 11+)
 - **CMake**: Version >= 3.21
 - **Build Tool**: Ninja (recommended)
 - **Qt 6**: Version **6.8 LTS** or newer (with modules `Core`, `Gui`, `Widgets`, `Sql`, `Svg`, `Test`).
@@ -66,6 +66,13 @@ Alternatively, run `./scripts/check.sh` to configure, build, and test in one com
 ## 3. Windows Build and Run
 
 > **Note:** Windows build verified via CI workflow (`.github/workflows/ci.yml`) offscreen; not verified on a real Windows machine by this agent.
+
+### MSVC Toolset Compatibility with Qt 6.10
+
+- **Known failing:** MSVC `19.30.30706` with Qt 6.10 fails with `fatal error C1001: Internal compiler error` in `QtCore/qrangemodel_impl.h(903)` (reported by user).
+- **Known good:** MSVC `19.44.35229` (`cl` output given by user) and the MSVC toolset in CI `windows-latest` (`& cl.exe 2>&1 | Select-Object -First 1`).
+- **User-reported setup:** Qt 6.10.2 from `D:\Qt_new`, configured with `cmake --preset dev-windows`, built with `-DJOBPREP_WERROR=OFF` ("warnings were off", before the M7 proxy fix), a Debug build that took less than about 10 minutes ("roughly"), app started and works.
+- **Warning flag notice:** `-DJOBPREP_WERROR=OFF` was strictly a temporary workaround for the Qt 6.10 `invalidateFilter()` deprecation warning (C4996); with M7's proxy modernization (`beginFilterChange()` / `endFilterChange()`), dev builds build with zero warnings and full `/WX` without flags.
 
 ### Step 1: Open Developer Command Prompt
 

@@ -372,6 +372,13 @@ Each topic gets 3–5 checklist items (e.g., "Read cppreference page", "Write a 
 - Optional, only if the repo is hosted on GitHub: a CI workflow building and testing on `windows-latest` and `ubuntu-latest`.
 - Acceptance: backup → wipe → restore reproduces identical data; all shortcuts from §3.7 work; changing the weekly goal from 6 h to 8 h updates the dashboard instantly and survives a restart; no clipped text at 150% scaling in either theme; app starts on Windows and on Linux (X11 or Wayland).
 
+**M7 — Localization, Compatibility & UI Quality.**
+- GUI localization: Ukrainian (uk) and Russian (ru), with English remaining the source language. Language selection in Settings (System default / English / Українська / Русский), stored in SettingsService; language takes effect on application startup. Plural forms (%n) handled for all counters. MonthView day and month names follow the active locale. Stored database values and CSV/JSON/ICS exports remain language-neutral.
+- Agenda item layout: Fixed text overlap between title and track category label in two-line agenda rows; polished card header styling and spacing.
+- Date controls keyboard accessibility: Alt+Down and F4 open the calendar popup across all date fields via SingleTabDateEdit; Esc closes the popup; tooltip shortcut hint added.
+- Qt 6.10 & MSVC compatibility: Replaced deprecated QSortFilterProxyModel::invalidateFilter() with beginFilterChange()/endFilterChange() guarded by QT_VERSION_CHECK; eliminated compiler warning suppressions; updated CI matrix to include Qt 6.10.3; updated RUNNING.md for MSVC toolset requirements.
+- Acceptance: Switching language in Settings and restarting displays all UI pages, dialogs, badges, and notifications in Ukrainian or Russian; zero text clipping or delegate overlap at 100% and 150% scaling in both themes; date popups open via keyboard in all dialogs; the CI matrix passes on Qt 6.8.x and 6.10.x.
+
 ## 13. Future ideas (not v1)
 Kanban for applications, per-company contacts directory, salary comparison chart, spaced-repetition flashcards for English vocabulary, pomodoro timer linked to topics, Markdown preview for notes, optional encrypted backup.
 
@@ -538,5 +545,7 @@ Kanban for applications, per-company contacts directory, salary comparison chart
   - **ApplicationDialog Tab Bar Minimum Width:** In `ApplicationDialog::setupUi`, disabled tab bar scroll buttons (`m_tabs->tabBar()->setUsesScrollButtons(false)`) and set `setExpanding(false)`. When scroll buttons are disabled, Qt's `QTabBar::minimumSizeHint()` equals its full `sizeHint()`, ensuring the layout naturally enforces sufficient minimum width across all tabs and themes without hand-computed pixel margins or character constants.
   - **Small-Screen Height Support (720p displays):** Tab pages in `ApplicationDialog` are wrapped in frameless `QScrollArea`s (`setWidgetResizable(true)`, `setFrameShape(QFrame::NoFrame)`, `ScrollBarAlwaysOff` horizontally) with an overridden `sizeHint()` that reflects inner contents and a `minimumSizeHint()` that allows shrinking vertically. In the constructor, the dialog sizes itself to `sizeHint().boundedTo(availableGeometry().size() * 0.9)`. The bottom button box (Save/Cancel) remains permanently outside the scroll area and visible on 1280x720 screens, with dialog `minimumSizeHint().height() <= 648`.
   - **EmptyState Minimum Size Calculation:** Replaced literal margins, spacing, and icon size in `EmptyState::minimumSizeHint()` with layout-derived values (`m_layout->contentsMargins()`, `m_layout->spacing()`, `m_btnLayout->spacing()`, `m_iconLabel->minimumSize()` / `sizeHint()`).
+- 1.24 — Qt 6.9+ QSortFilterProxyModel filter change modernization and CI matrix update (M7 Part A):
+  ApplicationFilterProxy and TopicBoardProxy use beginFilterChange() / endFilterChange(QSortFilterProxyModel::Direction::Rows) on Qt >= 6.9.0 and invalidateFilter() on Qt < 6.9.0; eliminated diagnostic pragma suppressions in models and removed diagnostic CI-DIAG logs from ApplicationDialog; updated CI workflow matrix to include Qt 6.10.3 across Ubuntu and Windows, added weekly scheduled / workflow_dispatch Windows Qt 6.8.2 job, and added pre-build Linguist tools diagnostics; updated RUNNING.md with MSVC compiler toolset findings (MSVC 19.30 ICE with Qt 6.10, known good MSVC 19.44 / CI toolset).
 
 
