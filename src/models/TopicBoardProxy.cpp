@@ -1,8 +1,3 @@
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
 #include "models/TopicBoardProxy.h"
 
 #include <algorithm>
@@ -22,15 +17,27 @@ TopicBoardProxy::TopicBoardProxy(Domain::TopicStatus status,
 
 void TopicBoardProxy::setTrackFilter(std::optional<int> trackId) {
     if (m_trackId == trackId) return;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+    beginFilterChange();
+    m_trackId = trackId;
+    endFilterChange(QSortFilterProxyModel::Direction::Rows);
+#else
     m_trackId = trackId;
     invalidateFilter();
+#endif
 }
 
 void TopicBoardProxy::setSearchFilter(const QString& text) {
     const QString trimmed = text.trimmed();
     if (m_searchText == trimmed) return;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+    beginFilterChange();
+    m_searchText = trimmed;
+    endFilterChange(QSortFilterProxyModel::Direction::Rows);
+#else
     m_searchText = trimmed;
     invalidateFilter();
+#endif
 }
 
 bool TopicBoardProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
@@ -169,7 +176,4 @@ bool TopicBoardProxy::dropMimeData(const QMimeData* data,
 }
 
 }  // namespace JobPrep::Models
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 

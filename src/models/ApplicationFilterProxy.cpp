@@ -1,7 +1,3 @@
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
 #include "models/ApplicationFilterProxy.h"
 #include "models/ApplicationTableModel.h"
 
@@ -17,13 +13,27 @@ ApplicationFilterProxy::ApplicationFilterProxy(QObject* parent)
 }
 
 void ApplicationFilterProxy::setFilterChip(FilterChip chip) {
+    if (m_chip == chip) return;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+    beginFilterChange();
+    m_chip = chip;
+    endFilterChange(QSortFilterProxyModel::Direction::Rows);
+#else
     m_chip = chip;
     QSortFilterProxyModel::invalidateFilter();
+#endif
 }
 
 void ApplicationFilterProxy::setSearchText(const QString& text) {
+    if (m_searchText == text) return;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+    beginFilterChange();
+    m_searchText = text;
+    endFilterChange(QSortFilterProxyModel::Direction::Rows);
+#else
     m_searchText = text;
     QSortFilterProxyModel::invalidateFilter();
+#endif
 }
 
 bool ApplicationFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
@@ -63,6 +73,3 @@ bool ApplicationFilterProxy::lessThan(const QModelIndex& left, const QModelIndex
 }
 
 }  // namespace JobPrep::Models
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
