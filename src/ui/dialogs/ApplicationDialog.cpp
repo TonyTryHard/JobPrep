@@ -102,28 +102,7 @@ ApplicationDialog::ApplicationDialog(JobPrep::Data::ApplicationRepository& apps,
     auto* screen = parentWidget() ? parentWidget()->screen() : QGuiApplication::primaryScreen();
     const QRect avail = screen ? screen->availableGeometry() : QRect(0, 0, 1280, 720);
     resize(sizeHint().boundedTo(avail.size() * 0.9));
-
-    qInfo("// CI-DIAG ApplicationDialog constructor: tabSizeHint=(%d,%d) tabMinHint=(%d,%d) usesScroll=%d layMin=(%d,%d) dlgMin=(%d,%d) dlgMinHint=(%d,%d) dlgSizeHint=(%d,%d)",
-          m_tabs->tabBar()->sizeHint().width(), m_tabs->tabBar()->sizeHint().height(),
-          m_tabs->tabBar()->minimumSizeHint().width(), m_tabs->tabBar()->minimumSizeHint().height(),
-          m_tabs->tabBar()->usesScrollButtons() ? 1 : 0,
-          layout()->minimumSize().width(), layout()->minimumSize().height(),
-          minimumSize().width(), minimumSize().height(),
-          minimumSizeHint().width(), minimumSizeHint().height(),
-          sizeHint().width(), sizeHint().height()); // CI-DIAG
 }
-
-void ApplicationDialog::showEvent(QShowEvent* event) { // CI-DIAG
-    QDialog::showEvent(event); // CI-DIAG
-    qInfo("// CI-DIAG ApplicationDialog showEvent: tabSizeHint=(%d,%d) tabMinHint=(%d,%d) usesScroll=%d layMin=(%d,%d) dlgMin=(%d,%d) dlgMinHint=(%d,%d) dlgSize=(%d,%d)",
-          m_tabs->tabBar()->sizeHint().width(), m_tabs->tabBar()->sizeHint().height(),
-          m_tabs->tabBar()->minimumSizeHint().width(), m_tabs->tabBar()->minimumSizeHint().height(),
-          m_tabs->tabBar()->usesScrollButtons() ? 1 : 0,
-          layout()->minimumSize().width(), layout()->minimumSize().height(),
-          minimumSize().width(), minimumSize().height(),
-          minimumSizeHint().width(), minimumSizeHint().height(),
-          width(), height()); // CI-DIAG
-} // CI-DIAG
 
 void ApplicationDialog::setupUi() {
     auto* layout = new QVBoxLayout(this);
