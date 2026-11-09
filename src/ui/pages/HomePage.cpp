@@ -54,6 +54,7 @@ QFrame* HomePage::createCard(const QString& title, QWidget* content) {
     cardLayout->setSpacing(12);
 
     auto* titleLabel = new QLabel(title, card);
+    titleLabel->setObjectName(u"CardTitle"_s);
     QFont titleFont = font();
     titleFont.setBold(true);
     titleLabel->setFont(titleFont);
@@ -126,7 +127,9 @@ void HomePage::setupUi() {
     m_todayDelegate = new Delegates::AgendaItemDelegate(m_theme, this);
 
     m_todayView = new QListView(todayContainer);
-    m_todayView->setUniformItemSizes(true);
+    m_todayView->setObjectName(u"TodayListView"_s);
+    m_todayView->setFrameShape(QFrame::NoFrame);
+    m_todayView->setUniformItemSizes(false);
     m_todayView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_todayView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_todayView->setItemDelegate(m_todayDelegate);
@@ -157,7 +160,9 @@ void HomePage::setupUi() {
     m_upcomingDelegate = new Delegates::AgendaItemDelegate(m_theme, this);
 
     m_upcomingView = new QListView(upcomingContainer);
-    m_upcomingView->setUniformItemSizes(true);
+    m_upcomingView->setObjectName(u"UpcomingListView"_s);
+    m_upcomingView->setFrameShape(QFrame::NoFrame);
+    m_upcomingView->setUniformItemSizes(false);
     m_upcomingView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_upcomingView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_upcomingView->setItemDelegate(m_upcomingDelegate);

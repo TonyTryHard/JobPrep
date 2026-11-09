@@ -281,7 +281,7 @@ void CalendarPage::setupAgendaPanel(QWidget* panel) {
 
     m_agendaView = new QListView(panel);
     m_agendaView->setObjectName(u"CalendarAgendaList"_s);
-    m_agendaView->setUniformItemSizes(true);
+    m_agendaView->setUniformItemSizes(false);
     m_agendaView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_agendaView->setMouseTracking(true);
     m_agendaView->setFrameShape(QFrame::NoFrame);

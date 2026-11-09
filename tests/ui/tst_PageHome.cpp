@@ -716,7 +716,7 @@ void tst_PageHome::testDashboardScreenshots() {
         Track t1; t1.name = u"C++"_s; t1.color = u"#3b82f6"_s; QVERIFY(ctx.tracks().insert(t1));
         Track t2; t2.name = u"English"_s; t2.color = u"#10b981"_s; QVERIFY(ctx.tracks().insert(t2));
         Topic tp1; tp1.trackId = t1.id; tp1.title = u"Smart Pointers"_s; tp1.status = TopicStatus::Done; QVERIFY(ctx.topics().insert(tp1));
-        Topic tp2; tp2.trackId = t2.id; tp2.title = u"Behavioral Questions"_s; tp2.status = TopicStatus::InProgress; tp2.targetDate = now.date(); QVERIFY(ctx.topics().insert(tp2));
+        Topic tp2; tp2.trackId = t2.id; tp2.title = u"Behavioral Questions: System Design and Architecture Trade-offs"_s; tp2.status = TopicStatus::InProgress; tp2.targetDate = now.date(); QVERIFY(ctx.topics().insert(tp2));
 
         JobApplication a1; a1.company = u"Acme Corp"_s; a1.position = u"C++ Engineer"_s; a1.status = ApplicationStatus::Technical; a1.appliedDate = QDate(2026, 10, 27); QVERIFY(ctx.applications().insert(a1));
         JobApplication a2; a2.company = u"Globex"_s; a2.position = u"Systems Dev"_s; a2.status = ApplicationStatus::Applied; a2.appliedDate = QDate(2026, 10, 29); a2.nextActionDate = now.date(); a2.nextAction = u"Send code samples"_s; QVERIFY(ctx.applications().insert(a2));
@@ -817,7 +817,7 @@ void tst_PageHome::testToastScreenshots() {
         Track t1; t1.name = u"C++"_s; t1.color = u"#3b82f6"_s; QVERIFY(ctx.tracks().insert(t1));
         Track t2; t2.name = u"English"_s; t2.color = u"#10b981"_s; QVERIFY(ctx.tracks().insert(t2));
         Topic tp1; tp1.trackId = t1.id; tp1.title = u"Smart Pointers"_s; tp1.status = TopicStatus::Done; QVERIFY(ctx.topics().insert(tp1));
-        Topic tp2; tp2.trackId = t2.id; tp2.title = u"Behavioral Questions"_s; tp2.status = TopicStatus::InProgress; tp2.targetDate = now.date(); QVERIFY(ctx.topics().insert(tp2));
+        Topic tp2; tp2.trackId = t2.id; tp2.title = u"Behavioral Questions: System Design and Architecture Trade-offs"_s; tp2.status = TopicStatus::InProgress; tp2.targetDate = now.date(); QVERIFY(ctx.topics().insert(tp2));
 
         JobApplication a1; a1.company = u"Acme Corp"_s; a1.position = u"C++ Engineer"_s; a1.status = ApplicationStatus::Technical; a1.appliedDate = QDate(2026, 10, 27); QVERIFY(ctx.applications().insert(a1));
         JobApplication a2; a2.company = u"Globex"_s; a2.position = u"Systems Dev"_s; a2.status = ApplicationStatus::Applied; a2.appliedDate = QDate(2026, 10, 29); a2.nextActionDate = now.date(); a2.nextAction = u"Send code samples"_s; QVERIFY(ctx.applications().insert(a2));

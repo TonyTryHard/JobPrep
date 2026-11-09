@@ -209,6 +209,20 @@ QFrame[card="true"] {
     border-radius: 12px;
 }
 
+QLabel#CardTitle {
+    font-size: 11pt;
+    font-weight: 600;
+    color: @text;
+    background: transparent;
+    border: none;
+}
+
+QListView#TodayListView,
+QListView#UpcomingListView {
+    background: transparent;
+    border: none;
+}
+
 /* Empty State */
 #EmptyStateWidget {
     background: transparent;

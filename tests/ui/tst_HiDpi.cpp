@@ -36,6 +36,12 @@
 #include "ui/dialogs/SessionDialog.h"
 #include "ui/dialogs/TrackDialog.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/delegates/AgendaItemDelegate.h"
+#include "ui/pages/HomePage.h"
+#include "models/AgendaListModel.h"
+#include <QListView>
+#include <QPainter>
+#include <QStandardItemModel>
 #include "UiTestHelpers.h"
 
 using namespace Qt::StringLiterals;
@@ -116,6 +122,7 @@ private slots:
     void cleanupTestCase();
 
     void testDevicePixelRatio();
+    void testDelegateAndWidgetTextOverlap();
     void testPagesHiDpi();
     void testDialogsHiDpi();
     void testDialogsFitSmallScreen();
@@ -180,6 +187,190 @@ void tst_HiDpi::testDevicePixelRatio() {
     // Allow small epsilon for floating point comparison
     QVERIFY(qAbs(dpr - 1.5) < 0.05 || qAbs(dpr - 1.0) < 0.05 || qAbs(dpr - 2.0) < 0.05);
     updateProgress(u"testDevicePixelRatio end"_s); // CI-DIAG
+}
+
+static QRect computeInkBoundingBox(const QImage& img) {
+    int minX = img.width(), maxX = -1, minY = img.height(), maxY = -1;
+    for (int y = 0; y < img.height(); ++y) {
+        const QRgb* scanline = reinterpret_cast<const QRgb*>(img.constScanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            if (qAlpha(scanline[x]) > 0) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    if (maxX < minX || maxY < minY) return QRect();
+    return QRect(minX, minY, maxX - minX + 1, maxY - minY + 1);
+}
+
+void tst_HiDpi::testDelegateAndWidgetTextOverlap() {
+    updateProgress(u"testDelegateAndWidgetTextOverlap start"_s); // CI-DIAG
+    auto& win = m_fix->window();
+
+    // 1. Setup sample items with different categories and title lengths
+    QStandardItemModel model;
+
+    auto* itemTwoLine = new QStandardItem(u"System Design: Microservices Architecture"_s);
+    itemTwoLine->setData(u"Architecture · High Priority"_s, JobPrep::Models::AgendaListModel::SubtitleRole);
+    itemTwoLine->setData(QTime(14, 0), JobPrep::Models::AgendaListModel::TimeRole);
+    itemTwoLine->setData(static_cast<int>(JobPrep::Domain::AgendaKind::StudyTarget), JobPrep::Models::AgendaListModel::KindRole);
+    model.appendRow(itemTwoLine);
+
+    auto* itemSingleLine = new QStandardItem(u"General Screening Call"_s);
+    itemSingleLine->setData(QTime(10, 0), JobPrep::Models::AgendaListModel::TimeRole);
+    itemSingleLine->setData(static_cast<int>(JobPrep::Domain::AgendaKind::Interview), JobPrep::Models::AgendaListModel::KindRole);
+    model.appendRow(itemSingleLine);
+
+    auto* itemLong = new QStandardItem(u"Behavioral Questions: Handling Technical Disagreements and Architecture Trade-offs in Distributed Systems"_s);
+    itemLong->setData(u"English Track · Crucial Focus"_s, JobPrep::Models::AgendaListModel::SubtitleRole);
+    itemLong->setData(QTime(16, 30), JobPrep::Models::AgendaListModel::TimeRole);
+    itemLong->setData(static_cast<int>(JobPrep::Domain::AgendaKind::StudyTarget), JobPrep::Models::AgendaListModel::KindRole);
+    model.appendRow(itemLong);
+
+    const QStringList fonts = {u"DejaVu Sans"_s, u"Liberation Sans"_s};
+    const QList<qreal> scales = {1.0, 1.5};
+    const QList<JobPrep::Ui::Theme::ThemeMode> themes = {
+        JobPrep::Ui::Theme::ThemeMode::Light,
+        JobPrep::Ui::Theme::ThemeMode::Dark
+    };
+
+    for (const auto& fontName : fonts) {
+        for (qreal scale : scales) {
+            for (auto theme : themes) {
+                win.themeManager().setThemeMode(theme);
+                QApplication::processEvents();
+
+                QFont baseFont(fontName);
+                baseFont.setPointSizeF(10.0 * scale);
+                const QFontMetrics tm(baseFont);
+
+                QFont subtitleFont(fontName);
+                subtitleFont.setPointSizeF(qMax(7.5, (10.0 - 1.0) * scale));
+                const QFontMetrics sm(subtitleFont);
+
+                for (int row = 0; row < model.rowCount(); ++row) {
+                    const QModelIndex idx = model.index(row, 0);
+                    QStyleOptionViewItem option;
+                    option.font = baseFont;
+                    option.rect = QRect(0, 0, 400, 0);
+
+                    const auto layout = JobPrep::Ui::Delegates::AgendaItemDelegate::computeLayout(option, idx);
+
+                    // Required row height must accommodate content
+                    if (layout.hasSubtitle) {
+                        QVERIFY(layout.rowHeight >= tm.height() + sm.height() + 14);
+                        // Subtitle must be strictly below title with no geometric overlap
+                        QVERIFY(!layout.titleRect.intersects(layout.subtitleRect));
+                        QVERIFY(layout.subtitleRect.top() > layout.titleRect.bottom());
+                    } else {
+                        QVERIFY(layout.rowHeight >= tm.height() + 14);
+                        QVERIFY(layout.subtitleRect.isEmpty());
+                    }
+
+                    // Independent painted-pixel ink test
+                    if (layout.hasSubtitle) {
+                        QImage titleImg(400, layout.rowHeight, QImage::Format_ARGB32_Premultiplied);
+                        titleImg.fill(Qt::transparent);
+                        {
+                            QPainter p(&titleImg);
+                            p.setFont(baseFont);
+                            p.setPen(Qt::black);
+                            p.drawText(layout.titleRect, Qt::AlignLeft | Qt::AlignVCenter | Qt::AlignAbsolute, layout.elidedTitle);
+                        }
+                        const QRect titleInk = computeInkBoundingBox(titleImg);
+
+                        QImage subImg(400, layout.rowHeight, QImage::Format_ARGB32_Premultiplied);
+                        subImg.fill(Qt::transparent);
+                        {
+                            QPainter p(&subImg);
+                            p.setFont(subtitleFont);
+                            p.setPen(Qt::black);
+                            p.drawText(layout.subtitleRect, Qt::AlignLeft | Qt::AlignVCenter | Qt::AlignAbsolute, layout.elidedSubtitle);
+                        }
+                        const QRect subInk = computeInkBoundingBox(subImg);
+
+                        QVERIFY(titleInk.isValid());
+                        QVERIFY(subInk.isValid());
+                        QVERIFY2(!titleInk.intersects(subInk),
+                                 qPrintable(QString(u"Ink overlap detected for font %1 at scale %2: titleInk=[%3,%4] subInk=[%5,%6]"_s)
+                                            .arg(fontName).arg(scale)
+                                            .arg(titleInk.top()).arg(titleInk.bottom())
+                                            .arg(subInk.top()).arg(subInk.bottom())));
+                        QVERIFY(titleInk.bottom() < subInk.top());
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Check sibling widgets managed by the same layout across all 5 pages
+    for (int pageIdx = 0; pageIdx < 5; ++pageIdx) {
+        win.pageStack()->setCurrentIndex(pageIdx);
+        QApplication::processEvents();
+        QWidget* page = win.pageStack()->currentWidget();
+        QVERIFY(page != nullptr);
+
+        for (QWidget* parent : page->findChildren<QWidget*>()) {
+            QLayout* layout = parent->layout();
+            if (!layout) continue;
+
+            QList<QWidget*> layoutWidgets;
+            for (int i = 0; i < layout->count(); ++i) {
+                if (auto* item = layout->itemAt(i)) {
+                    if (auto* w = item->widget()) {
+                        if (w->isVisible() && w->width() > 0 && w->height() > 0) {
+                            layoutWidgets.append(w);
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0; i < layoutWidgets.size(); ++i) {
+                for (int j = i + 1; j < layoutWidgets.size(); ++j) {
+                    QWidget* w1 = layoutWidgets[i];
+                    QWidget* w2 = layoutWidgets[j];
+                    QVERIFY2(!w1->geometry().intersects(w2->geometry()),
+                             qPrintable(QString(u"Sibling collision in layout of %1: %2 (%3) intersects %4 (%5)"_s)
+                                        .arg(parent->metaObject()->className(),
+                                             w1->metaObject()->className(), w1->objectName(),
+                                             w2->metaObject()->className(), w2->objectName())));
+                }
+            }
+        }
+    }
+
+    // 3. Header styling and theme toggle test
+    win.pageStack()->setCurrentIndex(0); // HomePage
+    QApplication::processEvents();
+    auto* homePage = win.homePage();
+    QVERIFY(homePage != nullptr);
+
+    const auto cardTitles = homePage->findChildren<QLabel*>(u"CardTitle"_s);
+    QVERIFY(!cardTitles.isEmpty());
+    for (QLabel* label : cardTitles) {
+        QCOMPARE(label->objectName(), u"CardTitle"_s);
+    }
+
+    auto* todayView = homePage->findChild<QListView*>(u"TodayListView"_s);
+    QVERIFY(todayView != nullptr);
+    QCOMPARE(todayView->frameShape(), QFrame::NoFrame);
+
+    auto* upcomingView = homePage->findChild<QListView*>(u"UpcomingListView"_s);
+    QVERIFY(upcomingView != nullptr);
+    QCOMPARE(upcomingView->frameShape(), QFrame::NoFrame);
+
+    // Switch theme and assert stability
+    win.themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Dark);
+    QApplication::processEvents();
+    QCOMPARE(todayView->frameShape(), QFrame::NoFrame);
+    win.themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Light);
+    QApplication::processEvents();
+    QCOMPARE(todayView->frameShape(), QFrame::NoFrame);
+
+    updateProgress(u"testDelegateAndWidgetTextOverlap end"_s); // CI-DIAG
 }
 
 static QString stripMnemonic(const QString& raw) {
