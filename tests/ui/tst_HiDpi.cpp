@@ -230,7 +230,11 @@ void tst_HiDpi::testDelegateAndWidgetTextOverlap() {
     itemLong->setData(static_cast<int>(JobPrep::Domain::AgendaKind::StudyTarget), JobPrep::Models::AgendaListModel::KindRole);
     model.appendRow(itemLong);
 
-    const QStringList fonts = {u"DejaVu Sans"_s, u"Liberation Sans"_s};
+    QStringList fonts = {u"DejaVu Sans"_s, u"Liberation Sans"_s};
+    const QString envFont = qEnvironmentVariable("JOBPREP_TEST_FONT_FAMILY");
+    if (!envFont.isEmpty() && !fonts.contains(envFont)) {
+        fonts.prepend(envFont);
+    }
     const QList<qreal> scales = {1.0, 1.5};
     const QList<JobPrep::Ui::Theme::ThemeMode> themes = {
         JobPrep::Ui::Theme::ThemeMode::Light,
@@ -270,9 +274,13 @@ void tst_HiDpi::testDelegateAndWidgetTextOverlap() {
                         QVERIFY(layout.subtitleRect.isEmpty());
                     }
 
-                    // Independent painted-pixel ink test
+                    // Independent painted-pixel ink test with devicePixelRatio set
                     if (layout.hasSubtitle) {
-                        QImage titleImg(400, layout.rowHeight, QImage::Format_ARGB32_Premultiplied);
+                        const int imgWidthPx = qRound(400 * scale);
+                        const int imgHeightPx = qRound(layout.rowHeight * scale);
+
+                        QImage titleImg(imgWidthPx, imgHeightPx, QImage::Format_ARGB32_Premultiplied);
+                        titleImg.setDevicePixelRatio(scale);
                         titleImg.fill(Qt::transparent);
                         {
                             QPainter p(&titleImg);
@@ -282,7 +290,8 @@ void tst_HiDpi::testDelegateAndWidgetTextOverlap() {
                         }
                         const QRect titleInk = computeInkBoundingBox(titleImg);
 
-                        QImage subImg(400, layout.rowHeight, QImage::Format_ARGB32_Premultiplied);
+                        QImage subImg(imgWidthPx, imgHeightPx, QImage::Format_ARGB32_Premultiplied);
+                        subImg.setDevicePixelRatio(scale);
                         subImg.fill(Qt::transparent);
                         {
                             QPainter p(&subImg);

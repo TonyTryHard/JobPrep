@@ -37,6 +37,7 @@
 #include <QCalendarWidget>
 #include <QCheckBox>
 #include <QStyleFactory>
+#include <QTranslator>
 #include "UiTestHelpers.h"
 
 using namespace Qt::StringLiterals;
@@ -70,6 +71,7 @@ private slots:
     // M7 Item 2 date controls keyboard popup
     void testDateControlsKeyboardPopup_data();
     void testDateControlsKeyboardPopup();
+    void testDateEditTranslationContext();
 
 private:
     QTemporaryDir m_tempDir;
@@ -761,6 +763,24 @@ void tst_Shortcuts::testDateControlsKeyboardPopup() {
         QVERIFY2(topContainer->isVisible(),
                  "First Esc closed the parent container/dialog");
 
+        // 2b. Keypad Alt+Down also opens popup (keypad modifier tolerated)
+        dateEdit->setFocus();
+        QCoreApplication::processEvents();
+        keyTarget = dateEdit->focusWidget() ? dateEdit->focusWidget() : dateEdit;
+        QTest::keyClick(keyTarget, Qt::Key_Down, Qt::AltModifier | Qt::KeypadModifier);
+        QCoreApplication::processEvents();
+        QVERIFY2(dateEdit->calendarWidget() && dateEdit->calendarWidget()->isVisible(),
+                 "Keypad Alt+Down failed to open calendar popup");
+        calTable = dateEdit->calendarWidget()->findChild<QTableView*>();
+        calFocus = calTable ? static_cast<QWidget*>(calTable)
+                            : (dateEdit->calendarWidget()->focusWidget()
+                                   ? dateEdit->calendarWidget()->focusWidget()
+                                   : dateEdit->calendarWidget());
+        QTest::keyClick(calFocus, Qt::Key_Escape);
+        QCoreApplication::processEvents();
+        QVERIFY2(!dateEdit->calendarWidget()->isVisible(),
+                 "Esc failed to close calendar popup after Keypad Alt+Down");
+
         // 3. F4 re-opens popup
         dateEdit->setFocus();
         QCoreApplication::processEvents();
@@ -810,6 +830,32 @@ void tst_Shortcuts::testDateControlsKeyboardPopup() {
                      "Second Esc failed to reject/close the parent dialog");
         }
     }
+}
+
+namespace {
+class RecordingTranslator : public QTranslator {
+public:
+    QStringList recordedContexts;
+    QString translate(const char* context, const char* sourceText,
+                      const char* disambiguation = nullptr, int n = -1) const override {
+        const_cast<RecordingTranslator*>(this)->recordedContexts.append(QString::fromUtf8(context));
+        return QTranslator::translate(context, sourceText, disambiguation, n);
+    }
+};
+}  // namespace
+
+void tst_Shortcuts::testDateEditTranslationContext() {
+    RecordingTranslator translator;
+    QCoreApplication::installTranslator(&translator);
+
+    JobPrep::Ui::Widgets::SingleTabDateEdit dateEdit;
+    dateEdit.setToolTip(u"Interview date"_s);
+
+    QCoreApplication::removeTranslator(&translator);
+
+    QVERIFY2(translator.recordedContexts.contains(u"SingleTabDateEdit"_s),
+             qPrintable(QString(u"Translation contexts did not contain 'SingleTabDateEdit': [%1]"_s)
+                        .arg(translator.recordedContexts.join(u", "_s))));
 }
 
 QTEST_MAIN(tst_Shortcuts)

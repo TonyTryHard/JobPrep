@@ -12,11 +12,22 @@
 
 namespace JobPrep::Ui::Widgets {
 
+/// Returns true if the key and modifier match the calendar popup shortcuts (Alt+Down or F4, keypad tolerated).
+inline bool isCalendarPopupShortcut(int key, Qt::KeyboardModifiers modifiers) {
+    const auto mods = modifiers & ~Qt::KeypadModifier;
+    return (mods == Qt::AltModifier && key == Qt::Key_Down) ||
+           (mods == Qt::NoModifier && key == Qt::Key_F4);
+}
+
 /// A QDateEdit where Tab and Backtab advance to the next or previous widget
 /// on a single key press instead of stepping through internal date sections,
 /// and Alt+Down / F4 opens the calendar popup.
 class SingleTabDateEdit : public QDateEdit {
 public:
+    static QString tr(const char* sourceText, const char* disambiguation = nullptr, int n = -1) {
+        return QCoreApplication::translate("SingleTabDateEdit", sourceText, disambiguation, n);
+    }
+
     explicit SingleTabDateEdit(QWidget* parent = nullptr)
         : QDateEdit(parent) {
         initShortcutHint();
@@ -71,17 +82,13 @@ protected:
         if (watched == lineEdit()) {
             if (event->type() == QEvent::ShortcutOverride) {
                 auto* ke = static_cast<QKeyEvent*>(event);
-                const auto mods = ke->modifiers() & ~Qt::KeypadModifier;
-                if ((mods == Qt::AltModifier && ke->key() == Qt::Key_Down) ||
-                    (mods == Qt::NoModifier && ke->key() == Qt::Key_F4)) {
+                if (isCalendarPopupShortcut(ke->key(), ke->modifiers())) {
                     ke->accept();
                     return true;
                 }
             } else if (event->type() == QEvent::KeyPress) {
                 auto* ke = static_cast<QKeyEvent*>(event);
-                const auto mods = ke->modifiers() & ~Qt::KeypadModifier;
-                if ((mods == Qt::AltModifier && ke->key() == Qt::Key_Down) ||
-                    (mods == Qt::NoModifier && ke->key() == Qt::Key_F4)) {
+                if (isCalendarPopupShortcut(ke->key(), ke->modifiers())) {
                     openCalendarPopup();
                     ke->accept();
                     return true;
@@ -102,9 +109,7 @@ protected:
         }
         if (e->type() == QEvent::ShortcutOverride) {
             auto* ke = static_cast<QKeyEvent*>(e);
-            const auto mods = ke->modifiers() & ~Qt::KeypadModifier;
-            if ((mods == Qt::AltModifier && ke->key() == Qt::Key_Down) ||
-                (mods == Qt::NoModifier && ke->key() == Qt::Key_F4)) {
+            if (isCalendarPopupShortcut(ke->key(), ke->modifiers())) {
                 ke->accept();
                 return true;
             }
@@ -113,9 +118,7 @@ protected:
     }
 
     void keyPressEvent(QKeyEvent* event) override {
-        const auto mods = event->modifiers() & ~Qt::KeypadModifier;
-        if ((mods == Qt::AltModifier && event->key() == Qt::Key_Down) ||
-            (mods == Qt::NoModifier && event->key() == Qt::Key_F4)) {
+        if (isCalendarPopupShortcut(event->key(), event->modifiers())) {
             openCalendarPopup();
             event->accept();
             return;

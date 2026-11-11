@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDateEdit>
+#include <QCalendarWidget>
 #include <QDir>
 #include <QFile>
 #include <QImage>
@@ -121,6 +122,7 @@ private slots:
     void testStudyChecklistTickSurvivesReset();
     void testStudyBoardRealDnDDropEvent();
     void testStudyDetailPanelAutosaveAndValidation();
+    void testTopicDetailCalendarPopupAndAutosave();
     void testStudyDeleteTopicKeepsSessions();
     void testStudyTrackFilterPersistenceAndFallback();
     void testStudyOverdueChipWithFixedClock();
@@ -864,6 +866,83 @@ void tst_PageStudy::testStudyDetailPanelAutosaveAndValidation() {
     resTable->selectRow(0);
     auto* resOpenBtn = childNamed<QPushButton>(detail, u"StudyDetailResourceOpenBtn"_s);
     QVERIFY(resOpenBtn->isEnabled());
+}
+
+void tst_PageStudy::testTopicDetailCalendarPopupAndAutosave() {
+    resetStudyData();
+    Track tr;
+    tr.name = u"General"_s;
+    tr.color = u"#3b82f6"_s;
+    QVERIFY(m_studyCtx->tracks().insert(tr));
+    const int trId = m_studyCtx->tracks().all().last().id;
+
+    Topic t1;
+    t1.trackId = trId;
+    t1.title = u"Topic For Calendar Popup"_s;
+    t1.notes = u"Original notes"_s;
+    t1.status = JobPrep::Domain::TopicStatus::Backlog;
+    QVERIFY(m_studyCtx->topics().insert(t1));
+    const int t1Id = m_studyCtx->topics().all().last().id;
+
+    QCoreApplication::processEvents();
+
+    auto* backlog = studyColumn(JobPrep::Domain::TopicStatus::Backlog);
+    backlog->selectTopicId(t1Id);
+    QCoreApplication::processEvents();
+
+    auto* detail = studyPage()->detailPanel();
+    QVERIFY(detail);
+    QVERIFY(detail->isVisible());
+
+    auto* notesEdit = childNamed<QTextEdit>(detail, u"StudyDetailNotesEdit"_s);
+    auto* dateEdit = childNamed<QDateEdit>(detail, u"StudyDetailDateEdit"_s);
+    QVERIFY(notesEdit);
+    QVERIFY(dateEdit);
+
+    // Edit notes without manual flush
+    notesEdit->setPlainText(u"Unsaved draft notes before calendar popup"_s);
+
+    // Focus dateEdit and open calendar popup via Alt+Down
+    dateEdit->setFocus();
+    QCoreApplication::processEvents();
+    QWidget* keyTarget = dateEdit->focusWidget() ? dateEdit->focusWidget() : static_cast<QWidget*>(dateEdit);
+    QTest::keyClick(keyTarget, Qt::Key_Down, Qt::AltModifier);
+    QCoreApplication::processEvents();
+
+    // Verify calendar popup is open
+    QVERIFY(dateEdit->calendarWidget());
+    QVERIFY2(dateEdit->calendarWidget()->isVisible(), "Calendar popup should be open");
+
+    // Assert the topic was NOT prematurely flushed/deleted/reset
+    QVERIFY2(detail->isVisible(), "Detail panel must remain open");
+    QCOMPARE(detail->currentTopicId(), t1Id);
+    QCOMPARE(notesEdit->toPlainText(), u"Unsaved draft notes before calendar popup"_s);
+
+    // Press Escape in the calendar popup
+    auto* calFocus = dateEdit->calendarWidget()->focusWidget()
+                         ? dateEdit->calendarWidget()->focusWidget()
+                         : static_cast<QWidget*>(dateEdit->calendarWidget());
+    QTest::keyClick(calFocus, Qt::Key_Escape);
+    QCoreApplication::processEvents();
+
+    // Verify popup is closed but detail panel is still open and retains edits
+    QVERIFY(!dateEdit->calendarWidget()->isVisible());
+    QVERIFY2(detail->isVisible(), "Detail panel must not close on first Esc inside popup");
+    QCOMPARE(notesEdit->toPlainText(), u"Unsaved draft notes before calendar popup"_s);
+
+    // Focus out to trigger regular autosave (e.g. switch focus to titleEdit or select another topic)
+    auto* titleEdit = childNamed<QLineEdit>(detail, u"StudyDetailTitleEdit"_s);
+    titleEdit->setFocus();
+    QCoreApplication::processEvents();
+
+    // Trigger focus-out flush
+    detail->flush();
+    QCoreApplication::processEvents();
+
+    // Verify changes are saved to DB
+    const auto topicInDb = m_studyCtx->topics().byId(t1Id);
+    QVERIFY(topicInDb.has_value());
+    QCOMPARE(topicInDb->notes, u"Unsaved draft notes before calendar popup"_s);
 }
 
 
