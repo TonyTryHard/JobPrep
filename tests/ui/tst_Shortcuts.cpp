@@ -818,10 +818,10 @@ void tst_Shortcuts::testDateControlsKeyboardPopup() {
         // 6. Second Esc closes dialog (if it is a QDialog)
         if (dialogPtr) {
             answerNextMessageBox([](QMessageBox* box) {
-                if (auto* btn = box->button(QMessageBox::Discard)) {
-                    btn->click();
-                } else if (auto* btn = box->button(QMessageBox::Yes)) {
-                    btn->click();
+                if (auto* discardBtn = box->button(QMessageBox::Discard)) {
+                    discardBtn->click();
+                } else if (auto* yesBtn = box->button(QMessageBox::Yes)) {
+                    yesBtn->click();
                 }
             });
             QTest::keyClick(dateEdit, Qt::Key_Escape);
