@@ -39,7 +39,9 @@ void testMessageHandler(QtMsgType type, const QMessageLogContext& context, const
 bool isPlatformPluginNoise(const QString& msg) {
     return msg.contains(u"does not support propagateSizeHints"_s) ||
            msg.contains(u"does not support raise"_s) ||
+           msg.contains(u"does not support grabbing the keyboard"_s) ||
            msg.contains(u"zwp_text_input_v3"_s) ||
+           msg.contains(u"enableSurface"_s) ||
            msg.contains(u"disableSurface"_s) ||
            msg.contains(u"systemTrayWindowChanged"_s);
 }

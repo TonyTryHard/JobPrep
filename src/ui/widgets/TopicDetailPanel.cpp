@@ -430,12 +430,21 @@ void TopicDetailPanel::focusFirstEditor() {
 
 bool TopicDetailPanel::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::FocusOut && m_topicId && !m_loading) {
+        // Date edit autosaves via dateChanged (line 294); ignore FocusOut to avoid collapsing calendar popup
+        if (watched == m_dateEdit || (m_dateEdit && m_dateEdit->findChild<QLineEdit*>() == watched)) {
+            return false;
+        }
+
         // Autosave when focus leaves an editor (B5). Guard against the focus-out of a
         // child popup (combo dropdown, calendar) by checking the new focus widget.
         const QWidget* next = QApplication::focusWidget();
         bool isChildPopup = false;
+        if (m_dateEdit && m_dateEdit->calendarWidget() && m_dateEdit->calendarWidget()->isVisible()) {
+            isChildPopup = true;
+        }
         if (next) {
-            if (m_dateEdit && (next == m_dateEdit->calendarWidget() || m_dateEdit->calendarWidget()->isAncestorOf(next))) {
+            if (m_dateEdit && (next == m_dateEdit->calendarWidget() || m_dateEdit->calendarWidget()->isAncestorOf(next) ||
+                               (m_dateEdit->calendarWidget()->window() && m_dateEdit->calendarWidget()->window()->isAncestorOf(next)))) {
                 isChildPopup = true;
             }
             if (m_trackCombo && next == m_trackCombo->view()) isChildPopup = true;
@@ -456,7 +465,15 @@ bool TopicDetailPanel::eventFilter(QObject* watched, QEvent* event) {
         }
 
         // Esc collapses the panel from any editor (B1); QLineEdit would swallow it.
+        // If the calendar popup is open or the event is from the calendar popup, Esc should close the popup instead of collapsing the panel.
         if (keyEvent->key() == Qt::Key_Escape) {
+            if (m_dateEdit && m_dateEdit->calendarWidget()) {
+                if (m_dateEdit->calendarWidget()->isVisible() ||
+                    watched == m_dateEdit->calendarWidget() ||
+                    (watched->isWidgetType() && m_dateEdit->calendarWidget()->isAncestorOf(static_cast<QWidget*>(watched)))) {
+                    return false;
+                }
+            }
             flush();
             emit closeRequested();
             return true;

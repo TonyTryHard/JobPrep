@@ -3,6 +3,7 @@
 #include <QLineEdit>
 #include <QListView>
 #include <QPushButton>
+#include <QShortcut>
 #include <QStackedWidget>
 #include <QTableView>
 #include <QTemporaryDir>
@@ -32,6 +33,10 @@
 #include "ui/pages/StudyPage.h"
 #include "ui/widgets/TopicBoardColumn.h"
 #include "ui/widgets/TopicDetailPanel.h"
+#include "ui/widgets/SingleTabDateTime.h"
+#include <QCalendarWidget>
+#include <QCheckBox>
+#include <QStyleFactory>
 #include "UiTestHelpers.h"
 
 using namespace Qt::StringLiterals;
@@ -61,6 +66,10 @@ private slots:
     void testCollisionCtrlSInsideTextEdit();
     void testCollisionCtrlNInsideLineEdit();
     void testCollisionAltArrowsOnBoard();
+
+    // M7 Item 2 date controls keyboard popup
+    void testDateControlsKeyboardPopup_data();
+    void testDateControlsKeyboardPopup();
 
 private:
     QTemporaryDir m_tempDir;
@@ -624,6 +633,183 @@ void tst_Shortcuts::testCollisionAltArrowsOnBoard() {
     auto* stack = win.findChild<QStackedWidget*>(u"PageStack"_s);
     QVERIFY(stack != nullptr);
     QCOMPARE(stack->currentIndex(), 1);
+}
+
+void tst_Shortcuts::testDateControlsKeyboardPopup_data() {
+    QTest::addColumn<QString>("controlName");
+
+    QTest::newRow("TopicDetailPanelDateEdit") << QString("TopicDetailPanelDateEdit");
+    QTest::newRow("InterviewDateEdit") << QString("InterviewDateEdit");
+    QTest::newRow("ApplicationAppliedDateEdit") << QString("ApplicationAppliedDateEdit");
+    QTest::newRow("ApplicationNextActionDateEdit") << QString("ApplicationNextActionDateEdit");
+    QTest::newRow("SessionDateEdit") << QString("SessionDateEdit");
+}
+
+void tst_Shortcuts::testDateControlsKeyboardPopup() {
+    QFETCH(QString, controlName);
+
+    auto& ctx = m_fix->context();
+    const QStringList styleKeys = QStyleFactory::keys();
+
+    for (const QString& styleKey : styleKeys) {
+        fprintf(stdout, "TEST_DATE_CONTROL: control=%s style=%s\n",
+                qPrintable(controlName), qPrintable(styleKey));
+        fflush(stdout);
+
+        QApplication::setStyle(QStyleFactory::create(styleKey));
+
+        QWidget* topContainer = nullptr;
+        QDateEdit* dateEdit = nullptr;
+        QDialog* dialogPtr = nullptr;
+
+        std::unique_ptr<JobPrep::Ui::Dialogs::InterviewDialog> interviewDlg;
+        std::unique_ptr<JobPrep::Ui::Dialogs::ApplicationDialog> appDlg;
+        std::unique_ptr<JobPrep::Ui::Dialogs::SessionDialog> sessionDlg;
+
+        if (controlName == u"InterviewDateEdit"_s) {
+            interviewDlg = std::make_unique<JobPrep::Ui::Dialogs::InterviewDialog>(
+                ctx.applications(), ctx.interviews(), JobPrep::Ui::Dialogs::InterviewDialog::Create);
+            dialogPtr = interviewDlg.get();
+            topContainer = interviewDlg.get();
+            dateEdit = interviewDlg->findChild<QDateEdit*>(u"InterviewDateEdit"_s);
+        } else if (controlName == u"ApplicationAppliedDateEdit"_s || controlName == u"ApplicationNextActionDateEdit"_s) {
+            appDlg = std::make_unique<JobPrep::Ui::Dialogs::ApplicationDialog>(
+                ctx.applications(), ctx.interviews(), JobPrep::Ui::Dialogs::ApplicationDialog::Create);
+            dialogPtr = appDlg.get();
+            topContainer = appDlg.get();
+            if (controlName == u"ApplicationAppliedDateEdit"_s) {
+                auto* check = appDlg->findChild<QCheckBox*>(u"FieldAppliedDateCheck"_s);
+                if (check) check->setChecked(true);
+                dateEdit = appDlg->findChild<QDateEdit*>(u"FieldAppliedDate"_s);
+            } else {
+                auto* check = appDlg->findChild<QCheckBox*>(u"FieldNextActionDateCheck"_s);
+                if (check) check->setChecked(true);
+                dateEdit = appDlg->findChild<QDateEdit*>(u"FieldNextActionDate"_s);
+            }
+        } else if (controlName == u"SessionDateEdit"_s) {
+            sessionDlg = std::make_unique<JobPrep::Ui::Dialogs::SessionDialog>(
+                ctx.sessions(), ctx.topics());
+            dialogPtr = sessionDlg.get();
+            topContainer = sessionDlg.get();
+            dateEdit = sessionDlg->findChild<QDateEdit*>(u"SessionDateEdit"_s);
+        } else if (controlName == u"TopicDetailPanelDateEdit"_s) {
+            auto& win = m_fix->window();
+            win.pageStack()->setCurrentIndex(1); // StudyPage
+            QCoreApplication::processEvents();
+            auto* studyPage = win.findChild<JobPrep::Ui::Pages::StudyPage*>();
+            topContainer = &win;
+            static int testTrackCounter = 100;
+            JobPrep::Domain::Track track;
+            track.name = QString(u"Track %1"_s).arg(testTrackCounter++);
+            ctx.tracks().insert(track);
+            JobPrep::Domain::Topic topic;
+            topic.title = u"Test Topic"_s;
+            topic.trackId = track.id;
+            ctx.topics().insert(topic);
+            auto* detailPanel = studyPage->findChild<JobPrep::Ui::Widgets::TopicDetailPanel*>();
+            QVERIFY(detailPanel != nullptr);
+            detailPanel->loadFrom(topic.id);
+            detailPanel->setVisible(true);
+            dateEdit = detailPanel->findChild<QDateEdit*>(u"StudyDetailDateEdit"_s);
+        }
+
+        QVERIFY(topContainer != nullptr);
+        QVERIFY(dateEdit != nullptr);
+
+        topContainer->show();
+        activateWindow(topContainer);
+        QCoreApplication::processEvents();
+
+        dateEdit->setFocus();
+        QCoreApplication::processEvents();
+        QVERIFY(dateEdit->hasFocus() || (dateEdit->findChild<QLineEdit*>() && dateEdit->findChild<QLineEdit*>()->hasFocus()));
+
+        // Verify initial state: popup closed
+        QVERIFY(!dateEdit->calendarWidget() || !dateEdit->calendarWidget()->isVisible());
+
+        // Install a window-level Alt+Down shortcut to verify ShortcutOverride prevents window shortcut hijack
+        bool windowShortcutFired = false;
+        auto* windowShortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Down), topContainer);
+        QObject::connect(windowShortcut, &QShortcut::activated, [&windowShortcutFired]() {
+            windowShortcutFired = true;
+        });
+
+        // 1. Alt+Down opens popup
+        QWidget* keyTarget = dateEdit->focusWidget() ? dateEdit->focusWidget() : dateEdit;
+        QTest::keyClick(keyTarget, Qt::Key_Down, Qt::AltModifier);
+        QCoreApplication::processEvents();
+        QVERIFY2(!windowShortcutFired, "Window-level Alt+Down shortcut fired instead of ShortcutOverride");
+        QVERIFY2(dateEdit->calendarWidget() && dateEdit->calendarWidget()->isVisible(),
+                 "Alt+Down failed to open calendar popup");
+        delete windowShortcut;
+
+        // Verify it is the same popup the mouse opens
+        QWidget* popupWindow = dateEdit->calendarWidget()->window();
+        QVERIFY(popupWindow != nullptr);
+        QVERIFY(popupWindow->isWindow());
+
+        // 2. First Esc closes only the popup (dialog remains open)
+        auto* calTable = dateEdit->calendarWidget()->findChild<QTableView*>();
+        QWidget* calFocus = calTable ? static_cast<QWidget*>(calTable)
+                                     : (dateEdit->calendarWidget()->focusWidget()
+                                            ? dateEdit->calendarWidget()->focusWidget()
+                                            : dateEdit->calendarWidget());
+        QTest::keyClick(calFocus, Qt::Key_Escape);
+        QCoreApplication::processEvents();
+        QVERIFY2(!dateEdit->calendarWidget()->isVisible(),
+                 "Esc failed to close calendar popup");
+        QVERIFY2(topContainer->isVisible(),
+                 "First Esc closed the parent container/dialog");
+
+        // 3. F4 re-opens popup
+        dateEdit->setFocus();
+        QCoreApplication::processEvents();
+        keyTarget = dateEdit->focusWidget() ? dateEdit->focusWidget() : dateEdit;
+        QTest::keyClick(keyTarget, Qt::Key_F4, Qt::NoModifier);
+        QCoreApplication::processEvents();
+        QVERIFY2(dateEdit->calendarWidget() && dateEdit->calendarWidget()->isVisible(),
+                 "F4 failed to open calendar popup");
+
+        // 4. Arrow keys + Enter select date without accepting dialog
+        calTable = dateEdit->calendarWidget()->findChild<QTableView*>();
+        calFocus = calTable ? static_cast<QWidget*>(calTable)
+                            : (dateEdit->calendarWidget()->focusWidget()
+                                   ? dateEdit->calendarWidget()->focusWidget()
+                                   : dateEdit->calendarWidget());
+        calFocus->setFocus();
+        QCoreApplication::processEvents();
+        QTest::keyClick(calFocus, Qt::Key_Right);
+        QTest::keyClick(calFocus, Qt::Key_Return);
+        QCoreApplication::processEvents();
+        QVERIFY2(!dateEdit->calendarWidget()->isVisible(),
+                 "Enter in popup failed to close popup");
+        QVERIFY2(topContainer->isVisible(),
+                 "Enter in popup accepted/closed the parent dialog");
+
+        // 5. Tooltip contains shortcut hint without overwriting existing tooltips
+        const QString tip = dateEdit->toolTip();
+        QVERIFY2(tip.contains(JobPrep::Ui::Widgets::SingleTabDateEdit::tr("Press Alt+Down or F4 to open calendar")),
+                 qPrintable(QString(u"Tooltip missing shortcut hint: '%1'"_s).arg(tip)));
+        if (controlName == u"InterviewDateEdit"_s) {
+            QVERIFY2(tip.contains(u"Interview date"_s),
+                     qPrintable(QString(u"Original tooltip was overwritten: '%1'"_s).arg(tip)));
+        }
+
+        // 6. Second Esc closes dialog (if it is a QDialog)
+        if (dialogPtr) {
+            answerNextMessageBox([](QMessageBox* box) {
+                if (auto* btn = box->button(QMessageBox::Discard)) {
+                    btn->click();
+                } else if (auto* btn = box->button(QMessageBox::Yes)) {
+                    btn->click();
+                }
+            });
+            QTest::keyClick(dateEdit, Qt::Key_Escape);
+            QCoreApplication::processEvents();
+            QVERIFY2(!dialogPtr->isVisible(),
+                     "Second Esc failed to reject/close the parent dialog");
+        }
+    }
 }
 
 QTEST_MAIN(tst_Shortcuts)
