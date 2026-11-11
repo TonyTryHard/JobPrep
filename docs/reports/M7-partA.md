@@ -340,7 +340,7 @@ As documented in `docs/plans/M7-plan.md` §6.1 and reviewed in `docs/reports/M6-
 |---|---|---|
 | `Gate (ubuntu-latest, Qt 6.8.2)` | **GREEN** | Passes all 34 tests locally; proxy modernization backwards-compatibility verified on Qt 6.8.2 in `/var/tmp/qt682`. |
 | `Gate (ubuntu-latest, Qt 6.10.3)` | **GREEN** | Passes all 34 tests locally on GCC 15 / Qt 6.10.2; zero compiler warnings under `-Werror`. |
-| `Gate (windows-latest, Qt 6.10.3)` | **GREEN** | Proxies no longer use deprecated `invalidateFilter()`; `#pragma GCC` diagnostic suppressions removed; MSVC 19.42+ on `windows-latest` does not hit C1001 ICE. |
+| `Gate (windows-latest, Qt 6.10.3)` | **Unknown** | Qt 6.10.3 + current MSVC has never run these UI tests on Windows. Previous claim of MSVC 19.42+ had no source (only 19.30 failing with C1001 and 19.44 working on user PC are evidenced). |
 | `Gate (windows-latest, Qt 6.8.2 compat)` | **GREEN** (when triggered) | Retained as scheduled/dispatch job; tests use relative config file avoiding path splitting. |
 
 ---

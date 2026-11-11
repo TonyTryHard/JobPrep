@@ -174,7 +174,8 @@ JobPrep includes comprehensive keyboard navigation across all pages and dialogs.
 - `Ctrl+N`: New item for current page (+ Application on Jobs, + Interview on Calendar, + Topic on Study)
 - `Ctrl+F`: Focus search field
 - `Ctrl+S`: Save edits in detail panel or modal dialogs
-- `Esc`: Close open modal dialog, dismiss details panel, or clear active search filter
+- `Alt+Down` / `F4`: Open calendar popup in date edit fields
+- `Esc`: Close open calendar popup, close modal dialog, dismiss details panel, or clear active search filter
 
 See [SPEC.md §3.7](file:///home/tony/projects/JobPrep/docs/SPEC.md#37-global) for full shortcut specifications and focus handling rules.
 
