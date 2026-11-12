@@ -402,6 +402,8 @@ void tst_UiSmoke::testWindowLoggingCategory() {
 void tst_UiSmoke::testApplicationIcon() {
     QVERIFY(QFileInfo::exists(u":/icons/app-color.svg"_s));
     QVERIFY(QFileInfo::exists(u":/icons/app-256.png"_s));
+    QVERIFY(QFile::exists(u":/i18n/jobprep_uk.qm"_s));
+    QVERIFY(QFile::exists(u":/i18n/jobprep_ru.qm"_s));
 
     QIcon appIcon;
     appIcon.addPixmap(QIcon(u":/icons/app-color.svg"_s).pixmap(16, 16));

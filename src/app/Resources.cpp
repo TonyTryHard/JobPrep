@@ -6,6 +6,7 @@
 // so this helper must sit at global scope with external linkage.
 void initializeResourcesGlobal() {
     Q_INIT_RESOURCE(resources);
+    Q_INIT_RESOURCE(jobprep_core_translations);
 }
 
 namespace JobPrep::App {

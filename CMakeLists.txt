@@ -29,6 +29,7 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS
     Sql
     Svg
     Test
+    LinguistTools
 )
 
 if(WIN32)
@@ -245,6 +246,14 @@ target_link_libraries(jobprep_core PUBLIC
 )
 
 jobprep_apply_warnings(jobprep_core)
+
+# Translations
+qt_add_translations(jobprep_core
+    TS_FILES
+        resources/translations/jobprep_uk.ts
+        resources/translations/jobprep_ru.ts
+    RESOURCE_PREFIX "/i18n"
+)
 
 # --- Main executable target ---
 add_executable(jobprep

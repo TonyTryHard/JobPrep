@@ -19,4 +19,6 @@ fi
 echo "==> Running tests with dev-linux preset..."
 CTEST_PARALLEL_LEVEL="${CTEST_PARALLEL_LEVEL:-2}" ctest --preset dev-linux -j "${CTEST_PARALLEL_LEVEL:-2}" --timeout 600 --output-on-failure
 
+"${SCRIPT_DIR}/check-translations.sh"
+
 echo "==> Quality check PASSED with zero warnings and all tests green!"
