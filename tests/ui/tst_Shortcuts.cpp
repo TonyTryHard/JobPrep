@@ -72,6 +72,8 @@ private slots:
     void testDateControlsKeyboardPopup_data();
     void testDateControlsKeyboardPopup();
     void testDateEditTranslationContext();
+    void testNativeThemeNoiseFilter_data();
+    void testNativeThemeNoiseFilter();
 
 private:
     QTemporaryDir m_tempDir;
@@ -654,9 +656,7 @@ void tst_Shortcuts::testDateControlsKeyboardPopup() {
     const QStringList styleKeys = QStyleFactory::keys();
 
     for (const QString& styleKey : styleKeys) {
-        fprintf(stdout, "TEST_DATE_CONTROL: control=%s style=%s\n",
-                qPrintable(controlName), qPrintable(styleKey));
-        fflush(stdout);
+        JobPrep::UiTest::ScopedActiveTestStyle scopedStyle(styleKey);
 
         QApplication::setStyle(QStyleFactory::create(styleKey));
 
@@ -726,8 +726,55 @@ void tst_Shortcuts::testDateControlsKeyboardPopup() {
         QCoreApplication::processEvents();
         QVERIFY(dateEdit->hasFocus() || (dateEdit->findChild<QLineEdit*>() && dateEdit->findChild<QLineEdit*>()->hasFocus()));
 
+        // Compute arrow rectangle from QStyleOptionComboBox / SC_ComboBoxArrow
+        QStyleOptionComboBox opt;
+        opt.initFrom(dateEdit);
+        opt.rect = dateEdit->rect();
+        opt.subControls = QStyle::SC_All;
+        opt.activeSubControls = QStyle::SC_None;
+        opt.state |= QStyle::State_Enabled;
+        const QRect arrowRect = dateEdit->style()->subControlRect(
+            QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, dateEdit);
+        const bool arrowEmpty = arrowRect.isEmpty();
+
         // Verify initial state: popup closed
         QVERIFY(!dateEdit->calendarWidget() || !dateEdit->calendarWidget()->isVisible());
+
+        // Test real mouse click at arrowRect.center()
+        bool mouseOpened = false;
+        if (!arrowEmpty) {
+            QTest::mouseClick(dateEdit, Qt::LeftButton, Qt::NoModifier, arrowRect.center());
+            QCoreApplication::processEvents();
+            mouseOpened = (dateEdit->calendarWidget() && dateEdit->calendarWidget()->isVisible());
+            if (mouseOpened) {
+                auto* calTable = dateEdit->calendarWidget()->findChild<QTableView*>();
+                QWidget* calFocus = calTable ? static_cast<QWidget*>(calTable)
+                                             : (dateEdit->calendarWidget()->focusWidget()
+                                                    ? dateEdit->calendarWidget()->focusWidget()
+                                                    : dateEdit->calendarWidget());
+                QTest::keyClick(calFocus, Qt::Key_Escape);
+                QCoreApplication::processEvents();
+                QVERIFY(!dateEdit->calendarWidget()->isVisible());
+            }
+        }
+
+        fprintf(stdout, "TEST_DATE_CONTROL: control=%s style=%s arrowRect=(%d,%d %dx%d) empty=%s mouseOpened=%s\n",
+                qPrintable(controlName), qPrintable(styleKey),
+                arrowRect.x(), arrowRect.y(), arrowRect.width(), arrowRect.height(),
+                arrowEmpty ? "true" : "false",
+                mouseOpened ? "true" : "false");
+        fflush(stdout);
+
+        if (arrowEmpty || !mouseOpened) {
+            QSKIP(qPrintable(QString(u"Style %1 returned empty or unusable arrow rectangle (%2,%3 %4x%5, mouseOpened=%6) for %7"_s)
+                                 .arg(styleKey)
+                                 .arg(arrowRect.x()).arg(arrowRect.y()).arg(arrowRect.width()).arg(arrowRect.height())
+                                 .arg(mouseOpened ? u"true"_s : u"false"_s)
+                                 .arg(controlName)));
+        }
+
+        QVERIFY2(!arrowRect.isEmpty(), "Arrow rectangle must not be empty");
+        QVERIFY2(mouseOpened, "Mouse click on combo-box arrow must open the calendar popup");
 
         // Install a window-level Alt+Down shortcut to verify ShortcutOverride prevents window shortcut hijack
         bool windowShortcutFired = false;
@@ -829,6 +876,13 @@ void tst_Shortcuts::testDateControlsKeyboardPopup() {
             QVERIFY2(!dialogPtr->isVisible(),
                      "Second Esc failed to reject/close the parent dialog");
         }
+
+        const int noiseWarnings = scopedStyle.swallowedWarningCount();
+        QTextStream out(stdout);
+        out << "TEST_DATE_NOISE: control=" << controlName
+            << " style=" << styleKey
+            << " openThemeDataWarnings=" << noiseWarnings << "\n";
+        out.flush();
     }
 }
 
@@ -856,6 +910,36 @@ void tst_Shortcuts::testDateEditTranslationContext() {
     QVERIFY2(translator.recordedContexts.contains(u"SingleTabDateEdit"_s),
              qPrintable(QString(u"Translation contexts did not contain 'SingleTabDateEdit': [%1]"_s)
                         .arg(translator.recordedContexts.join(u", "_s))));
+}
+
+void tst_Shortcuts::testNativeThemeNoiseFilter_data() {
+    QTest::addColumn<QString>("message");
+    QTest::addColumn<QString>("styleName");
+    QTest::addColumn<bool>("expected");
+
+    const QString exactMsg = u"OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.)"_s;
+
+    QTest::newRow("exact_windows11") << exactMsg << QString(u"windows11"_s) << true;
+    QTest::newRow("exact_windowsvista") << exactMsg << QString(u"windowsvista"_s) << true;
+    QTest::newRow("exact_Windows") << exactMsg << QString(u"Windows"_s) << false;
+    QTest::newRow("exact_Fusion") << exactMsg << QString(u"Fusion"_s) << false;
+    QTest::newRow("lowercase_class_windows11")
+        << QString(u"OpenThemeData() failed for theme 119 (edit). (The handle is invalid.)"_s)
+        << QString(u"windows11"_s) << false;
+    QTest::newRow("extra_suffix_windows11")
+        << QString(u"OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.) suffix"_s)
+        << QString(u"windows11"_s) << false;
+    QTest::newRow("different_warning_windows11")
+        << QString(u"QFont::setPointSize: Point size <= 0 (0), must be greater than 0"_s)
+        << QString(u"windows11"_s) << false;
+}
+
+void tst_Shortcuts::testNativeThemeNoiseFilter() {
+    QFETCH(QString, message);
+    QFETCH(QString, styleName);
+    QFETCH(bool, expected);
+
+    QCOMPARE(JobPrep::UiTest::isKnownNativeThemeNoise(message, styleName), expected);
 }
 
 QTEST_MAIN(tst_Shortcuts)

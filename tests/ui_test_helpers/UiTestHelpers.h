@@ -21,6 +21,31 @@ QStringList capturedWarnings();
 void clearCapturedWarnings();
 bool isPlatformPluginNoise(const QString& msg);
 
+/// Checks if the warning is known native Windows theme noise emitted by the offscreen
+/// platform plugin when native styles (windows11, windowsvista) query OpenThemeData without a native window handle.
+bool isKnownNativeThemeNoise(const QString& message, const QString& activeStyleName);
+
+/// RAII helper that sets the active style name for warning filtering during style iteration loops.
+/// When windows11 or windowsvista is active, matching OpenThemeData warnings are swallowed
+/// and counted rather than captured as test failures. For Windows, Fusion, or outside this scope,
+/// such warnings continue to be captured and fail the test.
+class ScopedActiveTestStyle {
+public:
+    explicit ScopedActiveTestStyle(const QString& styleName);
+    ~ScopedActiveTestStyle();
+
+    const QString& styleName() const { return m_styleName; }
+    void recordSwallowed();
+    int swallowedWarningCount() const;
+
+    ScopedActiveTestStyle(const ScopedActiveTestStyle&) = delete;
+    ScopedActiveTestStyle& operator=(const ScopedActiveTestStyle&) = delete;
+
+private:
+    QString m_styleName;
+    int m_swallowedCount{0};
+};
+
 /// Checks if any unexpected warnings were captured. Fails with QFAIL if not empty.
 #define JOBPREP_VERIFY_ZERO_WARNINGS() \
     do { \

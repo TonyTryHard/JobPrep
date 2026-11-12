@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QRegularExpression>
 #include "ui/dialogs/ApplicationDialog.h"
 #include "ui/dialogs/InterviewDialog.h"
 #include "ui/dialogs/SessionDialog.h"
@@ -17,6 +18,7 @@ namespace {
 QMutex s_warningMutex;
 QStringList s_capturedWarnings;
 QtMessageHandler s_previousHandler = nullptr;
+ScopedActiveTestStyle* s_activeTestStyleScope = nullptr;
 
 void testMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg) {
     Q_UNUSED(context);
@@ -31,6 +33,11 @@ void testMessageHandler(QtMsgType type, const QMessageLogContext& context, const
     if (isPlatformPluginNoise(msg)) return;
 
     QMutexLocker locker(&s_warningMutex);
+    if (s_activeTestStyleScope && isKnownNativeThemeNoise(msg, s_activeTestStyleScope->styleName())) {
+        s_activeTestStyleScope->recordSwallowed();
+        return;
+    }
+
     s_capturedWarnings.append(msg);
 }
 
@@ -64,6 +71,39 @@ QStringList capturedWarnings() {
 void clearCapturedWarnings() {
     QMutexLocker locker(&s_warningMutex);
     s_capturedWarnings.clear();
+}
+
+bool isKnownNativeThemeNoise(const QString& message, const QString& activeStyleName) {
+    const QString lower = activeStyleName.toLower();
+    if (lower != u"windows11"_s && lower != u"windowsvista"_s) {
+        return false;
+    }
+    static const QRegularExpression re(
+        u"^OpenThemeData\\(\\) failed for theme \\d+ \\([A-Z]+\\)\\. \\(The handle is invalid\\.\\)$"_s);
+    return re.match(message).hasMatch();
+}
+
+ScopedActiveTestStyle::ScopedActiveTestStyle(const QString& styleName)
+    : m_styleName(styleName) {
+    QMutexLocker locker(&s_warningMutex);
+    s_activeTestStyleScope = this;
+}
+
+ScopedActiveTestStyle::~ScopedActiveTestStyle() {
+    QMutexLocker locker(&s_warningMutex);
+    if (s_activeTestStyleScope == this) {
+        s_activeTestStyleScope = nullptr;
+    }
+}
+
+void ScopedActiveTestStyle::recordSwallowed() {
+    // Already guarded by s_warningMutex in testMessageHandler
+    m_swallowedCount++;
+}
+
+int ScopedActiveTestStyle::swallowedWarningCount() const {
+    QMutexLocker locker(&s_warningMutex);
+    return m_swallowedCount;
 }
 
 void isolateSettings(QTemporaryDir& tempDir) {
