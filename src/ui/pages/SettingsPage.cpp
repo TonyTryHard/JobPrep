@@ -255,7 +255,25 @@ void SettingsPage::setupUi() {
     m_accentCombo->addItem(tr("Sky"), u"sky"_s);
     appForm->addRow(tr("Accent color:"), m_accentCombo);
 
+    m_languageCombo = new QComboBox(appearanceCard);
+    m_languageCombo->setObjectName(u"SettingsLanguageCombo"_s);
+    m_languageCombo->setToolTip(tr("Select interface language"));
+    m_languageCombo->addItem(tr("System Default"), u"system"_s);
+    m_languageCombo->addItem(u"English"_s, u"en"_s);
+    m_languageCombo->addItem(QString::fromUtf8("Українська"), u"uk"_s);
+    m_languageCombo->addItem(QString::fromUtf8("Русский"), u"ru"_s);
+    appForm->addRow(tr("Language:"), m_languageCombo);
+
+    m_languageRestartNote = new QLabel(appearanceCard);
+    m_languageRestartNote->setObjectName(u"SettingsLanguageRestartNote"_s);
+    //: Notice displayed when user changes the interface language
+    m_languageRestartNote->setText(tr("Language will take effect after restarting JobPrep."));
+    m_languageRestartNote->setWordWrap(true);
+    m_languageRestartNote->setStyleSheet(u"font-size: 9pt; color: #64748b; margin-top: 4px;"_s);
+    m_languageRestartNote->hide();
+
     appearanceLayout->addLayout(appForm);
+    appearanceLayout->addWidget(m_languageRestartNote);
     containerLayout->addWidget(appearanceCard);
 
     // --- Preferences Card ---
@@ -475,6 +493,13 @@ void SettingsPage::setupUi() {
         m_themeMgr.setAccentPreset(Theme::Tokens::accentFromString(accentStr));
     });
 
+    connect(m_languageCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (index < 0) return;
+        const QString lang = m_languageCombo->itemData(index).toString();
+        m_settings.setLanguage(lang);
+        m_languageRestartNote->setVisible(lang != m_initialLanguage);
+    });
+
     connect(&m_themeMgr, &Theme::ThemeManager::themeChanged, this, [this]() {
         const QString modeStr = Theme::Tokens::themeModeToString(m_themeMgr.currentMode());
         const int themeIdx = m_themeCombo->findData(modeStr);
@@ -572,6 +597,16 @@ void SettingsPage::loadSettings() {
     const QString accent = m_settings.accentPreset();
     const int accentIdx = m_accentCombo->findData(accent);
     if (accentIdx >= 0) m_accentCombo->setCurrentIndex(accentIdx);
+
+    // Language setting
+    m_initialLanguage = m_settings.language();
+    int langIdx = m_languageCombo->findData(m_initialLanguage);
+    if (langIdx < 0) langIdx = 0;
+    {
+        const QSignalBlocker blocker(m_languageCombo);
+        m_languageCombo->setCurrentIndex(langIdx);
+    }
+    m_languageRestartNote->setVisible(false);
 
     // B1: Weekly study goal (minutes: 60-2400)
     m_studyGoalSpinBox->setValue(m_settings.weeklyGoalMinutes());

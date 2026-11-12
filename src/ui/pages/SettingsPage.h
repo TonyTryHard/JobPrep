@@ -5,6 +5,7 @@
 class QCheckBox;
 class QComboBox;
 class QFrame;
+class QLabel;
 class QListWidget;
 class QPushButton;
 class QSpinBox;
@@ -48,6 +49,8 @@ public:
     // Test accessors
     QComboBox* themeCombo() const { return m_themeCombo; }
     QComboBox* accentCombo() const { return m_accentCombo; }
+    QComboBox* languageCombo() const { return m_languageCombo; }
+    QLabel* languageRestartNote() const { return m_languageRestartNote; }
     QSpinBox* studyGoalSpinBox() const;
     QComboBox* weekStartCombo() const { return m_weekStartCombo; }
     QCheckBox* closeToTrayCheck() const { return m_closeToTrayCheck; }
@@ -84,6 +87,9 @@ private:
 
     QComboBox* m_themeCombo{nullptr};
     QComboBox* m_accentCombo{nullptr};
+    QComboBox* m_languageCombo{nullptr};
+    QLabel* m_languageRestartNote{nullptr};
+    QString m_initialLanguage;
     GoalSpinBox* m_studyGoalSpinBox{nullptr};
     QComboBox* m_weekStartCombo{nullptr};
     QCheckBox* m_closeToTrayCheck{nullptr};

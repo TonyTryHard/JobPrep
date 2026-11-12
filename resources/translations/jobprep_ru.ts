@@ -1472,6 +1472,19 @@ Path: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Select interface language</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Language:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Language will take effect after restarting JobPrep.</source>
+        <extracomment>Notice displayed when user changes the interface language</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Preferences</source>
         <translation type="unfinished"></translation>
     </message>

@@ -145,6 +145,7 @@ private slots:
     // B5: Theme "System" & switching
     void testThemeAndAccentSwitching();
     void testSystemThemeColorSchemeNotification();
+    void testLanguageSelectorAndRestartNote();
 
     // B6: Painted & contrast tests
     void testSettingsPageStructure();
@@ -1152,6 +1153,54 @@ void tst_PageSettings::testSystemThemeColorSchemeNotification() {
 #else
     QSKIP("QStyleHints::setColorScheme requires Qt 6.8+");
 #endif
+}
+
+void tst_PageSettings::testLanguageSelectorAndRestartNote() {
+    AppContext ctx(u":memory:"_s);
+    ctx.settings().setLanguage(u"system"_s);
+
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+    page.show();
+    QCoreApplication::processEvents();
+
+    auto* combo = page.languageCombo();
+    auto* note = page.languageRestartNote();
+    QVERIFY(combo != nullptr);
+    QVERIFY(note != nullptr);
+
+    // Initial state: matches "system" setting and note is hidden
+    QCOMPARE(combo->count(), 4);
+    QCOMPARE(combo->currentData().toString(), u"system"_s);
+    QVERIFY(!note->isVisible());
+
+    // Switch to Ukrainian: setting saves immediately, restart note appears
+    const int ukIdx = combo->findData(u"uk"_s);
+    QVERIFY(ukIdx >= 0);
+    combo->setCurrentIndex(ukIdx);
+    QCoreApplication::processEvents();
+
+    QCOMPARE(ctx.settings().language(), u"uk"_s);
+    QVERIFY(note->isVisible());
+    QVERIFY2(note->text().contains(u"restarting"_s, Qt::CaseInsensitive),
+             "Restart note should mention restarting");
+
+    // Switch to Russian: note stays visible, setting updates
+    const int ruIdx = combo->findData(u"ru"_s);
+    QVERIFY(ruIdx >= 0);
+    combo->setCurrentIndex(ruIdx);
+    QCoreApplication::processEvents();
+
+    QCOMPARE(ctx.settings().language(), u"ru"_s);
+    QVERIFY(note->isVisible());
+
+    // Switch back to initial setting ("system"): note disappears
+    const int sysIdx = combo->findData(u"system"_s);
+    QVERIFY(sysIdx >= 0);
+    combo->setCurrentIndex(sysIdx);
+    QCoreApplication::processEvents();
+
+    QCOMPARE(ctx.settings().language(), u"system"_s);
+    QVERIFY(!note->isVisible());
 }
 
 void tst_PageSettings::testSettingsPagePaintedStartupMatchesSwitch() {
