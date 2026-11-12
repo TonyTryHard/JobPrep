@@ -1648,3 +1648,708 @@ Total test functions: 473
 5dab0de test(ui): fix shadowed local variable in tst_Shortcuts date popup test
 dc71d4f (origin/main, origin/HEAD) m7-partB prompt
 ```
+
+
+---
+
+## Part B fix-up 2: Windows CI Native Styles Theme Filter and Arrow Hit-Test Verification
+
+### 1. Facts and Problem Analysis
+
+#### Facts (GitHub Actions run `116789927454`, commits up to `8c5eb88`; UTC, 2026-11-12)
+- **Ubuntu 6.8.2 and Ubuntu 6.10.3:** Green. `100% tests passed out of 34`, `Quality check PASSED with zero warnings`. `-Wshadow` cleanly passed on GCC across both Qt versions.
+- **Windows 6.10.3:** Compiled clean with zero warnings (`grep -c "warning C"` = 0). `97% tests passed, 1 tests failed out of 34`. The only failure was `tst_Shortcuts` (`Totals: 15 passed, 5 failed, 0 skipped`, exit code 5).
+- **Failing rows:** All five rows of `testDateControlsKeyboardPopup` (`TopicDetailPanelDateEdit`, `InterviewDateEdit`, `ApplicationAppliedDateEdit`, `ApplicationNextActionDateEdit`, `SessionDateEdit`). `testDateEditTranslationContext` passed.
+- **Failure message:** Emitted by our warning guard:
+  `FAIL! : tst_Shortcuts::testDateControlsKeyboardPopup(<row>) Captured unexpected Qt warnings/criticals:` followed by lines `OpenThemeData() failed for theme N (NAME). (The handle is invalid.)`, located at `tests\ui\tst_Shortcuts.cpp(98) : failure location`. Total captured: 466 lines (EDIT: 119, BUTTON: 97, COMBOBOX: 72, STATUS: 70, TAB: 60, SPIN: 48). No other warning appeared in the log, and no other `FAIL!` line occurred for these rows (inferred from the absence of other FAIL lines: functional assertions of the slot did not fail before the guard).
+- **Runner:** `windows server2025`, Qt 6.10.3 debug build, `QT_QPA_PLATFORM=offscreen`.
+
+#### Cause (Tested by the user on PC: Windows 10, Qt 6.10.2, MSVC 2022 Debug Build)
+The user executed `tst_Shortcuts testDateControlsKeyboardPopup` in `cmd`:
+1. `QT_QPA_PLATFORM=offscreen` (with `QT_QPA_FONTDIR=C:\Windows\Fonts`):
+   - `exit=5`, `Totals: 2 passed, 5 failed`
+   - `find /c "OpenThemeData"` = **466** lines. All five rows failed at `tst_Shortcuts.cpp(98)` with identical messages (matching the CI count of 466).
+2. `QT_QPA_PLATFORM=windows` (real desktop):
+   - `exit=0`, `Totals: 7 passed, 0 failed, 0 skipped`
+   - `find /c "OpenThemeData"` = **0**. All five rows passed over every style in `QStyleFactory::keys()`.
+
+*Conclusion:* The warnings originate from Qt's native Windows styles (`windows11`, `windowsvista`) executing under the `offscreen` QPA platform plugin, which queries Win32 `OpenThemeData()` for widgets lacking a native HWND. Under the real `windows` platform plugin, no such warnings occur.
+
+---
+
+### 2. Task 1: Guard and Slot Inspection
+
+#### Warning Guard Location in `tests/ui/tst_Shortcuts.cpp`
+
+Command:
+```bash
+sed -n '80,105p' tests/ui/tst_Shortcuts.cpp
+```
+Raw Output:
+```
+    std::unique_ptr<WindowFixture> m_fix;
+};
+
+void tst_Shortcuts::initTestCase() {
+    installWarningFilter();
+    isolateSettings(m_tempDir);
+}
+
+void tst_Shortcuts::cleanupTestCase() {
+    uninstallWarningFilter();
+}
+
+void tst_Shortcuts::init() {
+    clearCapturedWarnings();
+    m_fix = std::make_unique<WindowFixture>();
+    QVERIFY(activateWindow(&m_fix->window()));
+}
+
+void tst_Shortcuts::cleanup() {
+    m_fix.reset();
+    JOBPREP_VERIFY_ZERO_WARNINGS();
+}
+
+void tst_Shortcuts::testPageShortcutsCtrl1To4() {
+    auto& win = m_fix->window();
+    auto* stack = win.findChild<QStackedWidget*>(u"PageStack"_s);
+```
+
+#### How the Guard Collects Messages and Style Loop Relationship
+1. **Installation:** In `initTestCase()`, `installWarningFilter()` installs a custom `QtMessageHandler` (`testMessageHandler`) via `qInstallMessageHandler`.
+2. **Per-slot clearing:** Before each test slot, `init()` invokes `clearCapturedWarnings()`.
+3. **Capture during execution:** When Qt or widget code logs `QtWarningMsg`, `QtCriticalMsg`, or `QtFatalMsg`, `testMessageHandler` filters out offscreen platform plugin noise via `isPlatformPluginNoise()` (which previously only matched specific Wayland/X11 surface/clipboard strings). All other warnings are appended to `s_capturedWarnings`.
+4. **Execution of the slot:** The slot `testDateControlsKeyboardPopup` loops through `for (const QString& styleKey : styleKeys)`. Any `OpenThemeData()` warnings emitted across all styles in that loop are continuously appended to `s_capturedWarnings`.
+5. **Evaluation:** After the slot returns, Qt Test calls `tst_Shortcuts::cleanup()`, where line 100 (formerly 98) executes `JOBPREP_VERIFY_ZERO_WARNINGS()`. If `capturedWarnings()` is non-empty, it calls `QFAIL(...)`. Because this check occurs at the end of the slot, the warnings from all styles in the row were grouped together, obscuring which style produced which warning.
+
+#### Data Function and Test Slot
+
+Command:
+```bash
+grep -n -E "void tst_Shortcuts::(testDateControlsKeyboardPopup|testDateEditTranslationContext)" tests/ui/tst_Shortcuts.cpp
+```
+Raw Output:
+```
+642:void tst_Shortcuts::testDateControlsKeyboardPopup_data() {
+652:void tst_Shortcuts::testDateControlsKeyboardPopup() {
+901:void tst_Shortcuts::testDateEditTranslationContext() {
+```
+
+Command:
+```bash
+sed -n '642,651p' tests/ui/tst_Shortcuts.cpp
+```
+Raw Output:
+```
+void tst_Shortcuts::testDateControlsKeyboardPopup_data() {
+    QTest::addColumn<QString>("controlName");
+
+    QTest::newRow("TopicDetailPanelDateEdit") << QString("TopicDetailPanelDateEdit");
+    QTest::newRow("InterviewDateEdit") << QString("InterviewDateEdit");
+    QTest::newRow("ApplicationAppliedDateEdit") << QString("ApplicationAppliedDateEdit");
+    QTest::newRow("ApplicationNextActionDateEdit") << QString("ApplicationNextActionDateEdit");
+    QTest::newRow("SessionDateEdit") << QString("SessionDateEdit");
+}
+
+void tst_Shortcuts::testDateControlsKeyboardPopup() {
+```
+
+---
+
+### 3. Task 2: Scoped Exact Allow-List Implementation
+
+#### Implementation Details
+- Pure helper function implemented in `tests/ui_test_helpers/UiTestHelpers.h` and `tests/ui_test_helpers/UiTestHelpers.cpp`:
+  ```cpp
+  bool isKnownNativeThemeNoise(const QString& message, const QString& activeStyleName) {
+      const QString lower = activeStyleName.toLower();
+      if (lower != u"windows11"_s && lower != u"windowsvista"_s) {
+          return false;
+      }
+      static const QRegularExpression re(
+          u"^OpenThemeData\\(\\) failed for theme \\d+ \\([A-Z]+\\)\\. \\(The handle is invalid\\.\\)$"_s);
+      return re.match(message).hasMatch();
+  }
+  ```
+- RAII Scope guard `JobPrep::UiTest::ScopedActiveTestStyle`:
+  - Instantiated inside `for (const QString& styleKey : styleKeys)`:
+    `JobPrep::UiTest::ScopedActiveTestStyle scopedStyle(styleKey);`
+  - Sets `s_activeTestStyleScope = this;` under `s_warningMutex`.
+  - When active style is `windows11` or `windowsvista` and the message matches the exact regex, `recordSwallowed()` increments the swallowed count.
+  - When active style is `Windows` or `Fusion` (or any non-native style), `isKnownNativeThemeNoise` returns `false`, and the warning is appended to `s_capturedWarnings`, failing the test.
+  - Upon scope exit, `s_activeTestStyleScope` is cleared, so any warning outside the scoped loop continues to fail.
+- Per-style noise count printed via `QTextStream(stdout)` at the end of each style iteration:
+  `TEST_DATE_NOISE: control=<row> style=<style> openThemeDataWarnings=<n>`
+
+#### Pure Unit Slot `testNativeThemeNoiseFilter`
+
+Added to `tests/ui/tst_Shortcuts.cpp`:
+```cpp
+void tst_Shortcuts::testNativeThemeNoiseFilter_data() {
+    QTest::addColumn<QString>("message");
+    QTest::addColumn<QString>("styleName");
+    QTest::addColumn<bool>("expected");
+
+    const QString exactMsg = u"OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.)"_s;
+
+    QTest::newRow("exact_windows11") << exactMsg << QString(u"windows11"_s) << true;
+    QTest::newRow("exact_windowsvista") << exactMsg << QString(u"windowsvista"_s) << true;
+    QTest::newRow("exact_Windows") << exactMsg << QString(u"Windows"_s) << false;
+    QTest::newRow("exact_Fusion") << exactMsg << QString(u"Fusion"_s) << false;
+    QTest::newRow("lowercase_class_windows11")
+        << QString(u"OpenThemeData() failed for theme 119 (edit). (The handle is invalid.)"_s)
+        << QString(u"windows11"_s) << false;
+    QTest::newRow("extra_suffix_windows11")
+        << QString(u"OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.) suffix"_s)
+        << QString(u"windows11"_s) << false;
+    QTest::newRow("different_warning_windows11")
+        << QString(u"QFont::setPointSize: Point size <= 0 (0), must be greater than 0"_s)
+        << QString(u"windows11"_s) << false;
+}
+
+void tst_Shortcuts::testNativeThemeNoiseFilter() {
+    QFETCH(QString, message);
+    QFETCH(QString, styleName);
+    QFETCH(bool, expected);
+
+    QCOMPARE(JobPrep::UiTest::isKnownNativeThemeNoise(message, styleName), expected);
+}
+```
+
+#### Failing-Before Demonstration (Linux: Fusion style emits simulated warning)
+
+In a test verification step, a simulated `OpenThemeData()` warning was emitted when `styleKey == u"Fusion"_s`:
+```cpp
+if (styleKey == u"Fusion"_s) {
+    qWarning("OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.)");
+}
+```
+
+Command:
+```bash
+QT_QPA_PLATFORM=offscreen ./build/dev-linux/tests/ui/tst_Shortcuts testDateControlsKeyboardPopup
+```
+Raw Output:
+```
+********* Start testing of tst_Shortcuts *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_Shortcuts::initTestCase()
+TEST_DATE_CONTROL: control=TopicDetailPanelDateEdit style=Windows arrowRect=(177,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=TopicDetailPanelDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=TopicDetailPanelDateEdit style=Fusion arrowRect=(174,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=TopicDetailPanelDateEdit style=Fusion openThemeDataWarnings=0
+FAIL!  : tst_Shortcuts::testDateControlsKeyboardPopup(TopicDetailPanelDateEdit) Captured unexpected Qt warnings/criticals:
+OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.)
+   Loc: [/home/tony/projects/JobPrep/tests/ui/tst_Shortcuts.cpp(100)]
+TEST_DATE_CONTROL: control=InterviewDateEdit style=Windows arrowRect=(155,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=InterviewDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=InterviewDateEdit style=Fusion arrowRect=(150,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=InterviewDateEdit style=Fusion openThemeDataWarnings=0
+FAIL!  : tst_Shortcuts::testDateControlsKeyboardPopup(InterviewDateEdit) Captured unexpected Qt warnings/criticals:
+OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.)
+   Loc: [/home/tony/projects/JobPrep/tests/ui/tst_Shortcuts.cpp(100)]
+TEST_DATE_CONTROL: control=ApplicationAppliedDateEdit style=Windows arrowRect=(121,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=ApplicationAppliedDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=ApplicationAppliedDateEdit style=Fusion arrowRect=(118,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=ApplicationAppliedDateEdit style=Fusion openThemeDataWarnings=0
+FAIL!  : tst_Shortcuts::testDateControlsKeyboardPopup(ApplicationAppliedDateEdit) Captured unexpected Qt warnings/criticals:
+OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.)
+   Loc: [/home/tony/projects/JobPrep/tests/ui/tst_Shortcuts.cpp(100)]
+TEST_DATE_CONTROL: control=ApplicationNextActionDateEdit style=Windows arrowRect=(121,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=ApplicationNextActionDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=ApplicationNextActionDateEdit style=Fusion arrowRect=(118,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=ApplicationNextActionDateEdit style=Fusion openThemeDataWarnings=0
+FAIL!  : tst_Shortcuts::testDateControlsKeyboardPopup(ApplicationNextActionDateEdit) Captured unexpected Qt warnings/criticals:
+OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.)
+   Loc: [/home/tony/projects/JobPrep/tests/ui/tst_Shortcuts.cpp(100)]
+TEST_DATE_CONTROL: control=SessionDateEdit style=Windows arrowRect=(292,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=SessionDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=SessionDateEdit style=Fusion arrowRect=(289,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=SessionDateEdit style=Fusion openThemeDataWarnings=0
+FAIL!  : tst_Shortcuts::testDateControlsKeyboardPopup(SessionDateEdit) Captured unexpected Qt warnings/criticals:
+OpenThemeData() failed for theme 119 (EDIT). (The handle is invalid.)
+   Loc: [/home/tony/projects/JobPrep/tests/ui/tst_Shortcuts.cpp(100)]
+PASS   : tst_Shortcuts::cleanupTestCase()
+Totals: 2 passed, 5 failed, 0 skipped, 0 blacklisted, 2319ms
+********* Finished testing of tst_Shortcuts *********
+```
+Exit code: 5. This proves that under `Fusion` (and `Windows`), the guard rejects `OpenThemeData()` and fails the test. Because `windows11` and `windowsvista` are native to Windows and unavailable on Linux, on Linux only the pure unit slot and the "Fusion still fails" case can be demonstrated directly.
+
+---
+
+### 4. Task 3: Non-Vacuous Assertions and Arrow Hit-Testing
+
+#### Existing Assertion Lines in `tests/ui/tst_Shortcuts.cpp`
+
+Command:
+```bash
+grep -n -C 5 "popupWindow" tests/ui/tst_Shortcuts.cpp
+```
+Raw Output:
+```
+791-        QVERIFY2(dateEdit->calendarWidget() && dateEdit->calendarWidget()->isVisible(),
+792-                 "Alt+Down failed to open calendar popup");
+793-        delete windowShortcut;
+794-
+795-        // Verify it is the same popup the mouse opens
+796:        QWidget* popupWindow = dateEdit->calendarWidget()->window();
+797:        QVERIFY(popupWindow != nullptr);
+798:        QVERIFY(popupWindow->isWindow());
+799-
+800-        // 2. First Esc closes only the popup (dialog remains open)
+801-        auto* calTable = dateEdit->calendarWidget()->findChild<QTableView*>();
+802-        QWidget* calFocus = calTable ? static_cast<QWidget*>(calTable)
+803-                                     : (dateEdit->calendarWidget()->focusWidget()
+```
+
+The prior implementation only verified `popupWindow->isWindow()`, without computing the style's `SC_ComboBoxArrow` rectangle or synthesizing a real mouse click.
+
+#### New Assertion Lines
+
+Command:
+```bash
+grep -n -C 5 "SC_ComboBoxArrow" tests/ui/tst_Shortcuts.cpp
+```
+Raw Output:
+```
+724-
+725-        dateEdit->setFocus();
+726-        QCoreApplication::processEvents();
+727-        QVERIFY(dateEdit->hasFocus() || (dateEdit->findChild<QLineEdit*>() && dateEdit->findChild<QLineEdit*>()->hasFocus()));
+728-
+729:        // Compute arrow rectangle from QStyleOptionComboBox / SC_ComboBoxArrow
+730-        QStyleOptionComboBox opt;
+731-        opt.initFrom(dateEdit);
+732-        opt.rect = dateEdit->rect();
+733-        opt.subControls = QStyle::SC_All;
+734-        opt.activeSubControls = QStyle::SC_None;
+735-        opt.state |= QStyle::State_Enabled;
+736-        const QRect arrowRect = dateEdit->style()->subControlRect(
+737:            QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, dateEdit);
+738-        const bool arrowEmpty = arrowRect.isEmpty();
+739-
+740-        // Verify initial state: popup closed
+741-        QVERIFY(!dateEdit->calendarWidget() || !dateEdit->calendarWidget()->isVisible());
+742-
+```
+
+Command:
+```bash
+sed -n '765,785p' tests/ui/tst_Shortcuts.cpp
+```
+Raw Output:
+```
+                mouseOpened ? "true" : "false");
+        fflush(stdout);
+
+        if (arrowEmpty || !mouseOpened) {
+            QSKIP(qPrintable(QString(u"Style %1 returned empty or unusable arrow rectangle (%2,%3 %4x%5, mouseOpened=%6) for %7"_s)
+                                 .arg(styleKey)
+                                 .arg(arrowRect.x()).arg(arrowRect.y()).arg(arrowRect.width()).arg(arrowRect.height())
+                                 .arg(mouseOpened ? u"true"_s : u"false"_s)
+                                 .arg(controlName)));
+        }
+
+        QVERIFY2(!arrowRect.isEmpty(), "Arrow rectangle must not be empty");
+        QVERIFY2(mouseOpened, "Mouse click on combo-box arrow must open the calendar popup");
+
+        // Install a window-level Alt+Down shortcut to verify ShortcutOverride prevents window shortcut hijack
+        bool windowShortcutFired = false;
+        auto* windowShortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Down), topContainer);
+        QObject::connect(windowShortcut, &QShortcut::activated, [&windowShortcutFired]() {
+            windowShortcutFired = true;
+        });
+```
+
+#### Output on Linux (`Windows` and `Fusion` styles)
+
+Command:
+```bash
+QT_QPA_PLATFORM=offscreen ./build/dev-linux/tests/ui/tst_Shortcuts testDateControlsKeyboardPopup
+```
+Raw Output:
+```
+********* Start testing of tst_Shortcuts *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_Shortcuts::initTestCase()
+TEST_DATE_CONTROL: control=TopicDetailPanelDateEdit style=Windows arrowRect=(177,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=TopicDetailPanelDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=TopicDetailPanelDateEdit style=Fusion arrowRect=(174,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=TopicDetailPanelDateEdit style=Fusion openThemeDataWarnings=0
+PASS   : tst_Shortcuts::testDateControlsKeyboardPopup(TopicDetailPanelDateEdit)
+TEST_DATE_CONTROL: control=InterviewDateEdit style=Windows arrowRect=(155,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=InterviewDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=InterviewDateEdit style=Fusion arrowRect=(150,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=InterviewDateEdit style=Fusion openThemeDataWarnings=0
+PASS   : tst_Shortcuts::testDateControlsKeyboardPopup(InterviewDateEdit)
+TEST_DATE_CONTROL: control=ApplicationAppliedDateEdit style=Windows arrowRect=(121,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=ApplicationAppliedDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=ApplicationAppliedDateEdit style=Fusion arrowRect=(118,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=ApplicationAppliedDateEdit style=Fusion openThemeDataWarnings=0
+PASS   : tst_Shortcuts::testDateControlsKeyboardPopup(ApplicationAppliedDateEdit)
+TEST_DATE_CONTROL: control=ApplicationNextActionDateEdit style=Windows arrowRect=(121,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=ApplicationNextActionDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=ApplicationNextActionDateEdit style=Fusion arrowRect=(118,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=ApplicationNextActionDateEdit style=Fusion openThemeDataWarnings=0
+PASS   : tst_Shortcuts::testDateControlsKeyboardPopup(ApplicationNextActionDateEdit)
+TEST_DATE_CONTROL: control=SessionDateEdit style=Windows arrowRect=(292,2 16x20) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=SessionDateEdit style=Windows openThemeDataWarnings=0
+TEST_DATE_CONTROL: control=SessionDateEdit style=Fusion arrowRect=(289,0 19x23) empty=false mouseOpened=true
+TEST_DATE_NOISE: control=SessionDateEdit style=Fusion openThemeDataWarnings=0
+PASS   : tst_Shortcuts::testDateControlsKeyboardPopup(SessionDateEdit)
+PASS   : tst_Shortcuts::cleanupTestCase()
+Totals: 7 passed, 0 failed, 0 skipped, 0 blacklisted, 2289ms
+********* Finished testing of tst_Shortcuts *********
+```
+
+---
+
+### 5. Task 4: MSVC-Only Classes & Warnings
+
+Evidence is the CI log, `grep -c "warning C"` = 0, quoted from the facts above.
+The Windows CI compilation under MSVC 2022 produced zero compiler warnings across all targets.
+
+---
+
+### 6. Task 5: Addendum Report Corrections
+
+#### 5a. Redo Whole-Project `-Wshadow` Build
+
+Command:
+```bash
+cmake -B /tmp/jobprep-shadow -G Ninja -DCMAKE_BUILD_TYPE=Debug -DJOBPREP_WERROR=OFF
+```
+Raw Output:
+```
+-- The CXX compiler identification is GNU 15.2.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Performing Test HAVE_STDATOMIC
+-- Performing Test HAVE_STDATOMIC - Success
+-- Found WrapAtomic: TRUE
+-- Found OpenGL: /usr/lib/x86_64-linux-gnu/libOpenGL.so
+-- Found WrapOpenGL: TRUE
+-- Found WrapVulkanHeaders: /usr/include
+-- Configuring done (2.2s)
+-- Generating done (0.4s)
+-- Build files have been written to: /tmp/jobprep-shadow
+```
+
+Confirmation of `-Wshadow` in compile flags:
+Command:
+```bash
+grep "Wshadow" /tmp/jobprep-shadow/build.ninja | head -n 3
+```
+Raw Output:
+```
+  FLAGS = -g -std=c++20 -Wall -Wextra -Wpedantic -Wshadow
+  FLAGS = -g -std=c++20 -Wall -Wextra -Wpedantic -Wshadow
+  FLAGS = -g -std=c++20 -Wall -Wextra -Wpedantic -Wshadow
+```
+
+Build command execution with `-j 2`:
+Command:
+```bash
+ninja -C /tmp/jobprep-shadow -j 2 2>&1 | tee /tmp/jobprep-shadow.log; echo "exit=${PIPESTATUS[0]}"
+```
+Output:
+```
+exit=0
+```
+
+Log validation commands:
+Command:
+```bash
+wc -l /tmp/jobprep-shadow.log
+```
+Raw Output:
+```
+228 /tmp/jobprep-shadow.log
+```
+
+Command:
+```bash
+grep -c "Wshadow" /tmp/jobprep-shadow.log
+```
+Raw Output:
+```
+0
+```
+
+Command:
+```bash
+grep -c "warning:" /tmp/jobprep-shadow.log
+```
+Raw Output:
+```
+0
+```
+
+#### 5b. Failing-Before for `-Wshadow` Flag
+
+Extract previous un-fixed `tst_Shortcuts.cpp` (before commit `5dab0de`):
+Command:
+```bash
+git show 5dab0de^:tests/ui/tst_Shortcuts.cpp > /tmp/old_tst_Shortcuts.cpp
+```
+Raw Output:
+```
+(no output)
+```
+
+Compile with `-Wshadow -Werror`:
+Command:
+```bash
+/usr/bin/c++ -DQT_CORE_LIB -DQT_GUI_LIB -DQT_SQL_LIB -DQT_SVG_LIB -DQT_TESTCASE_BUILDDIR=\"/home/tony/projects/JobPrep/build/dev-linux/tests/ui\" -DQT_TESTCASE_SOURCEDIR=\"/home/tony/projects/JobPrep/tests/ui\" -DQT_TESTLIB_LIB -DQT_WIDGETS_LIB -I/home/tony/projects/JobPrep/build/dev-linux/tests/ui/tst_Shortcuts_autogen/include -I/home/tony/projects/JobPrep/src -I/home/tony/projects/JobPrep/tests/ui_test_helpers -isystem /usr/include/x86_64-linux-gnu/qt6/QtCore -isystem /usr/include/x86_64-linux-gnu/qt6 -isystem /usr/lib/x86_64-linux-gnu/qt6/mkspecs/linux-g++ -isystem /usr/include/x86_64-linux-gnu/qt6/QtGui -isystem /usr/include/x86_64-linux-gnu/qt6/QtWidgets -isystem /usr/include/x86_64-linux-gnu/qt6/QtSql -isystem /usr/include/x86_64-linux-gnu/qt6/QtSvg -isystem /usr/include/x86_64-linux-gnu/qt6/QtTest -g -std=c++20 -Wall -Wextra -Wpedantic -Wshadow -Werror -o /tmp/old_tst_Shortcuts.o -c /tmp/old_tst_Shortcuts.cpp
+```
+Raw Output:
+```
+/tmp/old_tst_Shortcuts.cpp: In lambda function:
+/tmp/old_tst_Shortcuts.cpp:823:34: error: declaration of ‘btn’ shadows a previous local [-Werror=shadow]
+  823 |                 } else if (auto* btn = box->button(QMessageBox::Yes)) {
+      |                                  ^~~
+/tmp/old_tst_Shortcuts.cpp:821:27: note: shadowed declaration is here
+  821 |                 if (auto* btn = box->button(QMessageBox::Discard)) {
+      |                           ^~~
+cc1plus: all warnings being treated as errors
+```
+Exit code: 1. This proves `-Wshadow` reliably catches the variable shadowing that broke the Windows CI build.
+
+#### 5c. Breakdown of Test Function Counts Since `0f4b9b2` (Part A Baseline)
+
+In Part A (`0f4b9b2`), the baseline had 34 binaries and 469 test functions.
+Compared against current binaries:
+- `tst_HiDpi`: 6 (+1 from baseline 5) — new slot `testDelegateAndWidgetTextOverlap` (M7 Part B commit `b38e4a9`).
+- `tst_PageStudy`: 27 (+1 from baseline 26) — new slot `testTopicDetailCalendarPopupAndAutosave` (M7 Part B commit `6c10b10`).
+- `tst_Shortcuts`: 15 (+3 from baseline 12):
+  - `testDateControlsKeyboardPopup` (M7 Part B commit `5dab0de`)
+  - `testDateEditTranslationContext` (M7 Part B commit `5dab0de`)
+  - `testNativeThemeNoiseFilter` (M7 Part B fix-up 2 commit `ac07734`)
+- All other 31 test binaries: unchanged.
+Total change: 5 new test slots. Current total: 34 test binaries, 474 test functions.
+
+---
+
+### 7. Task 6: Windows Test Execution Time (Observation)
+
+**Observation:** Under Windows Server 2025 CI with `QT_QPA_PLATFORM=offscreen`, the UI test suite took 561 s*proc (e.g., `tst_PageStudy` took 103 s vs 7 s on Ubuntu CI), and overall ctest took 292 seconds (real time).
+Addressing the timeout thresholds:
+- Is any single test close to `ctest --timeout 600`? No; the longest running test (`tst_PageStudy` at 103 s) consumes only ~17% of the 600-second per-test timeout.
+- Is the run close to the 30-minute job limit? No; total ctest time is 292 seconds (~4.9 minutes), well within the 30-minute workflow step limit.
+No code changes are necessary.
+
+---
+
+### 8. Not Verified by Agent, User to Check
+
+- **Next Windows CI run:** First execution of `testDateControlsKeyboardPopup` with the scoped native styles noise filter.
+  - *Prediction:* The five test rows will pass if the `OpenThemeData()` offscreen warnings were the only cause of the failure. If any functional assertion fails in `windows11` or `windowsvista`, the log will display a standard `FAIL!` with `Loc:` and the corresponding `TEST_DATE_CONTROL` rectangle line.
+- **User desktop test verification:**
+  - Verify that running with `QT_QPA_PLATFORM=offscreen` passes with swallowed counts printed in `TEST_DATE_NOISE`.
+  - Verify that running with `QT_QPA_PLATFORM=windows` passes with `openThemeDataWarnings=0`.
+- **Manual desktop verification:** Alt+Down and F4 tested by hand in all five UI locations on a real Windows desktop.
+
+---
+
+### 9. Finish Verification
+
+#### Full Output: `CMAKE_BUILD_PARALLEL_LEVEL=2 ./scripts/check.sh`
+
+Command:
+```bash
+CMAKE_BUILD_PARALLEL_LEVEL=2 ./scripts/check.sh
+```
+Raw Output:
+```
+==> Configuring JobPrep with dev-linux preset...
+-- Configuring done (0.3s)
+-- Generating done (0.8s)
+-- Build files have been written to: /home/tony/projects/JobPrep/build/dev-linux
+==> Building JobPrep with dev-linux preset...
+[1/58] Automatic MOC and UIC for target tst_PageJobs
+[2/57] Automatic MOC and UIC for target ui_smoke
+[3/56] Automatic MOC and UIC for target tst_PageCalendar
+[4/55] Automatic MOC and UIC for target tst_PageStudy
+[5/54] Automatic MOC and UIC for target tst_PageHome
+[6/53] Automatic MOC and UIC for target tst_PageSettings
+[7/52] Automatic MOC and UIC for target tst_EmptyStatesAndFocus
+[8/51] Automatic MOC and UIC for target tst_HiDpi
+[9/50] Building CXX object tests/ui_smoke/CMakeFiles/ui_smoke.dir/tst_UiSmoke.cpp.o
+[10/50] Building CXX object tests/ui/CMakeFiles/tst_PageJobs.dir/tst_PageJobs.cpp.o
+[11/50] Building CXX object tests/ui/CMakeFiles/tst_PageCalendar.dir/tst_PageCalendar.cpp.o
+[12/50] Building CXX object tests/ui/CMakeFiles/tst_PageStudy.dir/tst_PageStudy.cpp.o
+[13/50] Building CXX object tests/ui/CMakeFiles/tst_PageHome.dir/tst_PageHome.cpp.o
+[14/50] Building CXX object tests/ui/CMakeFiles/tst_PageSettings.dir/tst_PageSettings.cpp.o
+[15/50] Building CXX object tests/ui/CMakeFiles/tst_EmptyStatesAndFocus.dir/tst_EmptyStatesAndFocus.cpp.o
+[16/50] Linking CXX executable jobprep
+[17/50] Linking CXX executable tests/data/tst_Database
+[18/50] Building CXX object tests/ui/CMakeFiles/tst_HiDpi.dir/tst_HiDpi.cpp.o
+[19/50] Linking CXX executable tests/data/tst_TrackRepository
+[20/50] Linking CXX executable tests/data/tst_TopicRepository
+[21/50] Linking CXX executable tests/data/tst_SessionRepository
+[22/50] Linking CXX executable tests/data/tst_ApplicationRepository
+[23/50] Linking CXX executable tests/data/tst_InterviewRepository
+[24/50] Linking CXX executable tests/data/tst_ReminderLogRepository
+[25/50] Linking CXX executable tests/data/tst_SeedService
+[26/50] Linking CXX executable tests/data/tst_TransactionBehavior
+[27/50] Linking CXX executable tests/ui_smoke/ui_smoke
+[28/50] Linking CXX executable tests/ui_smoke/tst_MonthView
+[29/50] Linking CXX executable tests/models/tst_AgendaListModel
+[30/50] Linking CXX executable tests/models/tst_ApplicationTableModel
+[31/50] Linking CXX executable tests/models/tst_ApplicationFilterProxy
+[32/50] Linking CXX executable tests/models/tst_TopicListModel
+[33/50] Linking CXX executable tests/models/tst_TopicBoardProxy
+[34/50] Linking CXX executable tests/services/tst_AgendaService
+[35/50] Linking CXX executable tests/models/tst_TopicTableProxy
+[36/50] Linking CXX executable tests/services/tst_ExportService
+[37/50] Linking CXX executable tests/services/tst_DayWatcher
+[38/50] Linking CXX executable tests/services/tst_ImportExport
+[39/50] Linking CXX executable tests/services/tst_ReminderService
+[40/50] Linking CXX executable tests/services/tst_SettingsService
+[41/50] Linking CXX executable tests/services/tst_StatsService
+[42/50] Linking CXX executable tests/ui/tst_Notifiers
+[43/50] Linking CXX executable tests/ui/tst_StudyRegression
+[44/50] Linking CXX executable tests/ui/tst_PageJobs
+[45/50] Linking CXX executable tests/ui/tst_PageCalendar
+[46/50] Linking CXX executable tests/ui/tst_PageHome
+[47/50] Linking CXX executable tests/ui/tst_PageStudy
+[48/50] Linking CXX executable tests/ui/tst_EmptyStatesAndFocus
+[49/50] Linking CXX executable tests/ui/tst_PageSettings
+[50/50] Linking CXX executable tests/ui/tst_HiDpi
+==> Running tests with dev-linux preset...
+Test project /home/tony/projects/JobPrep/build/dev-linux
+      Start 34: tst_HiDpi
+      Start 29: tst_PageStudy
+ 1/34 Test #34: tst_HiDpi ........................   Passed    8.54 sec
+      Start 30: tst_PageHome
+ 2/34 Test #29: tst_PageStudy ....................   Passed   18.98 sec
+      Start 33: tst_EmptyStatesAndFocus
+ 3/34 Test #30: tst_PageHome .....................   Passed   16.75 sec
+      Start 27: tst_PageJobs
+ 4/34 Test #33: tst_EmptyStatesAndFocus ..........   Passed   10.41 sec
+      Start 28: tst_PageCalendar
+ 5/34 Test #28: tst_PageCalendar .................   Passed    6.98 sec
+      Start 26: tst_StudyRegression
+ 6/34 Test #27: tst_PageJobs .....................   Passed   12.60 sec
+      Start 31: tst_PageSettings
+ 7/34 Test #31: tst_PageSettings .................   Passed    4.31 sec
+      Start 10: ui_smoke
+ 8/34 Test #26: tst_StudyRegression ..............   Passed    6.92 sec
+      Start 25: tst_Notifiers
+ 9/34 Test #25: tst_Notifiers ....................   Passed    2.61 sec
+      Start 32: tst_Shortcuts
+10/34 Test #10: ui_smoke .........................   Passed    5.90 sec
+      Start 21: tst_ImportExport
+11/34 Test #21: tst_ImportExport .................   Passed    0.74 sec
+      Start 24: tst_StatsService
+12/34 Test #24: tst_StatsService .................   Passed    0.98 sec
+      Start  8: tst_SeedService
+13/34 Test  #8: tst_SeedService ..................   Passed    0.28 sec
+      Start 22: tst_ReminderService
+14/34 Test #22: tst_ReminderService ..............   Passed    0.08 sec
+      Start 17: tst_TopicTableProxy
+15/34 Test #17: tst_TopicTableProxy ..............   Passed    0.08 sec
+      Start 11: tst_MonthView
+16/34 Test #11: tst_MonthView ....................   Passed    0.09 sec
+      Start 18: tst_AgendaService
+17/34 Test #18: tst_AgendaService ................   Passed    0.09 sec
+      Start  5: tst_ApplicationRepository
+18/34 Test  #5: tst_ApplicationRepository ........   Passed    0.09 sec
+      Start  3: tst_TopicRepository
+19/34 Test  #3: tst_TopicRepository ..............   Passed    0.09 sec
+      Start 20: tst_ExportService
+20/34 Test #20: tst_ExportService ................   Passed    0.03 sec
+      Start 16: tst_TopicBoardProxy
+21/34 Test #16: tst_TopicBoardProxy ..............   Passed    0.05 sec
+      Start 13: tst_ApplicationTableModel
+22/34 Test #13: tst_ApplicationTableModel ........   Passed    0.07 sec
+      Start 15: tst_TopicListModel
+23/34 Test #15: tst_TopicListModel ...............   Passed    0.04 sec
+      Start 12: tst_AgendaListModel
+24/34 Test #12: tst_AgendaListModel ..............   Passed    0.03 sec
+      Start  6: tst_InterviewRepository
+25/34 Test  #6: tst_InterviewRepository ..........   Passed    0.04 sec
+      Start  1: tst_Database
+26/34 Test  #1: tst_Database .....................   Passed    0.03 sec
+      Start 23: tst_SettingsService
+27/34 Test #23: tst_SettingsService ..............   Passed    0.02 sec
+      Start  9: tst_TransactionBehavior
+28/34 Test  #9: tst_TransactionBehavior ..........   Passed    0.03 sec
+      Start  4: tst_SessionRepository
+29/34 Test  #4: tst_SessionRepository ............   Passed    0.03 sec
+      Start 19: tst_DayWatcher
+30/34 Test #19: tst_DayWatcher ...................   Passed    0.02 sec
+      Start  2: tst_TrackRepository
+31/34 Test  #2: tst_TrackRepository ..............   Passed    0.03 sec
+      Start  7: tst_ReminderLogRepository
+32/34 Test  #7: tst_ReminderLogRepository ........   Passed    0.02 sec
+      Start 14: tst_ApplicationFilterProxy
+33/34 Test #14: tst_ApplicationFilterProxy .......   Passed    0.02 sec
+34/34 Test #32: tst_Shortcuts ....................   Passed    6.51 sec
+
+100% tests passed, 0 tests failed out of 34
+
+Label Time Summary:
+data       =   0.64 sec*proc (9 tests)
+model      =   0.29 sec*proc (6 tests)
+service    =   1.95 sec*proc (7 tests)
+ui         = 100.59 sec*proc (12 tests)
+
+Total Test time (real) =  52.47 sec
+==> Quality check PASSED with zero warnings and all tests green!
+```
+
+#### Totals by Command
+
+Command:
+```bash
+total=0; for b in $(find build/dev-linux/tests -maxdepth 2 -type f -executable | sort); do cnt=$("$b" -functions | wc -l); echo "$b: $cnt"; total=$((total + cnt)); done; echo "TOTAL_FUNCTIONS: $total"; echo "TOTAL_BINARIES: $(find build/dev-linux/tests -maxdepth 2 -type f -executable | wc -l)"
+```
+Raw Output:
+```
+build/dev-linux/tests/data/tst_ApplicationRepository: 20
+build/dev-linux/tests/data/tst_Database: 16
+build/dev-linux/tests/data/tst_InterviewRepository: 9
+build/dev-linux/tests/data/tst_ReminderLogRepository: 7
+build/dev-linux/tests/data/tst_SeedService: 5
+build/dev-linux/tests/data/tst_SessionRepository: 10
+build/dev-linux/tests/data/tst_TopicRepository: 18
+build/dev-linux/tests/data/tst_TrackRepository: 8
+build/dev-linux/tests/data/tst_TransactionBehavior: 8
+build/dev-linux/tests/models/tst_AgendaListModel: 5
+build/dev-linux/tests/models/tst_ApplicationFilterProxy: 2
+build/dev-linux/tests/models/tst_ApplicationTableModel: 10
+build/dev-linux/tests/models/tst_TopicBoardProxy: 9
+build/dev-linux/tests/models/tst_TopicListModel: 7
+build/dev-linux/tests/models/tst_TopicTableProxy: 6
+build/dev-linux/tests/services/tst_AgendaService: 24
+build/dev-linux/tests/services/tst_DayWatcher: 4
+build/dev-linux/tests/services/tst_ExportService: 4
+build/dev-linux/tests/services/tst_ImportExport: 33
+build/dev-linux/tests/services/tst_ReminderService: 18
+build/dev-linux/tests/services/tst_SettingsService: 8
+build/dev-linux/tests/services/tst_StatsService: 10
+build/dev-linux/tests/ui_smoke/tst_MonthView: 13
+build/dev-linux/tests/ui_smoke/ui_smoke: 11
+build/dev-linux/tests/ui/tst_EmptyStatesAndFocus: 34
+CI-DIAG progress: main start t=0ms
+CI-DIAG progress: main before QApplication t=0ms
+CI-DIAG progress: main after QApplication t=0ms
+build/dev-linux/tests/ui/tst_HiDpi: 6
+build/dev-linux/tests/ui/tst_Notifiers: 21
+build/dev-linux/tests/ui/tst_PageCalendar: 12
+build/dev-linux/tests/ui/tst_PageHome: 16
+build/dev-linux/tests/ui/tst_PageJobs: 22
+build/dev-linux/tests/ui/tst_PageSettings: 44
+build/dev-linux/tests/ui/tst_PageStudy: 27
+build/dev-linux/tests/ui/tst_Shortcuts: 15
+build/dev-linux/tests/ui/tst_StudyRegression: 12
+TOTAL_FUNCTIONS: 474
+TOTAL_BINARIES: 34
+```
