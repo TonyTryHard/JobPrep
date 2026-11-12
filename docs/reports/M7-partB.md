@@ -1558,3 +1558,93 @@ ui         = 108.42 sec*proc (12 tests)
 Total Test time (real) =  55.87 sec
 ==> Quality check PASSED with zero warnings and all tests green!
 ```
+
+
+---
+
+### 8. Totals by Command
+
+#### Command:
+```bash
+python3 -c '
+import subprocess, glob, os
+binaries = []
+for root, dirs, files in os.walk("build/dev-linux/tests"):
+    for f in files:
+        p = os.path.join(root, f)
+        if os.access(p, os.X_OK) and not f.endswith(".sh") and not f.endswith(".py") and not f.endswith(".a") and not f.endswith(".so") and not "." in f:
+            binaries.append(p)
+binaries.sort()
+total_funcs = 0
+for b in binaries:
+    name = os.path.basename(b)
+    try:
+        out = subprocess.check_output([b, "-functions"], stderr=subprocess.STDOUT, text=True)
+        lines = [l.strip() for l in out.splitlines() if l.strip() and not l.startswith("*") and not l.startswith("Config:")]
+        funcs = [l for l in lines if "(" in l and not l.startswith("initTestCase") and not l.startswith("cleanupTestCase") and not l.startswith("init()") and not l.startswith("cleanup()")]
+        print(f"{name}: {len(funcs)}")
+        total_funcs += len(funcs)
+    except Exception as e:
+        pass
+print(f"Total test binaries: {len(binaries)}")
+print(f"Total test functions: {total_funcs}")
+'
+```
+Raw output:
+```
+tst_ApplicationRepository: 20
+tst_Database: 16
+tst_InterviewRepository: 9
+tst_ReminderLogRepository: 7
+tst_SeedService: 5
+tst_SessionRepository: 10
+tst_TopicRepository: 18
+tst_TrackRepository: 8
+tst_TransactionBehavior: 8
+tst_AgendaListModel: 5
+tst_ApplicationFilterProxy: 2
+tst_ApplicationTableModel: 10
+tst_TopicBoardProxy: 9
+tst_TopicListModel: 7
+tst_TopicTableProxy: 6
+tst_AgendaService: 24
+tst_DayWatcher: 4
+tst_ExportService: 4
+tst_ImportExport: 33
+tst_ReminderService: 18
+tst_SettingsService: 8
+tst_StatsService: 10
+tst_EmptyStatesAndFocus: 34
+tst_HiDpi: 6
+tst_Notifiers: 21
+tst_PageCalendar: 12
+tst_PageHome: 16
+tst_PageJobs: 22
+tst_PageSettings: 44
+tst_PageStudy: 27
+tst_Shortcuts: 14
+tst_StudyRegression: 12
+tst_MonthView: 13
+ui_smoke: 11
+Total test binaries: 34
+Total test functions: 473
+```
+
+---
+
+### 9. Git State
+
+#### Command: `git status --short`
+```
+?? docs/prompts/M7-partB-fixup-addendum-ci.md
+?? docs/reports/M7-partB-fixup-addendum-ci.md
+```
+
+#### Command: `git log --oneline -n 5`
+```
+1b39195 (HEAD -> main) docs(reports): append CI run of Part B section to M7-partB report
+333ef36 ci: add timeouts and retries to apt step on Linux
+9692058 build(cmake): enable -Wshadow for GCC and Clang
+5dab0de test(ui): fix shadowed local variable in tst_Shortcuts date popup test
+dc71d4f (origin/main, origin/HEAD) m7-partB prompt
+```
