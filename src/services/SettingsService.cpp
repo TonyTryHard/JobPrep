@@ -67,6 +67,23 @@ void SettingsService::setThemeMode(const QString& mode) {
     emit themeModeChanged(mode);
 }
 
+QString SettingsService::language() const {
+    const QString val = m_settings->value(u"ui/language"_s, u"system"_s).toString();
+    if (val == u"en"_s || val == u"uk"_s || val == u"ru"_s) {
+        return val;
+    }
+    return u"system"_s;
+}
+
+void SettingsService::setLanguage(const QString& language) {
+    const QString normalized = (language == u"en"_s || language == u"uk"_s || language == u"ru"_s)
+                                   ? language
+                                   : u"system"_s;
+    if (this->language() == normalized) return;
+    m_settings->setValue(u"ui/language"_s, normalized);
+    emit languageChanged(normalized);
+}
+
 QString SettingsService::accentPreset() const {
     return m_settings->value(u"ui/accentPreset"_s, u"indigo"_s).toString();
 }

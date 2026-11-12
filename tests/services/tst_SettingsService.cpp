@@ -1,5 +1,6 @@
 #include <QCoreApplication>
 #include <QDebug>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QSettings>
@@ -7,6 +8,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextStream>
+#include "app/Localization.h"
 #include "services/SettingsService.h"
 
 using namespace Qt::StringLiterals;
@@ -25,6 +27,11 @@ private slots:
     void testTrayHintShownKey();
     void testToDayOfWeekNormalization();
     void testWeeklyGoalSurvivesRestart();
+    void testLanguageSettingRoundTrip();
+    void testResolveLanguage_data();
+    void testResolveLanguage();
+    void testInstallLanguageRepeatedly();
+    void testMainCallsInstallLanguageBeforeWidgets();
 };
 
 void tst_SettingsService::initTestCase() {
@@ -210,6 +217,164 @@ void tst_SettingsService::testWeeklyGoalSurvivesRestart() {
         SettingsService svc(std::move(qsettings));
         QCOMPARE(svc.weeklyGoalMinutes(), 480);
     }
+}
+
+void tst_SettingsService::testLanguageSettingRoundTrip() {
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString path = tempDir.filePath(u"settings.ini"_s);
+
+    {
+        auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        SettingsService svc(std::move(qsettings));
+
+        // Default value is "system"
+        QCOMPARE(svc.language(), u"system"_s);
+
+        QSignalSpy spy(&svc, &SettingsService::languageChanged);
+
+        // Valid values
+        svc.setLanguage(u"uk"_s);
+        QCOMPARE(svc.language(), u"uk"_s);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toString(), u"uk"_s);
+
+        // Same value does not emit
+        svc.setLanguage(u"uk"_s);
+        QCOMPARE(spy.count(), 0);
+
+        svc.setLanguage(u"ru"_s);
+        QCOMPARE(svc.language(), u"ru"_s);
+        QCOMPARE(spy.count(), 1);
+        spy.clear();
+
+        svc.setLanguage(u"en"_s);
+        QCOMPARE(svc.language(), u"en"_s);
+        QCOMPARE(spy.count(), 1);
+        spy.clear();
+
+        // Unknown value normalizes to "system"
+        svc.setLanguage(u"fr_FR"_s);
+        QCOMPARE(svc.language(), u"system"_s);
+        QCOMPARE(spy.count(), 1);
+        spy.clear();
+
+        // Empty value normalizes to "system" (already "system", so no change signal)
+        svc.setLanguage(QString());
+        QCOMPARE(svc.language(), u"system"_s);
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // Persistence across restart
+    {
+        auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        SettingsService svc(std::move(qsettings));
+        svc.setLanguage(u"uk"_s);
+    }
+    {
+        auto qsettings = std::make_unique<QSettings>(path, QSettings::IniFormat);
+        SettingsService svc(std::move(qsettings));
+        QCOMPARE(svc.language(), u"uk"_s);
+    }
+}
+
+void tst_SettingsService::testResolveLanguage_data() {
+    QTest::addColumn<QString>("setting");
+    QTest::addColumn<QStringList>("uiLanguages");
+    QTest::addColumn<QString>("expected");
+
+    // System setting evaluates uiLanguages in order
+    QTest::newRow("system uk-UA") << u"system"_s << QStringList{u"uk-UA"_s} << u"uk"_s;
+    QTest::newRow("system uk") << u"system"_s << QStringList{u"uk"_s} << u"uk"_s;
+    QTest::newRow("system ru-RU") << u"system"_s << QStringList{u"ru-RU"_s} << u"ru"_s;
+    QTest::newRow("system ru-UA") << u"system"_s << QStringList{u"ru-UA"_s} << u"ru"_s;
+    QTest::newRow("system en-US") << u"system"_s << QStringList{u"en-US"_s} << u"en"_s;
+    QTest::newRow("system pl-PL") << u"system"_s << QStringList{u"pl-PL"_s} << u"en"_s;
+    QTest::newRow("system be-BY") << u"system"_s << QStringList{u"be-BY"_s} << u"en"_s;
+    QTest::newRow("system empty list") << u"system"_s << QStringList{} << u"en"_s;
+    QTest::newRow("system pl-PL then uk-UA")
+        << u"system"_s << QStringList{u"pl-PL"_s, u"uk-UA"_s} << u"uk"_s;
+
+    // Explicit setting overrides any system UI languages
+    QTest::newRow("explicit en with uk-UA") << u"en"_s << QStringList{u"uk-UA"_s} << u"en"_s;
+    QTest::newRow("explicit uk with en-US") << u"uk"_s << QStringList{u"en-US"_s} << u"uk"_s;
+    QTest::newRow("explicit ru with en-US") << u"ru"_s << QStringList{u"en-US"_s} << u"ru"_s;
+    QTest::newRow("unknown setting with uk-UA") << u"unknown"_s << QStringList{u"uk-UA"_s} << u"uk"_s;
+}
+
+void tst_SettingsService::testResolveLanguage() {
+    QFETCH(QString, setting);
+    QFETCH(QStringList, uiLanguages);
+    QFETCH(QString, expected);
+
+    QCOMPARE(JobPrep::App::resolveLanguage(setting, uiLanguages), expected);
+}
+
+void tst_SettingsService::testInstallLanguageRepeatedly() {
+    // 1. Ukrainian
+    auto resUk = JobPrep::App::installLanguage(u"uk"_s);
+    QCOMPARE(resUk.language, u"uk"_s);
+    QCOMPARE(QLocale().language(), QLocale::Ukrainian);
+    QVERIFY(resUk.appTranslatorLoaded);
+
+    // 2. Russian
+    auto resRu = JobPrep::App::installLanguage(u"ru"_s);
+    QCOMPARE(resRu.language, u"ru"_s);
+    QCOMPARE(QLocale().language(), QLocale::Russian);
+    QVERIFY(resRu.appTranslatorLoaded);
+
+    // 3. English (restores default without app translator)
+    auto resEn = JobPrep::App::installLanguage(u"en"_s);
+    QCOMPARE(resEn.language, u"en"_s);
+    QCOMPARE(QLocale().language(), QLocale::English);
+    QVERIFY(!resEn.appTranslatorLoaded);
+
+    // 4. Fallback when given invalid language
+    auto resInvalid = JobPrep::App::installLanguage(u"unknown_lang"_s);
+    QCOMPARE(resInvalid.language, u"en"_s);
+
+    // Cleanup
+    JobPrep::App::uninstallLanguage();
+}
+
+void tst_SettingsService::testMainCallsInstallLanguageBeforeWidgets() {
+    QString mainPath;
+    const QStringList candidates{
+        u"src/main.cpp"_s,
+        u"../src/main.cpp"_s,
+        u"../../src/main.cpp"_s,
+        u"../../../src/main.cpp"_s,
+#ifdef QT_TESTCASE_SOURCEDIR
+        QDir(QString::fromUtf8(QT_TESTCASE_SOURCEDIR)).filePath(u"../../src/main.cpp"_s)
+#endif
+    };
+    for (const QString& cand : candidates) {
+        if (!cand.isEmpty() && QFile::exists(cand)) {
+            mainPath = cand;
+            break;
+        }
+    }
+    QVERIFY2(!mainPath.isEmpty(), "Could not locate src/main.cpp");
+    QFile mainFile(mainPath);
+    QVERIFY2(mainFile.open(QIODevice::ReadOnly | QIODevice::Text), "Could not open src/main.cpp");
+
+    const QString content = QString::fromUtf8(mainFile.readAll());
+    const int installPos = content.indexOf(u"JobPrep::App::installLanguage"_s);
+    const int appIconPos = content.indexOf(u"QApplication::setWindowIcon"_s);
+    const int ctxPos = content.indexOf(u"JobPrep::App::AppContext ctx"_s);
+    const int msgBoxPos = content.indexOf(u"QMessageBox::critical"_s);
+    const int windowPos = content.indexOf(u"mainWindow(ctx"_s);
+
+    QVERIFY2(installPos != -1, "JobPrep::App::installLanguage not found in main.cpp");
+    QVERIFY2(appIconPos != -1, "QApplication::setWindowIcon not found in main.cpp");
+    QVERIFY2(ctxPos != -1, "AppContext not found in main.cpp");
+    QVERIFY2(msgBoxPos != -1, "QMessageBox::critical not found in main.cpp");
+    QVERIFY2(windowPos != -1, "mainWindow(ctx not found in main.cpp");
+
+    QVERIFY2(installPos < appIconPos, "installLanguage must precede window icon setup");
+    QVERIFY2(installPos < ctxPos, "installLanguage must precede AppContext creation");
+    QVERIFY2(installPos < msgBoxPos, "installLanguage must precede QMessageBox::critical");
+    QVERIFY2(installPos < windowPos, "installLanguage must precede mainWindow creation");
 }
 
 QTEST_GUILESS_MAIN(tst_SettingsService)

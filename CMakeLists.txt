@@ -60,6 +60,8 @@ add_library(jobprep_core STATIC
     src/app/AppContext.cpp
     src/app/Resources.h
     src/app/Resources.cpp
+    src/app/Localization.h
+    src/app/Localization.cpp
 
     # Domain models
     src/domain/Enums.h

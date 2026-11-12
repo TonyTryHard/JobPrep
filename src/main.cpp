@@ -3,8 +3,10 @@
 #include <QFontDatabase>
 #include <QIcon>
 #include <QMessageBox>
+#include <QSettings>
 #include <QSystemTrayIcon>
 #include "app/AppContext.h"
+#include "app/Localization.h"
 #include "app/Resources.h"
 #include "data/Database.h"
 #include "services/SeedService.h"
@@ -25,6 +27,16 @@ int main(int argc, char* argv[]) {
 
     // Set application window icon from bundled resources (SVG and multi-size PNG)
     JobPrep::App::ensureResources();
+
+    // Determine and install UI language before creating any widgets
+    {
+        QSettings settings;
+        const QString langSetting = settings.value(u"ui/language"_s, u"system"_s).toString();
+        const QString effectiveLang =
+            JobPrep::App::resolveLanguage(langSetting, QLocale::system().uiLanguages());
+        JobPrep::App::installLanguage(effectiveLang);
+    }
+
     QIcon appIcon;
     appIcon.addPixmap(QIcon(u":/icons/app-color.svg"_s).pixmap(16, 16));
     appIcon.addPixmap(QIcon(u":/icons/app-color.svg"_s).pixmap(32, 32));

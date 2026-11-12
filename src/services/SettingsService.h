@@ -30,6 +30,9 @@ public:
     QString themeMode() const;
     void setThemeMode(const QString& mode);
 
+    QString language() const;
+    void setLanguage(const QString& language);
+
     QString accentPreset() const;
     void setAccentPreset(const QString& preset);
 
@@ -76,6 +79,7 @@ public:
 
 signals:
     void themeModeChanged(const QString& mode);
+    void languageChanged(const QString& language);
     void accentPresetChanged(const QString& preset);
     void sidebarCollapsedChanged(bool collapsed);
     void weeklyGoalMinutesChanged(int minutes);
