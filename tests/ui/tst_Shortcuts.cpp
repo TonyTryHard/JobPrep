@@ -72,6 +72,7 @@ private slots:
     void testDateControlsKeyboardPopup_data();
     void testDateControlsKeyboardPopup();
     void testDateEditTranslationContext();
+    void testDateEditDisplayFormatAndFirstDayOfWeek();
     void testNativeThemeNoiseFilter_data();
     void testNativeThemeNoiseFilter();
 
@@ -910,6 +911,33 @@ void tst_Shortcuts::testDateEditTranslationContext() {
     QVERIFY2(translator.recordedContexts.contains(u"SingleTabDateEdit"_s),
              qPrintable(QString(u"Translation contexts did not contain 'SingleTabDateEdit': [%1]"_s)
                         .arg(translator.recordedContexts.join(u", "_s))));
+}
+
+void tst_Shortcuts::testDateEditDisplayFormatAndFirstDayOfWeek() {
+    const QLocale savedLocale = QLocale();
+    struct LocaleRestore {
+        QLocale orig;
+        ~LocaleRestore() { QLocale::setDefault(orig); }
+    } guard{savedLocale};
+
+    const QList<QLocale> testLocales = {
+        QLocale(QLocale::Ukrainian, QLocale::Ukraine),
+        QLocale(QLocale::German, QLocale::Germany),
+        QLocale(QLocale::English, QLocale::UnitedStates)
+    };
+
+    for (const auto& loc : testLocales) {
+        QLocale::setDefault(loc);
+
+        // 1. SingleTabDateEdit display format is strictly ISO yyyy-MM-dd across all locales
+        JobPrep::Ui::Widgets::SingleTabDateEdit dateEdit;
+        QCOMPARE(dateEdit.displayFormat(), u"yyyy-MM-dd"_s);
+
+        // 2. Calendar popup respects user preference (default Monday)
+        dateEdit.setCalendarPopup(true);
+        QVERIFY(dateEdit.calendarWidget() != nullptr);
+        QCOMPARE(dateEdit.calendarWidget()->firstDayOfWeek(), Qt::Monday);
+    }
 }
 
 void tst_Shortcuts::testNativeThemeNoiseFilter_data() {

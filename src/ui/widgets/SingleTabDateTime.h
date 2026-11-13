@@ -6,6 +6,7 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QMouseEvent>
+#include <QSettings>
 #include <QStyle>
 #include <QStyleOptionComboBox>
 #include <QTimeEdit>
@@ -30,6 +31,7 @@ public:
 
     explicit SingleTabDateEdit(QWidget* parent = nullptr)
         : QDateEdit(parent) {
+        setDisplayFormat(QString::fromLatin1("yyyy-MM-dd"));
         initShortcutHint();
         if (lineEdit()) {
             lineEdit()->installEventFilter(this);
@@ -38,9 +40,25 @@ public:
 
     explicit SingleTabDateEdit(const QDate& date, QWidget* parent = nullptr)
         : QDateEdit(date, parent) {
+        setDisplayFormat(QString::fromLatin1("yyyy-MM-dd"));
         initShortcutHint();
         if (lineEdit()) {
             lineEdit()->installEventFilter(this);
+        }
+    }
+
+    void syncCalendarFirstDayOfWeek() {
+        if (auto* cal = calendarWidget()) {
+            QSettings s;
+            const int dayInt = s.value(QString::fromLatin1("calendar/firstDayOfWeek"), 1).toInt();
+            cal->setFirstDayOfWeek((dayInt == 7) ? Qt::Sunday : Qt::Monday);
+        }
+    }
+
+    void setCalendarPopup(bool enable) {
+        QDateEdit::setCalendarPopup(enable);
+        if (enable) {
+            syncCalendarFirstDayOfWeek();
         }
     }
 
@@ -58,6 +76,7 @@ public:
 
     void openCalendarPopup() {
         if (!calendarPopup()) return;
+        syncCalendarFirstDayOfWeek();
         if (calendarWidget() && calendarWidget()->isVisible()) return;
 
         QStyleOptionComboBox opt;

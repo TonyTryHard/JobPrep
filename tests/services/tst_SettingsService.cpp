@@ -349,22 +349,30 @@ void tst_SettingsService::testEnglishLocaleIndependentOfSystem() {
         }
     } guard{savedLocale};
 
-    // 1. Simulate non-English system locale (German)
-    QLocale::setDefault(QLocale(QLocale::German, QLocale::Germany));
-    QCOMPARE(QLocale().language(), QLocale::German);
+    const QList<QLocale> testLocales = {
+        QLocale(QLocale::Ukrainian, QLocale::Ukraine),
+        QLocale(QLocale::German, QLocale::Germany),
+        QLocale(QLocale::English, QLocale::UnitedStates)
+    };
 
-    // 2. Install English
-    auto res = JobPrep::App::installLanguage(u"en"_s);
-    QCOMPARE(res.language, u"en"_s);
-    QCOMPARE(QLocale().language(), QLocale::English);
+    for (const auto& sysLoc : testLocales) {
+        // 1. Simulate non-English system locale
+        QLocale::setDefault(sysLoc);
+        QCOMPARE(QLocale().language(), sysLoc.language());
 
-    // 3. Verify month title is in English ("January 2026", not German "Januar 2026")
-    const QString monthTitle = QLocale().toString(QDate(2026, 1, 1), u"MMMM yyyy"_s);
-    QCOMPARE(monthTitle, u"January 2026"_s);
+        // 2. Install English
+        auto res = JobPrep::App::installLanguage(u"en"_s);
+        QCOMPARE(res.language, u"en"_s);
+        QCOMPARE(QLocale().language(), QLocale::English);
 
-    // 4. Verify day abbreviation is English ("Mon", not German "Mo")
-    const QString shortDay = QLocale().dayName(1, QLocale::ShortFormat);
-    QCOMPARE(shortDay, u"Mon"_s);
+        // 3. Verify month title is in English ("January 2026")
+        const QString monthTitle = QLocale().toString(QDate(2026, 1, 1), u"MMMM yyyy"_s);
+        QCOMPARE(monthTitle, u"January 2026"_s);
+
+        // 4. Verify day abbreviation is English ("Mon")
+        const QString shortDay = QLocale().dayName(1, QLocale::ShortFormat);
+        QCOMPARE(shortDay, u"Mon"_s);
+    }
 }
 
 void tst_SettingsService::testMainCallsInstallLanguageBeforeWidgets() {
