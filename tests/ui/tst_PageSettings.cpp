@@ -148,6 +148,7 @@ private slots:
     void testSystemThemeColorSchemeNotification();
     void testLanguageSelectorAndRestartNote();
     void testGoalSpinBoxTranslationContext();
+    void testGoalSpinBoxTypingRulesUnderLocales();
 
     // B6: Painted & contrast tests
     void testSettingsPageStructure();
@@ -1235,6 +1236,58 @@ void tst_PageSettings::testGoalSpinBoxTranslationContext() {
     QVERIFY2(translator.recordedContexts.contains(u"GoalSpinBox"_s),
              qPrintable(QString(u"Translation contexts did not contain 'GoalSpinBox': [%1]"_s)
                         .arg(translator.recordedContexts.join(u", "_s))));
+}
+
+void tst_PageSettings::testGoalSpinBoxTypingRulesUnderLocales() {
+    const QLocale savedLocale = QLocale();
+    struct LocaleRestore {
+        QLocale orig;
+        ~LocaleRestore() { QLocale::setDefault(orig); }
+    } guard{savedLocale};
+
+    const QList<QLocale> testLocales = {
+        QLocale(QLocale::English),
+        QLocale(QLocale::Ukrainian),
+        QLocale(QLocale::Russian)
+    };
+
+    struct TestCase {
+        QString input;
+        bool isError;
+        int expectedMinutes;
+    };
+
+    const QList<TestCase> cases = {
+        {u"7.30"_s, false, 450},
+        {u"7,30"_s, false, 450},
+        {u"7.5"_s, false, 465},
+        {u"7,5"_s, false, 465},
+        {u"7.75"_s, true, 0},
+        {u"8"_s, false, 480},
+        {u"8 h"_s, false, 480}
+    };
+
+    for (const auto& loc : testLocales) {
+        QLocale::setDefault(loc);
+        AppContext ctx(u":memory:"_s);
+        SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+        auto* spin = page.studyGoalSpinBox();
+        QVERIFY(spin != nullptr);
+        auto* edit = spin->findChild<QLineEdit*>();
+        QVERIFY(edit != nullptr);
+
+        for (const auto& tc : cases) {
+            spin->setValue(480);
+            edit->setText(tc.input);
+            QTest::keyClick(edit, Qt::Key_Return);
+
+            if (tc.isError) {
+                QCOMPARE(spin->value(), 480);
+            } else {
+                QCOMPARE(spin->value(), tc.expectedMinutes);
+            }
+        }
+    }
 }
 
 void tst_PageSettings::testSettingsPagePaintedStartupMatchesSwitch() {

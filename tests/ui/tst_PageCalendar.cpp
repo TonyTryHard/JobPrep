@@ -126,6 +126,7 @@ private slots:
     void testCalendarTopicDateAndTrackRename();
     void testCalendarTrackDeleteClearsMarkers();
     void testMonthViewDoubleClicksDayWithoutOpeningStudyTarget();
+    void testCalendarAgendaDayNameUnderUkrainianLocale();
 
 private:
     void resetCalendarData(const QDate& today);
@@ -696,6 +697,26 @@ void tst_PageCalendar::testMonthViewDoubleClicksDayWithoutOpeningStudyTarget() {
     QCOMPARE(interviewDialogs, 1);
     // MainWindow remains on Calendar page (did not jump to Study)
     QCOMPARE(m_window->pageStack()->currentIndex(), 3);
+}
+
+void tst_PageCalendar::testCalendarAgendaDayNameUnderUkrainianLocale() {
+    const QLocale savedLocale = QLocale();
+    struct LocaleRestore {
+        QLocale orig;
+        ~LocaleRestore() { QLocale::setDefault(orig); }
+    } guard{savedLocale};
+
+    QLocale::setDefault(QLocale(QLocale::Ukrainian));
+
+    // Ensure Ukrainian locale produces non-English day name
+    const QDate monday(2026, 10, 12);
+    const QString dayStr = QLocale().toString(monday, u"ddd"_s);
+    QVERIFY(!dayStr.isEmpty());
+    QVERIFY(dayStr != u"Mon"_s);
+    QCOMPARE(dayStr.toLower(), u"пн"_s);
+
+    // Verify MonthView::monthTitle(2026, 5) shows "Травень 2026"
+    QCOMPARE(JobPrep::Ui::Widgets::MonthView::monthTitle(2026, 5), u"Травень 2026"_s);
 }
 
 

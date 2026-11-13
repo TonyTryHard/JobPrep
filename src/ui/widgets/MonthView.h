@@ -56,6 +56,9 @@ public:
     /// Screen rect of `day` when it falls in the visible grid, otherwise a null rect.
     QRect dayRect(QDate day) const;
 
+    /// Localized title (e.g. "May 2026", "Травень 2026") for given year and month.
+    static QString monthTitle(int year, int month);
+
     /// Localized "October 2026" title for the visible month.
     QString monthTitle() const;
 

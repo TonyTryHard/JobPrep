@@ -23,10 +23,6 @@ constexpr int kPanelRadius = 12;
 constexpr int kDotSize = 6;
 constexpr int kDotGap = 4;
 
-QLocale englishLocale() {
-    return QLocale(QLocale::English);
-}
-
 }  // namespace
 
 MonthView::MonthView(JobPrep::Ui::Theme::ThemeManager& theme,
@@ -112,8 +108,18 @@ MonthView::DayMarkers MonthView::markersFor(QDate day) const {
     return m_markers.value(day);
 }
 
+QString MonthView::monthTitle(int year, int month) {
+    const QLocale locale;
+    QString name = locale.standaloneMonthName(month, QLocale::LongFormat);
+    if (!name.isEmpty()) {
+        name[0] = name[0].toUpper();
+        return QString(u"%1 %2"_s).arg(name).arg(year);
+    }
+    return locale.toString(QDate(year, month, 1), u"MMMM yyyy"_s);
+}
+
 QString MonthView::monthTitle() const {
-    return englishLocale().toString(m_visibleMonth, u"MMMM yyyy"_s);
+    return monthTitle(m_visibleMonth.year(), m_visibleMonth.month());
 }
 
 int MonthView::headerHeight() const {
@@ -248,7 +254,7 @@ void MonthView::paintEvent(QPaintEvent* event) {
     painter.setBrush(tokens.surface);
     painter.drawRoundedRect(panel, kPanelRadius, kPanelRadius);
 
-    const QLocale locale = englishLocale();
+    const QLocale locale;
     const QFont baseFont = font();
     QFont weekdayFont(baseFont);
     weekdayFont.setPointSizeF(qMax(7.5, baseFont.pointSizeF() - 1.0));
@@ -262,7 +268,10 @@ void MonthView::paintEvent(QPaintEvent* event) {
     for (int column = 0; column < kColumns; ++column) {
         const int qtDay = m_firstDayOfWeek + column > 7 ? m_firstDayOfWeek + column - 7
                                                          : m_firstDayOfWeek + column;
-        const QString name = locale.dayName(qtDay, QLocale::ShortFormat);
+        QString name = locale.dayName(qtDay, QLocale::ShortFormat);
+        if (!name.isEmpty()) {
+            name[0] = name[0].toUpper();
+        }
         painter.drawText(cellRect(0, column).adjusted(0, -headerHeight(), 0, 0),
                          Qt::AlignCenter, name);
     }

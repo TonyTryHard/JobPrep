@@ -52,6 +52,7 @@ private slots:
     void doubleClickEmitsDayActivated();
     void markersOnTrailingDimmedDay();
     void dayRectNullOutsideGrid();
+    void monthTitleUnderDifferentLocales();
 
 private:
     std::unique_ptr<JobPrep::Tests::TestSettingsScope> m_settingsScope;
@@ -295,6 +296,23 @@ void tst_MonthView::dayRectNullOutsideGrid() {
     QVERIFY(view->dayRect(QDate(2026, 9, 20)).isNull());
 
     delete view;
+}
+
+void tst_MonthView::monthTitleUnderDifferentLocales() {
+    const QLocale savedLocale = QLocale();
+    struct LocaleRestore {
+        QLocale orig;
+        ~LocaleRestore() { QLocale::setDefault(orig); }
+    } guard{savedLocale};
+
+    QLocale::setDefault(QLocale(QLocale::English));
+    QCOMPARE(MonthView::monthTitle(2026, 5), u"May 2026"_s);
+
+    QLocale::setDefault(QLocale(QLocale::Ukrainian));
+    QCOMPARE(MonthView::monthTitle(2026, 5), u"Травень 2026"_s);
+
+    QLocale::setDefault(QLocale(QLocale::Russian));
+    QCOMPARE(MonthView::monthTitle(2026, 5), u"Май 2026"_s);
 }
 
 QTEST_MAIN(tst_MonthView)

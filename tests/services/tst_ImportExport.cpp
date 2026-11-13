@@ -44,6 +44,7 @@ using JobPrep::Domain::InterviewType;
 using JobPrep::Domain::JobApplication;
 using JobPrep::Services::ExportErrorKind;
 using JobPrep::Services::ExportResult;
+using JobPrep::Services::ExportRow;
 using JobPrep::Services::ExportService;
 using JobPrep::Services::RestoreErrorKind;
 using JobPrep::Services::RestoreResult;
@@ -94,6 +95,7 @@ private slots:
     void testRestoreCoalescedRefresh();
     void testRestoreStudyPanelWithVanishedTopic();
     void testBackupAndRestorePreservesLegacy1970Timestamp();
+    void testExportsStayNeutralUnderUkLocale();
 
 private:
     /// Test helper to unfold RFC 5545 lines and unescape characters for round-trip verification.
@@ -1403,6 +1405,96 @@ void tst_ImportExport::testBackupAndRestorePreservesLegacy1970Timestamp() {
         QVERIFY(q.next());
         QCOMPARE(q.value(0).toString(), u"1970-01-01T00:00:00"_s);
     }
+}
+
+void tst_ImportExport::testExportsStayNeutralUnderUkLocale() {
+    const QLocale savedLocale = QLocale();
+    struct LocaleRestore {
+        QLocale orig;
+        ~LocaleRestore() { QLocale::setDefault(orig); }
+    } guard{savedLocale};
+
+    TestDatabase testDb(u"tst_exports_neutral"_s);
+    QVERIFY(testDb.open(u":memory:"_s));
+    populateHandBuiltDataset(testDb.db());
+
+    Interview iv;
+    iv.id = 1;
+    iv.applicationId = 10;
+    iv.startAt = QDateTime(QDate(2026, 10, 28), QTime(14, 0, 0));
+    iv.durationMin = 45;
+    iv.type = InterviewType::Technical;
+
+    JobApplication app;
+    app.id = 10;
+    app.company = u"Acme Corp"_s;
+
+    QHash<int, JobApplication> apps;
+    apps.insert(10, app);
+
+    ExportRow r;
+    r.company = u"Acme"_s;
+    r.position = u"Dev"_s;
+    r.salaryMin = u"1000.50"_s;
+    r.salaryMax = u"2000.75"_s;
+
+    // 1. ICS export bytes
+    QLocale::setDefault(QLocale(QLocale::English));
+    const QByteArray icsEn = ExportService::generateIcs({iv}, apps);
+    QLocale::setDefault(QLocale(QLocale::Ukrainian));
+    const QByteArray icsUk = ExportService::generateIcs({iv}, apps);
+    QCOMPARE(icsUk, icsEn);
+
+    // 2. CSV export bytes
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString csvEnPath = tempDir.filePath(u"export_en.csv"_s);
+    const QString csvUkPath = tempDir.filePath(u"export_uk.csv"_s);
+
+    ExportService csvSvc;
+    QLocale::setDefault(QLocale(QLocale::English));
+    QVERIFY(csvSvc.exportToFile({r}, ExportService::headers(), csvEnPath));
+    QLocale::setDefault(QLocale(QLocale::Ukrainian));
+    QVERIFY(csvSvc.exportToFile({r}, ExportService::headers(), csvUkPath));
+
+    QFile fEn(csvEnPath);
+    QVERIFY(fEn.open(QIODevice::ReadOnly));
+    const QByteArray csvEn = fEn.readAll();
+    QFile fUk(csvUkPath);
+    QVERIFY(fUk.open(QIODevice::ReadOnly));
+    const QByteArray csvUk = fUk.readAll();
+    QCOMPARE(csvUk, csvEn);
+
+    // 3. JSON backup bytes
+    const auto fixedClock = []() {
+        return QDateTime(QDate(2026, 10, 25), QTime(12, 0, 0), QTimeZone::UTC);
+    };
+    const QString backupEnPath = tempDir.filePath(u"backup_en.json"_s);
+    const QString backupUkPath = tempDir.filePath(u"backup_uk.json"_s);
+    QLocale::setDefault(QLocale(QLocale::English));
+    QVERIFY(csvSvc.exportBackupJson(testDb.db(), backupEnPath, fixedClock).success);
+    QLocale::setDefault(QLocale(QLocale::Ukrainian));
+    QVERIFY(csvSvc.exportBackupJson(testDb.db(), backupUkPath, fixedClock).success);
+
+    QFile fJsonEn(backupEnPath);
+    QVERIFY(fJsonEn.open(QIODevice::ReadOnly));
+    const QByteArray jsonEn = fJsonEn.readAll();
+    QFile fJsonUk(backupUkPath);
+    QVERIFY(fJsonUk.open(QIODevice::ReadOnly));
+    const QByteArray jsonUk = fJsonUk.readAll();
+    QCOMPARE(jsonUk, jsonEn);
+
+    // 4. Backup under uk, restore under en: verify identical data
+    const auto dumpBefore = dumpDatabase(testDb.db());
+    const QString safetyDir = tempDir.filePath(u"safety_backups"_s);
+
+    QLocale::setDefault(QLocale(QLocale::English));
+    wipeDatabase(testDb.db());
+    const auto res = RestoreService::restoreFromFile(testDb.db(), backupUkPath, safetyDir);
+    QVERIFY(res.success);
+    const auto dumpAfter = dumpDatabase(testDb.db());
+    QString diff;
+    QVERIFY2(compareDumps(dumpBefore, dumpAfter, &diff), qPrintable(diff));
 }
 
 QTEST_MAIN(tst_ImportExport)

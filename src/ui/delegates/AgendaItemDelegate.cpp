@@ -50,7 +50,11 @@ AgendaItemLayout AgendaItemDelegate::computeLayout(const QStyleOptionViewItem& o
     QString time;
     if (timeVal.isValid()) {
         if (dateVal.isValid() && dateVal != QDate::currentDate()) {
-            time = dateVal.toString(u"ddd "_s) + timeVal.toString(u"HH:mm"_s);
+            QString dayStr = QLocale().toString(dateVal, u"ddd"_s);
+            if (!dayStr.isEmpty()) {
+                dayStr[0] = dayStr[0].toUpper();
+            }
+            time = dayStr + u" "_s + timeVal.toString(u"HH:mm"_s);
         } else {
             time = timeVal.toString(u"HH:mm"_s);
         }
