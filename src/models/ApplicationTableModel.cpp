@@ -164,8 +164,12 @@ QVariant ApplicationTableModel::headerData(int section, Qt::Orientation orientat
     switch (section) {
         case CompanyColumn: return tr("Company");
         case PositionColumn: return tr("Position");
-        case StatusColumn: return tr("Status");
-        case AppliedColumn: return tr("Applied");
+        case StatusColumn:
+            //: Header for job application stage column
+            return tr("Status");
+        case AppliedColumn:
+            //: Header for date when job application was submitted
+            return tr("Applied");
         case NextStepColumn: return tr("Next step");
         case SalaryColumn: return tr("Salary");
         case SourceColumn: return tr("Source");

@@ -230,6 +230,7 @@ TopicDetailPanel::TopicDetailPanel(Data::TopicRepository& topics, Theme::ThemeMa
     form->addLayout(resourceAddRow);
 
     auto* resourceButtonsRow = new QHBoxLayout;
+    //: Button action to open link in external web browser
     m_resourceOpenBtn = new QPushButton(tr("Open"), m_form);
     m_resourceOpenBtn->setObjectName(u"StudyDetailResourceOpenBtn"_s);
     m_resourceOpenBtn->setToolTip(tr("Only http and https links can be opened"));

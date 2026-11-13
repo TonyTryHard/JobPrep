@@ -121,9 +121,9 @@ public:
         const int h = val / 60;
         const int m = val % 60;
         if (m == 0) {
-            return tr("%1 h").arg(h);
+            return QCoreApplication::translate("GoalSpinBox", "%1 h").arg(h);
         }
-        return tr("%1 h %2 min").arg(h).arg(m);
+        return QCoreApplication::translate("GoalSpinBox", "%1 h %2 min").arg(h).arg(m);
     }
 
     int valueFromText(const QString& text) const override {

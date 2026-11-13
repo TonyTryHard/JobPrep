@@ -376,6 +376,7 @@ QMenu* MainWindow::setupNewMenu(QWidget* parent) {
     auto* menu = new QMenu(parent);
     menu->setObjectName(u"HeaderNewMenu"_s);
 
+    //: Menu action to create a new job application (not program)
     QAction* application = menu->addAction(tr("Application"));
     application->setObjectName(u"HeaderNewApplication"_s);
     connect(application, &QAction::triggered, this, &MainWindow::newApplicationFromHeader);

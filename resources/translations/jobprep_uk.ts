@@ -17,6 +17,17 @@
     </message>
 </context>
 <context>
+    <name>GoalSpinBox</name>
+    <message>
+        <source>%1 h</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 h %2 min</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>JobPrep::Models::ApplicationTableModel</name>
     <message>
         <source>Company</source>
@@ -28,10 +39,12 @@
     </message>
     <message>
         <source>Status</source>
+        <extracomment>Header for job application stage column</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Applied</source>
+        <extracomment>Header for date when job application was submitted</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -63,6 +76,7 @@
     </message>
     <message>
         <source>Status</source>
+        <extracomment>Header for study topic status column</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -373,6 +387,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Status</source>
+        <extracomment>Form field label for job application hiring stage</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -527,9 +542,13 @@ Path: %1</source>
         <source>—</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>%1 min</source>
-        <translation type="unfinished"></translation>
+    <message numerus="yes">
+        <source>%n min</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
     </message>
     <message>
         <source>Add an interview to this application</source>
@@ -931,9 +950,13 @@ Path: %1</source>
         <source>Could not add track: %1</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>Delete track “%1”? This will delete %2 topic(s) and their checklist(s). Logged study time will be kept.</source>
-        <translation type="unfinished"></translation>
+    <message numerus="yes">
+        <source>Delete track “%1”? This will delete %n topic(s) and their checklist(s). Logged study time will be kept.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
     </message>
     <message>
         <source>Could not delete track: %1</source>
@@ -966,6 +989,14 @@ Path: %1</source>
         <source>0 minutes</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
     <message>
         <source>1 day</source>
         <translation type="unfinished"></translation>
@@ -973,6 +1004,14 @@ Path: %1</source>
     <message>
         <source>%1 days</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
     </message>
     <message>
         <source>1 hour</source>
@@ -982,6 +1021,14 @@ Path: %1</source>
         <source>%1 hours</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
     <message>
         <source>1 minute</source>
         <translation type="unfinished"></translation>
@@ -990,12 +1037,24 @@ Path: %1</source>
         <source>%1 minutes</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>%1%</source>
-        <translation type="unfinished"></translation>
+    <message numerus="yes">
+        <source>%n-day streak</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active process(es)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
     </message>
     <message>
-        <source>%1-day streak</source>
+        <source>%1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1017,9 +1076,13 @@ Path: %1</source>
 </context>
 <context>
     <name>JobPrep::Ui::InAppNotifier</name>
-    <message>
-        <source>+%1 more</source>
-        <translation type="unfinished"></translation>
+    <message numerus="yes">
+        <source>+%n more</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1058,6 +1121,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Application</source>
+        <extracomment>Menu action to create a new job application (not program)</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1117,6 +1181,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Today</source>
+        <extracomment>Button action to navigate calendar view to current day</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1181,17 +1246,6 @@ Path: %1</source>
     </message>
 </context>
 <context>
-    <name>JobPrep::Ui::Pages::GoalSpinBox</name>
-    <message>
-        <source>%1 h</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 h %2 min</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>JobPrep::Ui::Pages::HomePage</name>
     <message>
         <source>Dashboard</source>
@@ -1231,6 +1285,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Today</source>
+        <extracomment>Dashboard card title showing today&apos;s agenda items</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1827,13 +1882,6 @@ Path: %1</source>
     </message>
 </context>
 <context>
-    <name>JobPrep::Ui::Widgets::SingleTabDateEdit</name>
-    <message>
-        <source>Press Alt+Down or F4 to open calendar</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>JobPrep::Ui::Widgets::TopicBoardColumn</name>
     <message>
         <source>Move to</source>
@@ -1940,6 +1988,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Open</source>
+        <extracomment>Button action to open link in external web browser</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1985,6 +2034,14 @@ Path: %1</source>
 </context>
 <context>
     <name>NotificationText</name>
+    <message numerus="yes">
+        <source>in %n hour(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
     <message>
         <source>in 1 hour</source>
         <translation type="unfinished"></translation>
@@ -1992,6 +2049,14 @@ Path: %1</source>
     <message>
         <source>in %1 hours</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>in %n minute(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
     </message>
     <message>
         <source>in 1 minute</source>
@@ -2036,6 +2101,14 @@ Path: %1</source>
     <message>
         <source>Follow-up is overdue</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n follow-up(s) overdue</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
     </message>
     <message>
         <source>1 follow-up is overdue</source>
@@ -2084,6 +2157,13 @@ It adds the C++ and English tracks with their topics and checklists.</source>
     </message>
 </context>
 <context>
+    <name>SingleTabDateEdit</name>
+    <message>
+        <source>Press Alt+Down or F4 to open calendar</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>StatusStyle</name>
     <message>
         <source>Wishlist</source>
@@ -2091,6 +2171,7 @@ It adds the C++ and English tracks with their topics and checklists.</source>
     </message>
     <message>
         <source>Applied</source>
+        <extracomment>Application hiring stage: application has been submitted</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message>

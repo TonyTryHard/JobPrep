@@ -148,6 +148,7 @@ void HomePage::setupUi() {
     todayLayout->addWidget(m_todayView);
     todayLayout->addWidget(m_todayEmptyState);
 
+    //: Dashboard card title showing today's agenda items
     auto* todayCard = createCard(tr("Today"), todayContainer);
     leftCol->addWidget(todayCard, 1);
 

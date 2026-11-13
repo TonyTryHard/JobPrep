@@ -36,6 +36,7 @@ QString StatusStyle::label(Domain::ApplicationStatus status) {
         case Domain::ApplicationStatus::Wishlist:
             return QCoreApplication::translate("StatusStyle", "Wishlist");
         case Domain::ApplicationStatus::Applied:
+            //: Application hiring stage: application has been submitted
             return QCoreApplication::translate("StatusStyle", "Applied");
         case Domain::ApplicationStatus::HrScreen:
             return QCoreApplication::translate("StatusStyle", "HR Screen");

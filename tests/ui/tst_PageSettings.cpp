@@ -19,6 +19,7 @@
 #include <QStyleHints>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTranslator>
 #include <QVBoxLayout>
 #include "app/AppContext.h"
 #include "data/ApplicationRepository.h"
@@ -146,6 +147,7 @@ private slots:
     void testThemeAndAccentSwitching();
     void testSystemThemeColorSchemeNotification();
     void testLanguageSelectorAndRestartNote();
+    void testGoalSpinBoxTranslationContext();
 
     // B6: Painted & contrast tests
     void testSettingsPageStructure();
@@ -1201,6 +1203,38 @@ void tst_PageSettings::testLanguageSelectorAndRestartNote() {
 
     QCOMPARE(ctx.settings().language(), u"system"_s);
     QVERIFY(!note->isVisible());
+}
+
+namespace {
+class RecordingTranslator : public QTranslator {
+public:
+    QStringList recordedContexts;
+    QString translate(const char* context, const char* sourceText,
+                      const char* disambiguation = nullptr, int n = -1) const override {
+        const_cast<RecordingTranslator*>(this)->recordedContexts.append(QString::fromUtf8(context));
+        return QTranslator::translate(context, sourceText, disambiguation, n);
+    }
+};
+}  // namespace
+
+void tst_PageSettings::testGoalSpinBoxTranslationContext() {
+    AppContext ctx(u":memory:"_s);
+    SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+
+    RecordingTranslator translator;
+    QCoreApplication::installTranslator(&translator);
+
+    auto* spin = page.studyGoalSpinBox();
+    QVERIFY(spin != nullptr);
+    spin->setValue(480);
+    const QString txt = spin->text();
+    Q_UNUSED(txt);
+
+    QCoreApplication::removeTranslator(&translator);
+
+    QVERIFY2(translator.recordedContexts.contains(u"GoalSpinBox"_s),
+             qPrintable(QString(u"Translation contexts did not contain 'GoalSpinBox': [%1]"_s)
+                        .arg(translator.recordedContexts.join(u", "_s))));
 }
 
 void tst_PageSettings::testSettingsPagePaintedStartupMatchesSwitch() {

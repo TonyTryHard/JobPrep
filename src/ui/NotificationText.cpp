@@ -11,10 +11,20 @@ QString NotificationText::formatLeadTime(int leadMinutes) {
     if (leadMinutes <= 0) return QString();
     if (leadMinutes % 60 == 0) {
         const int hours = leadMinutes / 60;
+        const QString translated =
+            QCoreApplication::translate("NotificationText", "in %n hour(s)", "", hours);
+        if (translated != QString(u"in %1 hour(s)"_s).arg(hours)) {
+            return translated;
+        }
         if (hours == 1) {
             return QCoreApplication::translate("NotificationText", "in 1 hour");
         }
         return QCoreApplication::translate("NotificationText", "in %1 hours").arg(hours);
+    }
+    const QString translated =
+        QCoreApplication::translate("NotificationText", "in %n minute(s)", "", leadMinutes);
+    if (translated != QString(u"in %1 minute(s)"_s).arg(leadMinutes)) {
+        return translated;
     }
     if (leadMinutes == 1) {
         return QCoreApplication::translate("NotificationText", "in 1 minute");
@@ -30,6 +40,11 @@ QString NotificationText::formatRemainingTime(const Services::Notification& noti
         if (secs > 0) {
             const qint64 mins = (secs + 30) / 60;
             if (mins < 60) {
+                const QString translated =
+                    QCoreApplication::translate("NotificationText", "in %n minute(s)", "", mins);
+                if (translated != QString(u"in %1 minute(s)"_s).arg(mins)) {
+                    return translated;
+                }
                 if (mins <= 1) {
                     return QCoreApplication::translate("NotificationText", "in 1 minute");
                 }
@@ -45,6 +60,14 @@ QString NotificationText::formatRemainingTime(const Services::Notification& noti
             }
             const qint64 hours = (secs + 1800) / 3600;
             if (hours < 24) {
+                const QString translated =
+                    QCoreApplication::translate("NotificationText", "in %n hour(s)", "", hours);
+                if (translated != QString(u"in %1 hour(s)"_s).arg(hours)) {
+                    return translated;
+                }
+                if (hours == 1) {
+                    return QCoreApplication::translate("NotificationText", "in 1 hour");
+                }
                 return QCoreApplication::translate("NotificationText", "in %1 hours").arg(hours);
             }
             return notification.when.toString(u"yyyy-MM-dd HH:mm"_s);
@@ -122,6 +145,11 @@ QString NotificationText::formatMessage(const Services::Notification& notificati
                     return notification.position;
                 }
                 return QCoreApplication::translate("NotificationText", "Follow-up is overdue");
+            }
+            const QString translated = QCoreApplication::translate(
+                "NotificationText", "%n follow-up(s) overdue", "", notification.count);
+            if (translated != QString(u"%1 follow-up(s) overdue"_s).arg(notification.count)) {
+                return translated;
             }
             if (notification.count == 1) {
                 return QCoreApplication::translate("NotificationText", "1 follow-up is overdue");

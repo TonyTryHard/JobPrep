@@ -206,6 +206,7 @@ QVariant TopicListModel::headerData(int section, Qt::Orientation orientation, in
         case TrackColumn:
             return tr("Track");
         case StatusColumn:
+            //: Header for study topic status column
             return tr("Status");
         case PriorityColumn:
             return tr("Priority");

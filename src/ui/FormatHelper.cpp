@@ -31,11 +31,23 @@ QString FormatHelper::formatLeadTime(int minutes) {
     }
     if (minutes % 1440 == 0) {
         const int days = minutes / 1440;
+        const QString translated = tr("%n day(s)", "", days);
+        if (translated != QString(u"%1 day(s)"_s).arg(days)) {
+            return translated;
+        }
         return days == 1 ? tr("1 day") : tr("%1 days").arg(days);
     }
     if (minutes % 60 == 0) {
         const int hours = minutes / 60;
+        const QString translated = tr("%n hour(s)", "", hours);
+        if (translated != QString(u"%1 hour(s)"_s).arg(hours)) {
+            return translated;
+        }
         return hours == 1 ? tr("1 hour") : tr("%1 hours").arg(hours);
+    }
+    const QString translated = tr("%n minute(s)", "", minutes);
+    if (translated != QString(u"%1 minute(s)"_s).arg(minutes)) {
+        return translated;
     }
     return minutes == 1 ? tr("1 minute") : tr("%1 minutes").arg(minutes);
 }
@@ -48,10 +60,14 @@ QString FormatHelper::formatInterviewRate(const std::optional<double>& rate) {
 }
 
 QString FormatHelper::formatStreak(int days) {
-    return tr("%1-day streak").arg(days);
+    return tr("%n-day streak", "", days);
 }
 
 QString FormatHelper::formatActiveProcesses(int count) {
+    const QString translated = tr("%n active process(es)", "", count);
+    if (translated != QString(u"%1 active process(es)"_s).arg(count)) {
+        return translated;
+    }
     if (count == 1) {
         return tr("1 active process");
     }

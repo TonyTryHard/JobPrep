@@ -98,7 +98,7 @@ void InAppNotifier::updateLayout() {
             f.setBold(true);
             m_overflowLabel->setFont(f);
         }
-        m_overflowLabel->setText(tr("+%1 more").arg(overflowCount));
+        m_overflowLabel->setText(tr("+%n more", "", overflowCount));
         applyOverflowTheme();
     } else if (m_overflowLabel) {
         m_overflowLabel->hide();

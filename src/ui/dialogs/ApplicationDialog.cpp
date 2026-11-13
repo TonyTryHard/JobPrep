@@ -167,6 +167,7 @@ void ApplicationDialog::setupOverviewTab() {
         m_statusCombo->addItem(Theme::StatusStyle::label(status),
                                static_cast<int>(status));
     }
+    //: Form field label for job application hiring stage
     form->addRow(tr("Status"), m_statusCombo);
 
     m_sourceCombo = new QComboBox(page);
@@ -547,7 +548,7 @@ void ApplicationDialog::reloadInterviewsTable() {
         m_interviewsTable->setItem(row, 1, new QTableWidgetItem(
             Theme::StatusStyle::label(interview.type)));
         m_interviewsTable->setItem(row, 2, new QTableWidgetItem(
-            tr("%1 min").arg(interview.durationMin)));
+            tr("%n min", "", interview.durationMin)));
         m_interviewsTable->setItem(row, 3, new QTableWidgetItem(
             Theme::StatusStyle::label(interview.outcome)));
     }

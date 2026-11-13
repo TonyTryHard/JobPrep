@@ -45,7 +45,8 @@ public:
     }
 
     void setToolTip(const QString& tip) {
-        const QString hint = tr("Press Alt+Down or F4 to open calendar");
+        const QString hint =
+            QCoreApplication::translate("SingleTabDateEdit", "Press Alt+Down or F4 to open calendar");
         if (tip.isEmpty()) {
             QDateEdit::setToolTip(hint);
         } else if (tip.contains(hint)) {
@@ -100,7 +101,8 @@ protected:
 
     bool event(QEvent* e) override {
         if (e->type() == QEvent::ToolTipChange) {
-            const QString hint = tr("Press Alt+Down or F4 to open calendar");
+            const QString hint =
+                QCoreApplication::translate("SingleTabDateEdit", "Press Alt+Down or F4 to open calendar");
             const QString cur = toolTip();
             if (!cur.contains(hint)) {
                 const QString combined = cur.isEmpty() ? hint : (cur + u'\n' + hint);

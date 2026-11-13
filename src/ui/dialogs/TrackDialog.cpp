@@ -412,8 +412,9 @@ void TrackDialog::onDeleteClicked() {
 
     const auto answer = QMessageBox::question(
         this, tr("Delete Track"),
-        tr("Delete track \u201c%1\u201d? This will delete %2 topic(s) and their checklist(s). Logged study time will be kept.")
-            .arg(track->name).arg(topicCount),
+        tr("Delete track \u201c%1\u201d? This will delete %n topic(s) and their checklist(s). Logged study time will be kept.",
+           "", topicCount)
+            .arg(track->name),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
     if (answer != QMessageBox::Yes) return;

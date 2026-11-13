@@ -159,6 +159,7 @@ void CalendarPage::setupToolbar(QVBoxLayout* layout) {
     m_monthTitleLabel->setObjectName(u"CalendarMonthTitle"_s);
     m_monthTitleLabel->setTextFormat(Qt::PlainText);
 
+    //: Button action to navigate calendar view to current day
     m_todayBtn = new QPushButton(tr("Today"), bar);
     m_todayBtn->setObjectName(u"CalendarTodayBtn"_s);
     m_todayBtn->setToolTip(tr("Go to today"));
