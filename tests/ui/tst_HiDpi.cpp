@@ -26,6 +26,7 @@
 #include "data/SessionRepository.h"
 #include "data/TopicRepository.h"
 #include "data/TrackRepository.h"
+#include "app/Localization.h"
 #include "domain/Structs.h"
 #include "services/SeedService.h"
 #include "ui/MainWindow.h"
@@ -128,6 +129,8 @@ private slots:
     void testPagesHiDpi();
     void testDialogsHiDpi();
     void testPseudoTranslationHiDpi();
+    void testRealTranslationUkHiDpi();
+    void testRealTranslationRuHiDpi();
     void testDialogsFitSmallScreen();
     void testScreenshotsHiDpi();
 
@@ -918,6 +921,135 @@ void tst_HiDpi::testPseudoTranslationHiDpi() {
 
     QCOMPARE(allViolations.count(), 0);
     updateProgress(u"testPseudoTranslationHiDpi end"_s); // CI-DIAG
+}
+
+static void runRealTranslationHiDpiTest(JobPrep::UiTest::WindowFixture* fix,
+                                        const QString& lang,
+                                        std::function<QList<ClippingViolation>(QWidget*, const QString&)> checkFn) {
+    auto res = JobPrep::App::installLanguage(lang);
+    Q_UNUSED(res);
+
+    auto& ctx = fix->context();
+    JobPrep::Ui::MainWindow win(ctx);
+    win.show();
+    JobPrep::UiTest::activateWindow(&win);
+    QApplication::processEvents();
+
+    const QList<ThemeMode> themes = {ThemeMode::Light, ThemeMode::Dark};
+    const QList<QSize> sizes = {QSize(1100, 700), QSize(1000, 540)};
+
+    QList<ClippingViolation> allViolations;
+
+    // 1. Pages check under real translation
+    for (const ThemeMode theme : themes) {
+        win.themeManager().setThemeMode(theme);
+        QApplication::processEvents();
+        const QString themeName = (theme == ThemeMode::Light ? u"Light"_s : u"Dark"_s);
+
+        for (const QSize& size : sizes) {
+            win.resize(size);
+            QApplication::processEvents();
+
+            for (int pageIdx = 0; pageIdx < 5; ++pageIdx) {
+                win.pageStack()->setCurrentIndex(pageIdx);
+                if (pageIdx == 1) {
+                    if (auto* sp = qobject_cast<JobPrep::Ui::Pages::StudyPage*>(win.pageStack()->widget(1))) {
+                        const auto topics = ctx.topics().all();
+                        if (!topics.empty()) {
+                            sp->selectTopic(topics.first().id);
+                        }
+                    }
+                }
+                QApplication::processEvents();
+                const QString pageName = QString(u"Page_%1"_s).arg(pageIdx);
+                const QString desc = QString(u"%1 | %2 | %3 | %4x%5"_s)
+                                         .arg(lang, pageName, themeName)
+                                         .arg(win.width())
+                                         .arg(win.height());
+                const auto v = checkFn(win.pageStack()->currentWidget(), desc);
+                allViolations.append(v);
+            }
+        }
+
+        // 2. Dialogs check under real translation
+        {
+            JobPrep::Ui::Dialogs::ApplicationDialog dlg(
+                ctx.applications(), ctx.interviews(),
+                JobPrep::Ui::Dialogs::ApplicationDialog::Edit, &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkFn(&dlg, QString(u"%1 | ApplicationDialog | %2"_s).arg(lang, themeName)));
+            dlg.close();
+        }
+        {
+            JobPrep::Ui::Dialogs::InterviewDialog dlg(
+                ctx.applications(), ctx.interviews(),
+                JobPrep::Ui::Dialogs::InterviewDialog::Create, &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkFn(&dlg, QString(u"%1 | InterviewDialog | %2"_s).arg(lang, themeName)));
+            dlg.close();
+        }
+        {
+            JobPrep::Ui::Dialogs::FollowUpDialog dlg(
+                ctx.applications(), QDate(2026, 11, 1), &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkFn(&dlg, QString(u"%1 | FollowUpDialog | %2"_s).arg(lang, themeName)));
+            dlg.close();
+        }
+        {
+            JobPrep::Ui::Dialogs::TrackDialog dlg(
+                ctx.tracks(), ctx.topics(), &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkFn(&dlg, QString(u"%1 | TrackDialog | %2"_s).arg(lang, themeName)));
+            dlg.close();
+        }
+        {
+            JobPrep::Ui::Dialogs::SessionDialog dlg(
+                ctx.sessions(), ctx.topics(), &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkFn(&dlg, QString(u"%1 | SessionDialog | %2"_s).arg(lang, themeName)));
+            dlg.close();
+        }
+    }
+
+    JobPrep::App::uninstallLanguage();
+
+    for (const auto& viol : allViolations) {
+        fprintf(stderr, "CLIPPING_VIOLATION: [%s] %s (%s) '%s': %s\n",
+                qPrintable(viol.context),
+                qPrintable(viol.widgetClass),
+                qPrintable(viol.objectName),
+                qPrintable(viol.text),
+                qPrintable(viol.reason));
+    }
+    fflush(stderr);
+
+    QCOMPARE(allViolations.count(), 0);
+}
+
+void tst_HiDpi::testRealTranslationUkHiDpi() {
+    updateProgress(u"testRealTranslationUkHiDpi start"_s); // CI-DIAG
+    runRealTranslationHiDpiTest(m_fix.get(), u"uk"_s, [this](QWidget* w, const QString& d) {
+        return checkClipping(w, d);
+    });
+    updateProgress(u"testRealTranslationUkHiDpi end"_s); // CI-DIAG
+}
+
+void tst_HiDpi::testRealTranslationRuHiDpi() {
+    updateProgress(u"testRealTranslationRuHiDpi start"_s); // CI-DIAG
+    runRealTranslationHiDpiTest(m_fix.get(), u"ru"_s, [this](QWidget* w, const QString& d) {
+        return checkClipping(w, d);
+    });
+    updateProgress(u"testRealTranslationRuHiDpi end"_s); // CI-DIAG
 }
 
 void tst_HiDpi::testDialogsFitSmallScreen() {

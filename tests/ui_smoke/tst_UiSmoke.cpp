@@ -32,6 +32,7 @@
 #include <QToolButton>
 #include <QToolTip>
 #include "app/AppContext.h"
+#include "app/Localization.h"
 #include "data/ApplicationRepository.h"
 #include "data/Database.h"
 #include "data/InterviewRepository.h"
@@ -132,6 +133,8 @@ private slots:
     void testWindowLoggingCategory();
     void testApplicationIcon();
     void testPseudoTranslationSmoke();
+    void testRealTranslationUkSmoke();
+    void testRealTranslationRuSmoke();
     void testZeroWarnings();
     void cleanupTestCase();
 
@@ -485,6 +488,120 @@ void tst_UiSmoke::testPseudoTranslationSmoke() {
     QCoreApplication::processEvents();
 
     QCoreApplication::removeTranslator(&pseudo);
+}
+
+void tst_UiSmoke::testRealTranslationUkSmoke() {
+    auto resUk = JobPrep::App::installLanguage(u"uk"_s);
+    QVERIFY(resUk.appTranslatorLoaded);
+
+    JobPrep::Ui::MainWindow smokeWin(*m_ctx);
+    smokeWin.show();
+    QCoreApplication::processEvents();
+
+    // 1. Visit every page
+    for (int i = 0; i < 5; ++i) {
+        smokeWin.sidebar()->setCurrentPage(i);
+        emit smokeWin.sidebar()->pageSelected(i);
+        QCoreApplication::processEvents();
+    }
+
+    // 2. Open each dialog with Ukrainian active
+    withNextModal([](QWidget* modal) {
+        auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::ApplicationDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        dlg->reject();
+    });
+    smokeWin.findChild<QAction*>(u"HeaderNewApplication"_s)->trigger();
+
+    withNextModal([](QWidget* modal) {
+        auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::InterviewDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        dlg->reject();
+    });
+    smokeWin.findChild<QAction*>(u"HeaderNewInterview"_s)->trigger();
+
+    withNextModal([](QWidget* modal) {
+        auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::SessionDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        dlg->reject();
+    });
+    smokeWin.findChild<QAction*>(u"HeaderNewSession"_s)->trigger();
+
+    {
+        JobPrep::Ui::Dialogs::FollowUpDialog dlg(m_ctx->applications(), QDate::currentDate(), &smokeWin);
+        dlg.reject();
+    }
+
+    {
+        JobPrep::Ui::Dialogs::TrackDialog dlg(
+            m_ctx->tracks(), m_ctx->topics(), &smokeWin);
+        dlg.reject();
+    }
+
+    // 3. Toggle themes
+    smokeWin.themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Dark);
+    QCoreApplication::processEvents();
+    smokeWin.themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Light);
+    QCoreApplication::processEvents();
+
+    JobPrep::App::uninstallLanguage();
+}
+
+void tst_UiSmoke::testRealTranslationRuSmoke() {
+    auto resRu = JobPrep::App::installLanguage(u"ru"_s);
+    QVERIFY(resRu.appTranslatorLoaded);
+
+    JobPrep::Ui::MainWindow smokeWin(*m_ctx);
+    smokeWin.show();
+    QCoreApplication::processEvents();
+
+    // 1. Visit every page
+    for (int i = 0; i < 5; ++i) {
+        smokeWin.sidebar()->setCurrentPage(i);
+        emit smokeWin.sidebar()->pageSelected(i);
+        QCoreApplication::processEvents();
+    }
+
+    // 2. Open each dialog with Russian active
+    withNextModal([](QWidget* modal) {
+        auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::ApplicationDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        dlg->reject();
+    });
+    smokeWin.findChild<QAction*>(u"HeaderNewApplication"_s)->trigger();
+
+    withNextModal([](QWidget* modal) {
+        auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::InterviewDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        dlg->reject();
+    });
+    smokeWin.findChild<QAction*>(u"HeaderNewInterview"_s)->trigger();
+
+    withNextModal([](QWidget* modal) {
+        auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::SessionDialog*>(modal);
+        QVERIFY(dlg != nullptr);
+        dlg->reject();
+    });
+    smokeWin.findChild<QAction*>(u"HeaderNewSession"_s)->trigger();
+
+    {
+        JobPrep::Ui::Dialogs::FollowUpDialog dlg(m_ctx->applications(), QDate::currentDate(), &smokeWin);
+        dlg.reject();
+    }
+
+    {
+        JobPrep::Ui::Dialogs::TrackDialog dlg(
+            m_ctx->tracks(), m_ctx->topics(), &smokeWin);
+        dlg.reject();
+    }
+
+    // 3. Toggle themes
+    smokeWin.themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Dark);
+    QCoreApplication::processEvents();
+    smokeWin.themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Light);
+    QCoreApplication::processEvents();
+
+    JobPrep::App::uninstallLanguage();
 }
 
 void tst_UiSmoke::testZeroWarnings() {
