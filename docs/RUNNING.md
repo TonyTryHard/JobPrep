@@ -218,9 +218,18 @@ See [SPEC.md §3.7](file:///home/tony/projects/JobPrep/docs/SPEC.md#37-global) f
 
 ## 11. Localization and Languages
 
-- **Available UI Languages**: English, Ukrainian (`Українська`), and Russian (`Русский`).
-- **Language Selection**: Configured in Settings -> General -> Language. Options are `System Default`, `English`, `Українська`, and `Русский`. Changes take effect after restarting JobPrep.
-- **Translation Infrastructure**:
-  - Translations are compiled from XML catalogs (`resources/translations/jobprep_uk.ts` and `jobprep_ru.ts`) into embedded binary resources (`/i18n/jobprep_uk.qm` and `/i18n/jobprep_ru.qm`).
-  - To verify that translation sources are synchronized with code without modifying working tree files, run `./scripts/check-translations.sh` (automatically executed as part of `./scripts/check.sh`).
+- **Available UI Languages**: English (source), Ukrainian (`Українська`), and Russian (`Русский`).
+- **How to Choose the Language**:
+  - Open **Settings** (click *Settings* in the sidebar or press `Ctrl+,`).
+  - Under **General**, locate the **Language** selector dropdown.
+  - Choose among `System Default`, `English`, `Українська`, or `Русский`.
+  - **Restart Required**: Language changes are saved immediately to `ui/language` in `jobprep.ini` / settings, but Qt loads catalogs strictly at startup before any GUI widgets are constructed. Restart JobPrep for the new language to take effect.
+- **Translation Catalogs & Qt Base Translations**:
+  - Application strings are compiled from XML source catalogs (`resources/translations/jobprep_uk.ts` and `jobprep_ru.ts`) into embedded binary resources (`:/i18n/jobprep_uk.qm` and `:/i18n/jobprep_ru.qm`).
+  - Standard dialog buttons (e.g., *OK*, *Cancel*, *Yes*, *No*, *Save*, *Discard*) and common widgets rely on Qt's system catalogs (`qtbase_uk.qm` and `qtbase_ru.qm`).
+  - **Where `qtbase_*.qm` must be**:
+    - **Linux**: In the Qt install translations folder, resolved via `QLibraryInfo::path(QLibraryInfo::TranslationsPath)` (typically `/usr/share/qt6/translations` or `$QT_PREFIX_PATH/translations`).
+    - **Windows**: Located in `%QT_PREFIX_PATH%\translations` (or alongside the binary in a `translations/` subfolder). *Note:* Windows runtime loading of `qtbase_*.qm` depends on the specific Qt kit installed and is not verified by agent until the CI diagnostic runs on Windows.
+- **Translation Sync Verification**:
+  - To verify that translation sources are synchronized with code without churning file timestamps or line numbers, run `./scripts/check-translations.sh` (automatically executed by `./scripts/check.sh`).
 
