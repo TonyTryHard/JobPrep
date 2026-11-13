@@ -153,6 +153,9 @@ jobs:
           ls -la "${QT_PREFIX_PATH}/bin/lrelease"* 2>/dev/null || echo "lrelease not found"
           ls -la "${QT_PREFIX_PATH}/bin/lupdate"* 2>/dev/null || echo "lupdate not found"
           ls -la "${QT_PREFIX_PATH}/lib/cmake/Qt6LinguistTools" 2>/dev/null || echo "Qt6LinguistTools cmake dir not found"
+          echo "--- qtbase translations ---"
+          ls -la "${QT_PREFIX_PATH}/translations/qtbase_uk.qm" 2>/dev/null || echo "qtbase_uk.qm not found in ${QT_PREFIX_PATH}/translations"
+          ls -la "${QT_PREFIX_PATH}/translations/qtbase_ru.qm" 2>/dev/null || echo "qtbase_ru.qm not found in ${QT_PREFIX_PATH}/translations"
 
       - name: Check Linguist tools availability (Windows) # // CI-DIAG
         if: runner.os == 'Windows'
@@ -162,6 +165,9 @@ jobs:
           Get-ChildItem -Path "$env:QT_PREFIX_PATH\bin" -Filter "lrelease*" -ErrorAction SilentlyContinue | Select-Object Name, Length
           Get-ChildItem -Path "$env:QT_PREFIX_PATH\bin" -Filter "lupdate*" -ErrorAction SilentlyContinue | Select-Object Name, Length
           Get-ChildItem -Path "$env:QT_PREFIX_PATH\lib\cmake\Qt6LinguistTools" -ErrorAction SilentlyContinue | Select-Object Name
+          Write-Host "--- qtbase translations ---"
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\translations\qtbase_uk.qm" -ErrorAction SilentlyContinue | Select-Object Name, Length
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\translations\qtbase_ru.qm" -ErrorAction SilentlyContinue | Select-Object Name, Length
 
       - name: Run quality gate (Linux)
         if: runner.os == 'Linux'
@@ -368,6 +374,9 @@ jobs:
           Get-ChildItem -Path "$env:QT_PREFIX_PATH\bin" -Filter "lrelease*" -ErrorAction SilentlyContinue | Select-Object Name, Length
           Get-ChildItem -Path "$env:QT_PREFIX_PATH\bin" -Filter "lupdate*" -ErrorAction SilentlyContinue | Select-Object Name, Length
           Get-ChildItem -Path "$env:QT_PREFIX_PATH\lib\cmake\Qt6LinguistTools" -ErrorAction SilentlyContinue | Select-Object Name
+          Write-Host "--- qtbase translations ---"
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\translations\qtbase_uk.qm" -ErrorAction SilentlyContinue | Select-Object Name, Length
+          Get-ChildItem -Path "$env:QT_PREFIX_PATH\translations\qtbase_ru.qm" -ErrorAction SilentlyContinue | Select-Object Name, Length
 
       - name: Run quality gate (Windows)
         timeout-minutes: 30
