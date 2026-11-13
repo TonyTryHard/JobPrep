@@ -6,6 +6,15 @@ using namespace Qt::StringLiterals;
 
 namespace JobPrep::Ui {
 
+namespace {
+inline QString englishPlural(int n, const QString& one, const QString& otherPattern) {
+    if (n == 1) {
+        return one;
+    }
+    return otherPattern.arg(n);
+}
+}  // namespace
+
 QString FormatHelper::formatDuration(int totalMinutes) {
     if (totalMinutes <= 0) {
         return tr("0m");
@@ -35,7 +44,7 @@ QString FormatHelper::formatLeadTime(int minutes) {
         if (translated != QString(u"%1 day(s)"_s).arg(days)) {
             return translated;
         }
-        return days == 1 ? tr("1 day") : tr("%1 days").arg(days);
+        return englishPlural(days, u"1 day"_s, u"%1 days"_s);
     }
     if (minutes % 60 == 0) {
         const int hours = minutes / 60;
@@ -43,13 +52,13 @@ QString FormatHelper::formatLeadTime(int minutes) {
         if (translated != QString(u"%1 hour(s)"_s).arg(hours)) {
             return translated;
         }
-        return hours == 1 ? tr("1 hour") : tr("%1 hours").arg(hours);
+        return englishPlural(hours, u"1 hour"_s, u"%1 hours"_s);
     }
     const QString translated = tr("%n minute(s)", "", minutes);
     if (translated != QString(u"%1 minute(s)"_s).arg(minutes)) {
         return translated;
     }
-    return minutes == 1 ? tr("1 minute") : tr("%1 minutes").arg(minutes);
+    return englishPlural(minutes, u"1 minute"_s, u"%1 minutes"_s);
 }
 
 QString FormatHelper::formatInterviewRate(const std::optional<double>& rate) {
@@ -68,10 +77,7 @@ QString FormatHelper::formatActiveProcesses(int count) {
     if (translated != QString(u"%1 active process(es)"_s).arg(count)) {
         return translated;
     }
-    if (count == 1) {
-        return tr("1 active process");
-    }
-    return tr("%1 active processes").arg(count);
+    return englishPlural(count, u"1 active process"_s, u"%1 active processes"_s);
 }
 
 QString FormatHelper::formatNextInterview(const std::optional<Domain::AgendaItem>& item,

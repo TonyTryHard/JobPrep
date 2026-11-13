@@ -7,6 +7,15 @@ using namespace Qt::StringLiterals;
 
 namespace JobPrep::Ui {
 
+namespace {
+inline QString englishPlural(int n, const QString& one, const QString& otherPattern) {
+    if (n == 1) {
+        return one;
+    }
+    return otherPattern.arg(n);
+}
+}  // namespace
+
 QString NotificationText::formatLeadTime(int leadMinutes) {
     if (leadMinutes <= 0) return QString();
     if (leadMinutes % 60 == 0) {
@@ -16,20 +25,14 @@ QString NotificationText::formatLeadTime(int leadMinutes) {
         if (translated != QString(u"in %1 hour(s)"_s).arg(hours)) {
             return translated;
         }
-        if (hours == 1) {
-            return QCoreApplication::translate("NotificationText", "in 1 hour");
-        }
-        return QCoreApplication::translate("NotificationText", "in %1 hours").arg(hours);
+        return englishPlural(hours, u"in 1 hour"_s, u"in %1 hours"_s);
     }
     const QString translated =
         QCoreApplication::translate("NotificationText", "in %n minute(s)", "", leadMinutes);
     if (translated != QString(u"in %1 minute(s)"_s).arg(leadMinutes)) {
         return translated;
     }
-    if (leadMinutes == 1) {
-        return QCoreApplication::translate("NotificationText", "in 1 minute");
-    }
-    return QCoreApplication::translate("NotificationText", "in %1 minutes").arg(leadMinutes);
+    return englishPlural(leadMinutes, u"in 1 minute"_s, u"in %1 minutes"_s);
 }
 
 QString NotificationText::formatRemainingTime(const Services::Notification& notification,
@@ -45,10 +48,7 @@ QString NotificationText::formatRemainingTime(const Services::Notification& noti
                 if (translated != QString(u"in %1 minute(s)"_s).arg(mins)) {
                     return translated;
                 }
-                if (mins <= 1) {
-                    return QCoreApplication::translate("NotificationText", "in 1 minute");
-                }
-                return QCoreApplication::translate("NotificationText", "in %1 minutes").arg(mins);
+                return englishPlural(mins, u"in 1 minute"_s, u"in %1 minutes"_s);
             }
             if (notification.when.date() == current.date()) {
                 return QCoreApplication::translate("NotificationText", "today at %1")
@@ -65,10 +65,7 @@ QString NotificationText::formatRemainingTime(const Services::Notification& noti
                 if (translated != QString(u"in %1 hour(s)"_s).arg(hours)) {
                     return translated;
                 }
-                if (hours == 1) {
-                    return QCoreApplication::translate("NotificationText", "in 1 hour");
-                }
-                return QCoreApplication::translate("NotificationText", "in %1 hours").arg(hours);
+                return englishPlural(hours, u"in 1 hour"_s, u"in %1 hours"_s);
             }
             return notification.when.toString(u"yyyy-MM-dd HH:mm"_s);
         }
@@ -151,11 +148,7 @@ QString NotificationText::formatMessage(const Services::Notification& notificati
             if (translated != QString(u"%1 follow-up(s) overdue"_s).arg(notification.count)) {
                 return translated;
             }
-            if (notification.count == 1) {
-                return QCoreApplication::translate("NotificationText", "1 follow-up is overdue");
-            }
-            return QCoreApplication::translate("NotificationText", "%1 follow-ups are overdue")
-                .arg(notification.count);
+            return englishPlural(notification.count, u"1 follow-up is overdue"_s, u"%1 follow-ups are overdue"_s);
         }
     }
     return QString();

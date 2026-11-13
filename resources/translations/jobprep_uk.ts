@@ -997,14 +997,6 @@ Path: %1</source>
             <numerusform></numerusform>
         </translation>
     </message>
-    <message>
-        <source>1 day</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 days</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
         <translation type="unfinished">
@@ -1013,14 +1005,6 @@ Path: %1</source>
             <numerusform></numerusform>
         </translation>
     </message>
-    <message>
-        <source>1 hour</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 hours</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
         <translation type="unfinished">
@@ -1028,14 +1012,6 @@ Path: %1</source>
             <numerusform></numerusform>
             <numerusform></numerusform>
         </translation>
-    </message>
-    <message>
-        <source>1 minute</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 minutes</source>
-        <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
         <source>%n-day streak</source>
@@ -1055,14 +1031,6 @@ Path: %1</source>
     </message>
     <message>
         <source>%1%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>1 active process</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 active processes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2042,14 +2010,6 @@ Path: %1</source>
             <numerusform></numerusform>
         </translation>
     </message>
-    <message>
-        <source>in 1 hour</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>in %1 hours</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message numerus="yes">
         <source>in %n minute(s)</source>
         <translation type="unfinished">
@@ -2057,14 +2017,6 @@ Path: %1</source>
             <numerusform></numerusform>
             <numerusform></numerusform>
         </translation>
-    </message>
-    <message>
-        <source>in 1 minute</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>in %1 minutes</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>today at %1</source>
@@ -2109,14 +2061,6 @@ Path: %1</source>
             <numerusform></numerusform>
             <numerusform></numerusform>
         </translation>
-    </message>
-    <message>
-        <source>1 follow-up is overdue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 follow-ups are overdue</source>
-        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
