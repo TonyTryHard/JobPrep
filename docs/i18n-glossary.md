@@ -1,32 +1,83 @@
 # JobPrep Translation Glossary & Terminology Proposals
 
 > [!IMPORTANT]
-> Every row in this document is a **draft proposal for the user's review and approval**.
+> Every row in this document is a **draft proposal for the user review and approval**.
 > No translations have been written into `jobprep_uk.ts` or `jobprep_ru.ts` in Part C (deferred to Part D).
 
-## 1. Terminology Decisions & Conflict Resolutions
+## 1. Section 1: Needs the User's Decision (Domain Terminology)
 
-- **`Application` (Job application):** Unified as **`Заявка`** in both Ukrainian and Russian per user specification.
-- **`Follow-up` vs `Reminder`:** `Follow-up` is **`Фолоу-ап`** (uk) / **`Фоллоу-ап`** (ru). In contrast, `Reminder` refers to the system reminder service notification (**`Нагадування`** / **`Напоминание`**).
-- **`Target`:** Represents a date-bound study topic goal (**`Ціль`** / **`Цель`**).
-- **Disambiguated Terms:** Disambiguated in source code with `//:` translator comments and distinct contexts:
-  - `Application`: menu action `tr("Application")` with comment `//: Menu action to create a new job application (not program)`
-  - `Status`: column header `tr("Status")` (`//: Header for job application stage column`) vs `TopicListModel` (`//: Header for study topic status column`) vs `ApplicationDialog` (`//: Form field label for job application hiring stage`)
-  - `Applied`: table header `tr("Applied")` (`//: Header for date when job application was submitted`) vs enum label `StatusStyle::label` (`//: Application hiring stage: application has been submitted`)
-  - `Today`: navigation button in `CalendarPage` (`//: Button action to navigate calendar view to current day`) vs dashboard card in `HomePage` (`//: Dashboard card title showing today's agenda items`)
-  - `Open`: action button in `TopicDetailPanel` (`//: Button action to open link in external web browser`)
-- **Untranslated Tokens:** Program name `JobPrep`, technical acronyms `HR`, file formats `CSV`, `ICS`, `JSON` remain strictly untranslated.
-- **Mnemonics:** Ukrainian and Russian translations intentionally omit all `&` keyboard mnemonics (no `&` in Cyrillic UI).
+This section contains domain-critical terms carrying specific semantic weight in JobPrep.
+Each term requires the user's review and explicit sign-off prior to authoring full translations in Part D.
 
-## 2. Extraction Methodology
+### Core Terminology Conflicts & Resolutions
 
-Derived from source code via automated regex scan over all `tr()` and `translate()` calls:
-```bash
-python3 scripts/build_glossary.py
-wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header)
-```
+1. **`Follow-up` is NOT `Reminder`:**
+   - **`Follow-up`** is an action step or check-in date scheduled for a job application (**`Фолоу-ап`** in uk, **`Фоллоу-ап`** in ru).
+   - **`Reminder`** refers to the background reminder service notification popping up in the system tray or banner (**`Нагадування`** in uk, **`Напоминание`** in ru).
+2. **`Application` (Job application):**
+   - Unified as **`Заявка`** in both Ukrainian and Russian per user specification (distinguished from an application program via `//:` comments).
+3. **`Target`:**
+   - Represents a date-bound study topic goal (**`Ціль`** in uk, **`Цель`** in ru).
 
-## 3. Glossary Table (Draft Proposals for User Review)
+### Proposal on Accelerators / Mnemonics (`&`)
+
+- **Context:** The English UI includes 16 accelerator mnemonics (`&Save`, `&Delete`, `&Application *`, `+ &Interview`, etc.) enabling `Alt+<Letter>` key combinations.
+- **Qt Base Translations:** Converting `qtbase_uk.qm` with `lconvert` reveals that Qt's standard buttons (`QDialogButtonBox::Ok`, `Cancel`, `Yes`, `No`) already contain 280 Cyrillic accelerators (e.g. `Т&ак` for Alt+А, `&Ні` for Alt+Н, `С&касувати` for Alt+К).
+- **Trade-off:**
+  - If custom Cyrillic mnemonics are used, a user with an English keyboard layout active cannot trigger them without switching layouts, and there is a risk of duplicate accelerator collisions within complex custom dialogs.
+  - If omitted in custom strings, the user loses `Alt+<Letter>` shortcuts for custom field labels, but standard dialog actions (`Enter`, `Esc`, standard buttons) continue working predictably.
+- **User Decision Options:**
+  - **Option A (Full Mnemonics):** Assign unique Cyrillic accelerator letters to dialog buttons and field labels (e.g. `&Зберегти`, `&Видалити`).
+  - **Option B (Recommended — Minimal Risk):** Omit mnemonics in custom application strings; rely on standard `qtbase_*.qm` accelerators for dialog buttons and global shortcuts (`Ctrl+S`, `Ctrl+N`).
+
+### Domain Terms Table (40 Terms)
+
+| English UI String | Context | Ukrainian Proposal | Russian Proposal | Conflict / Semantic Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| `Status` | `Global` | Статус | Статус | Disambiguated between hiring stage and study topic |
+| `Applied` | `Global` | Подано | Подано | Hiring stage: application submitted |
+| `Track` | `Global` | Напрям | Направление | Study track |
+| `Priority` | `Global` | *Priority* | *Priority* | Proposal pending review |
+| `Application` | `Global` | Заявка | Заявка | User decision: unified term for job application |
+| `Interview` | `Global` | Співбесіда | Собеседование | Job interview |
+| `Topic` | `Global` | Тема | Тема | Study topic |
+| `Interview` | `NotificationText` | Співбесіда | Собеседование | Job interview |
+| `Status` | `TabScrollArea` | Статус | Статус | Disambiguated between hiring stage and study topic |
+| `Work mode` | `TabScrollArea` | *Work mode* | *Work mode* | Proposal pending review |
+| `Today` | `Global` | Сьогодні | Сегодня | Current day |
+| `Offer` | `Global` | Офер | Оффер | Hiring stage |
+| `Interview` | `AgendaKindStyle` | Співбесіда | Собеседование | Job interview |
+| `Follow-up` | `AgendaKindStyle` | Фолоу-ап | Фоллоу-ап | Distinct from Reminder (Нагадування / Напоминание) |
+| `Wishlist` | `StatusStyle` | Список бажань | Список желаний | Application wishlist |
+| `Applied` | `StatusStyle` | Подано | Подано | Hiring stage: application submitted |
+| `HR Screen` | `StatusStyle` | HR-скринінг | HR-скрининг | Interview stage |
+| `Technical` | `StatusStyle` | Технічне | Техническое | Interview type or stage |
+| `Final` | `StatusStyle` | Фінальне | Финальное | Interview stage |
+| `Offer` | `StatusStyle` | Офер | Оффер | Hiring stage |
+| `Accepted` | `StatusStyle` | Прийнято | Принято | Hiring stage outcome |
+| `Rejected` | `StatusStyle` | Відхилено | Отклонено | Hiring stage outcome |
+| `Withdrawn` | `StatusStyle` | Відкликано | Отозвано | Application withdrawn |
+| `Ghosted` | `StatusStyle` | Без відповіді | Без ответа | Application ghosted |
+| `Backlog` | `StatusStyle` | Беклог | Бэклог | Topic board status |
+| `In Progress` | `StatusStyle` | В процесі | В процессе | Topic board status |
+| `Review` | `StatusStyle` | На перегляді | На проверке | Topic board status |
+| `Done` | `StatusStyle` | Виконано | Выполнено | Topic board status |
+| `HR screen` | `StatusStyle` | HR-скринінг | HR-скрининг | Interview type |
+| `Live coding` | `StatusStyle` | Лайвкодинг | Лайвкодинг | Interview type |
+| `System design` | `StatusStyle` | Системний дизайн | Системный дизайн | Interview type |
+| `Behavioral` | `StatusStyle` | Поведінкове | Поведенческое | Interview type |
+| `Pending` | `StatusStyle` | Очікується | Ожидается | Interview outcome |
+| `Passed` | `StatusStyle` | Пройдено | Пройдено | Interview outcome |
+| `Failed` | `StatusStyle` | Не пройдено | Не пройдено | Interview outcome |
+| `Cancelled` | `StatusStyle` | Скасовано | Отменено | Interview outcome |
+| `Checklist` | `InternalWriteGuard` | *Checklist* | *Checklist* | Proposal pending review |
+| `Open` | `InternalWriteGuard` | Відкрити | Открыть | Action button to open external link |
+| `Study target` | `AgendaKindStyle` | Навчальна ціль | Учебная цель | Date-bound study topic goal |
+| `Study streak` | `Global` | Серія навчання | Серия занятий | Consecutive days of study progress |
+
+## 2. Section 2: Mechanical (Generic Labels, Buttons, Form Fields)
+
+This section contains **281 mechanical UI terms** (standard button labels, table columns, settings options, and informational messages). These will be translated directly in Part D and only require spot-checking.
 
 | English UI String | Context | Ukrainian Proposal | Russian Proposal | Notes |
 | :--- | :--- | :--- | :--- | :--- |
@@ -34,15 +85,11 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `Sample data` | `Global` | *Sample data* | *Sample data* | Proposal pending review |
 | `Company` | `Global` | Компанія | Компания | Application field |
 | `Position` | `Global` | Посада | Должность | Application field |
-| `Status` | `Global` | Статус | Статус | Disambiguated between hiring stage and study topic |
-| `Applied` | `Global` | Подано | Подано | Hiring stage: application submitted |
 | `Next step` | `Global` | *Next step* | *Next step* | Proposal pending review |
 | `Salary` | `Global` | Зарплата | Зарплата | Application field |
 | `Source` | `Global` | *Source* | *Source* | Proposal pending review |
 | `Updated` | `Global` | *Updated* | *Updated* | Proposal pending review |
 | `Title` | `Global` | *Title* | *Title* | Proposal pending review |
-| `Track` | `Global` | Напрям | Направление | Study track |
-| `Priority` | `Global` | *Priority* | *Priority* | Proposal pending review |
 | `Target Date` | `Global` | *Target Date* | *Target Date* | Proposal pending review |
 | `Progress` | `Global` | *Progress* | *Progress* | Proposal pending review |
 | `Tags` | `Global` | *Tags* | *Tags* | Proposal pending review |
@@ -73,9 +120,6 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `+ New (Ctrl+N)` | `Global` | *+ New (Ctrl+N)* | *+ New (Ctrl+N)* | Proposal pending review |
 | `0-day streak` | `Global` | *0-day streak* | *0-day streak* | Proposal pending review |
 | `0 active processes` | `Global` | *0 active processes* | *0 active processes* | Proposal pending review |
-| `Application` | `Global` | Заявка | Заявка | User decision: unified term for job application |
-| `Interview` | `Global` | Співбесіда | Собеседование | Job interview |
-| `Topic` | `Global` | Тема | Тема | Study topic |
 | `Study session` | `Global` | *Study session* | *Study session* | Proposal pending review |
 | `Topic not found` | `Global` | *Topic not found* | *Topic not found* | Proposal pending review |
 | `Interview not found` | `Global` | *Interview not found* | *Interview not found* | Proposal pending review |
@@ -93,7 +137,6 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `Follow-up due today` | `NotificationText` | *Follow-up due today* | *Follow-up due today* | Proposal pending review |
 | `Overdue Follow-up` | `NotificationText` | *Overdue Follow-up* | *Overdue Follow-up* | Proposal pending review |
 | `Overdue Follow-ups` | `NotificationText` | *Overdue Follow-ups* | *Overdue Follow-ups* | Proposal pending review |
-| `Interview` | `NotificationText` | Співбесіда | Собеседование | Job interview |
 | `Follow-up is overdue` | `NotificationText` | *Follow-up is overdue* | *Follow-up is overdue* | Proposal pending review |
 | `Dashboard` | `NavButton` | *Dashboard* | *Dashboard* | Proposal pending review |
 | `Study` | `NavButton` | Навчання | Обучение | Study page |
@@ -116,9 +159,7 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `Company *` | `TabScrollArea` | *Company ** | *Company ** | Proposal pending review |
 | `C++ Developer` | `TabScrollArea` | *C++ Developer* | *C++ Developer* | Proposal pending review |
 | `Position *` | `TabScrollArea` | *Position ** | *Position ** | Proposal pending review |
-| `Status` | `TabScrollArea` | Статус | Статус | Disambiguated between hiring stage and study topic |
 | `Source` | `TabScrollArea` | *Source* | *Source* | Proposal pending review |
-| `Work mode` | `TabScrollArea` | *Work mode* | *Work mode* | Proposal pending review |
 | `not set` | `TabScrollArea` | *not set* | *not set* | Proposal pending review |
 | `Salary min` | `TabScrollArea` | *Salary min* | *Salary min* | Proposal pending review |
 | `Salary max` | `TabScrollArea` | *Salary max* | *Salary max* | Proposal pending review |
@@ -203,7 +244,6 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `Calendar` | `Global` | Календар | Календарь | Navigation page |
 | `Previous month` | `Global` | *Previous month* | *Previous month* | Proposal pending review |
 | `Next month` | `Global` | *Next month* | *Next month* | Proposal pending review |
-| `Today` | `Global` | Сьогодні | Сегодня | Current day |
 | `Go to today` | `Global` | *Go to today* | *Go to today* | Proposal pending review |
 | `Interviews` | `Global` | Співбесіди | Собеседования | Plural of interview |
 | `Follow-ups` | `Global` | Фолоу-апи | Фоллоу-апы | Plural of Follow-up |
@@ -220,7 +260,6 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `Active processes` | `Global` | *Active processes* | *Active processes* | Proposal pending review |
 | `Upcoming interviews` | `Global` | *Upcoming interviews* | *Upcoming interviews* | Proposal pending review |
 | `Next 7 days` | `Global` | *Next 7 days* | *Next 7 days* | Proposal pending review |
-| `Study streak` | `Global` | *Study streak* | *Study streak* | Proposal pending review |
 | `No upcoming interviews` | `Global` | *No upcoming interviews* | *No upcoming interviews* | Proposal pending review |
 | `+ Schedule interview` | `Global` | *+ Schedule interview* | *+ Schedule interview* | Proposal pending review |
 | `Study progress` | `Global` | *Study progress* | *Study progress* | Proposal pending review |
@@ -232,7 +271,6 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `All` | `Global` | *All* | *All* | Proposal pending review |
 | `Active` | `Global` | *Active* | *Active* | Proposal pending review |
 | `Interviewing` | `Global` | *Interviewing* | *Interviewing* | Proposal pending review |
-| `Offer` | `Global` | Офер | Оффер | Hiring stage |
 | `Closed` | `Global` | *Closed* | *Closed* | Proposal pending review |
 | `Export CSV` | `Global` | *Export CSV* | *Export CSV* | Proposal pending review |
 | `+ Application` | `Global` | *+ Application* | *+ Application* | Proposal pending review |
@@ -297,35 +335,10 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `Search topics (Ctrl+F)` | `Global` | *Search topics (Ctrl+F)* | *Search topics (Ctrl+F)* | Proposal pending review |
 | `+ Topic` | `Global` | *+ Topic* | *+ Topic* | Proposal pending review |
 | `Delete Topic` | `Global` | *Delete Topic* | *Delete Topic* | Proposal pending review |
-| `Interview` | `AgendaKindStyle` | Співбесіда | Собеседование | Job interview |
-| `Follow-up` | `AgendaKindStyle` | Фолоу-ап | Фоллоу-ап | Distinct from Reminder (Нагадування / Напоминание) |
-| `Study target` | `AgendaKindStyle` | Навчальна ціль | Учебная цель | Agenda study milestone |
-| `Wishlist` | `StatusStyle` | Список бажань | Список желаний | Application wishlist |
-| `Applied` | `StatusStyle` | Подано | Подано | Hiring stage: application submitted |
-| `HR Screen` | `StatusStyle` | HR-скринінг | HR-скрининг | Interview stage |
-| `Technical` | `StatusStyle` | Технічне | Техническое | Interview type or stage |
-| `Final` | `StatusStyle` | Фінальне | Финальное | Interview stage |
-| `Offer` | `StatusStyle` | Офер | Оффер | Hiring stage |
-| `Accepted` | `StatusStyle` | Прийнято | Принято | Hiring stage outcome |
-| `Rejected` | `StatusStyle` | Відхилено | Отклонено | Hiring stage outcome |
-| `Withdrawn` | `StatusStyle` | Відкликано | Отозвано | Application withdrawn |
-| `Ghosted` | `StatusStyle` | Без відповіді | Без ответа | Application ghosted |
-| `Backlog` | `StatusStyle` | Беклог | Бэклог | Topic board status |
-| `In Progress` | `StatusStyle` | В процесі | В процессе | Topic board status |
-| `Review` | `StatusStyle` | На перегляді | На проверке | Topic board status |
-| `Done` | `StatusStyle` | Виконано | Выполнено | Topic board status |
 | `Low` | `StatusStyle` | Низький | Низкий | Priority |
 | `Normal` | `StatusStyle` | Звичайний | Обычный | Priority |
 | `High` | `StatusStyle` | Високий | Высокий | Priority |
-| `HR screen` | `StatusStyle` | HR-скринінг | HR-скрининг | Interview type |
-| `Live coding` | `StatusStyle` | Лайвкодинг | Лайвкодинг | Interview type |
-| `System design` | `StatusStyle` | Системний дизайн | Системный дизайн | Interview type |
-| `Behavioral` | `StatusStyle` | Поведінкове | Поведенческое | Interview type |
 | `Other` | `StatusStyle` | Інше | Другое | Category/type |
-| `Pending` | `StatusStyle` | Очікується | Ожидается | Interview outcome |
-| `Passed` | `StatusStyle` | Пройдено | Пройдено | Interview outcome |
-| `Failed` | `StatusStyle` | Не пройдено | Не пройдено | Interview outcome |
-| `Cancelled` | `StatusStyle` | Скасовано | Отменено | Interview outcome |
 | `Interview rate: ` | `Global` | *Interview rate: * | *Interview rate: * | Proposal pending review |
 | `Weekly study goal` | `Global` | *Weekly study goal* | *Weekly study goal* | Proposal pending review |
 | `Weekly goal` | `Global` | *Weekly goal* | *Weekly goal* | Proposal pending review |
@@ -339,7 +352,6 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `Clear` | `InternalWriteGuard` | *Clear* | *Clear* | Proposal pending review |
 | `Tags, comma separated` | `InternalWriteGuard` | *Tags, comma separated* | *Tags, comma separated* | Proposal pending review |
 | `Notes` | `InternalWriteGuard` | *Notes* | *Notes* | Proposal pending review |
-| `Checklist` | `InternalWriteGuard` | *Checklist* | *Checklist* | Proposal pending review |
 | `New checklist item` | `InternalWriteGuard` | *New checklist item* | *New checklist item* | Proposal pending review |
 | `Add` | `InternalWriteGuard` | *Add* | *Add* | Proposal pending review |
 | `Resources` | `InternalWriteGuard` | *Resources* | *Resources* | Proposal pending review |
@@ -347,7 +359,23 @@ wc -l docs/i18n-glossary-raw.tsv  # 322 lines (321 distinct short terms + header
 | `URL` | `InternalWriteGuard` | *URL* | *URL* | Proposal pending review |
 | `Resource title` | `InternalWriteGuard` | *Resource title* | *Resource title* | Proposal pending review |
 | `https://...` | `InternalWriteGuard` | *https://...* | *https://...* | Proposal pending review |
-| `Open` | `InternalWriteGuard` | Відкрити | Открыть | Action button to open external link |
 | `Delete` | `InternalWriteGuard` | Видалити | Удалить | Destructive action |
 | `Log time` | `InternalWriteGuard` | *Log time* | *Log time* | Proposal pending review |
 | `Select a topic` | `InternalWriteGuard` | *Select a topic* | *Select a topic* | Proposal pending review |
+
+## 3. Translator Comments (`//:`) in Codebase
+
+Ten disambiguation comments were inserted into source code to ensure translators have complete context:
+
+```
+src/models/TopicListModel.cpp:209:            //: Header for study topic status column
+src/models/ApplicationTableModel.cpp:168:            //: Header for job application stage column
+src/models/ApplicationTableModel.cpp:171:            //: Header for date when job application was submitted
+src/ui/widgets/TopicDetailPanel.cpp:233:    //: Button action to open link in external web browser
+src/ui/MainWindow.cpp:379:    //: Menu action to create a new job application (not program)
+src/ui/dialogs/ApplicationDialog.cpp:170:    //: Form field label for job application hiring stage
+src/ui/pages/HomePage.cpp:151:    //: Dashboard card title showing today's agenda items
+src/ui/pages/SettingsPage.cpp:269:    //: Notice displayed when user changes the interface language
+src/ui/pages/CalendarPage.cpp:162:    //: Button action to navigate calendar view to current day
+src/ui/theme/StatusStyle.cpp:39:            //: Application hiring stage: application has been submitted
+```
