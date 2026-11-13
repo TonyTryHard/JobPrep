@@ -31,6 +31,6 @@ jobprep_apply_warnings(tst_Translations)
 
 add_test(NAME tst_Translations COMMAND tst_Translations)
 set_tests_properties(tst_Translations PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JOBPREP_REQUIRE_COMPLETE_TRANSLATIONS=1"
     LABELS "i18n"
 )
