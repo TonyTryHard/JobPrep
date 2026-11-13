@@ -1,0 +1,322 @@
+Source	Context	Comment
+Load sample data?	Global	
+Sample data	Global	
+Company	Global	
+Position	Global	
+Status	Global	
+Applied	Global	
+Next step	Global	
+Salary	Global	
+Source	Global	
+Updated	Global	
+Title	Global	
+Track	Global	
+Priority	Global	
+Target Date	Global	
+Progress	Global	
+Tags	Global	
+No error.	SystemFileChooser	
+Export Applications (CSV)	SystemFileChooser	
+Export Successful	SystemFileChooser	
+Export Failed	SystemFileChooser	
+Export Interviews (ICS)	SystemFileChooser	
+Backup Database (JSON)	SystemFileChooser	
+Backup Successful	SystemFileChooser	
+Backup Failed	SystemFileChooser	
+Restore in Progress	SystemFileChooser	
+Confirm Database Restore	SystemFileChooser	
+Restoring Database	SystemFileChooser	
+Restore Successful	SystemFileChooser	
+Restore Failed	SystemFileChooser	
+Sample Data Loaded	SystemFileChooser	
+Data Folder	SystemFileChooser	
+0m	Global	
+0 minutes	Global	
+1 day	Global	
+1 hour	Global	
+1 minute	Global	
+1 active process	Global	
+JobPrep	Global	
+Search... (Ctrl+F)	Global	
++ New	Global	
++ New (Ctrl+N)	Global	
+0-day streak	Global	
+0 active processes	Global	
+Application	Global	
+Interview	Global	
+Topic	Global	
+Study session	Global	
+Topic not found	Global	
+Interview not found	Global	
+Application not found	Global	
+in %n hour(s)	NotificationText	
+in 1 hour	NotificationText	
+in %1 hours	NotificationText	
+in %n minute(s)	NotificationText	
+in 1 minute	NotificationText	
+in %1 minutes	NotificationText	
+today at %1	NotificationText	
+tomorrow at %1	NotificationText	
+Interview %1	NotificationText	
+Interview Reminder	NotificationText	
+Follow-up due today	NotificationText	
+Overdue Follow-up	NotificationText	
+Overdue Follow-ups	NotificationText	
+Interview	NotificationText	
+Follow-up is overdue	NotificationText	
+Dashboard	NavButton	
+Study	NavButton	
+Jobs	NavButton	
+Calendar	NavButton	
+Settings	NavButton	
+Expand sidebar	NavButton	
+Collapse sidebar	NavButton	
+Dismiss	Global	
+Show JobPrep	Global	
+Quit	Global	
+Overdue	Global	
+Priority: %1	Global	
+Add Application	TabScrollArea	
+Edit Application	TabScrollArea	
+Discard changes (Esc)	TabScrollArea	
+Save	TabScrollArea	
+Save changes (Ctrl+S)	TabScrollArea	
+Acme Corp	TabScrollArea	
+Company *	TabScrollArea	
+C++ Developer	TabScrollArea	
+Position *	TabScrollArea	
+Status	TabScrollArea	
+Source	TabScrollArea	
+Work mode	TabScrollArea	
+not set	TabScrollArea	
+Salary min	TabScrollArea	
+Salary max	TabScrollArea	
+Currency	TabScrollArea	
+Set	TabScrollArea	
+Applied date	TabScrollArea	
+Next action	TabScrollArea	
+Next action date	TabScrollArea	
+URL	TabScrollArea	
+Resume version	TabScrollArea	
+Location	TabScrollArea	
+Contact name	TabScrollArea	
+Contact email	TabScrollArea	
+Overview	TabScrollArea	
+Notes	TabScrollArea	
+When	TabScrollArea	
+Type	TabScrollArea	
+Duration	TabScrollArea	
+Outcome	TabScrollArea	
++ Interview	TabScrollArea	
++ &Interview	TabScrollArea	
+&Edit...	TabScrollArea	
+&Delete...	TabScrollArea	
+Interviews	TabScrollArea	
+From	TabScrollArea	
+To	TabScrollArea	
+Timeline	TabScrollArea	
+—	TabScrollArea	
+Delete interview	TabScrollArea	
+Company is required.	TabScrollArea	
+Position is required.	TabScrollArea	
+Discard changes?	TabScrollArea	
+Add Follow-up	Global	
+&Application *	Global	
+&Action *	Global	
+Date	Global	
+&Save	Global	
+Cancel (Esc)	Global	
+Replace follow-up	Global	
+Add Interview	Global	
+Edit Interview	Global	
+Interview date	Global	
+Start time	Global	
+&When *	Global	
+ min	Global	
+&Duration	Global	
+&Type	Global	
+Result so far	Global	
+&Outcome	Global	
+Zoom, on-site address...	Global	
+&Place	Global	
+&Interviewer	Global	
+Preparation notes	Global	
+&Notes	Global	
+Discard changes (Esc)	Global	
+&Delete	Global	
+Delete this interview	Global	
+Discard changes?	Global	
+Delete interview	Global	
+Log Study Session	Global	
+Date:	Global	
+Duration:	Global	
+Topic:	Global	
+Notes (optional)	Global	
+Notes:	Global	
+Cancel	Global	
+Log session	Global	
+Log session (Ctrl+S)	Global	
+(No topic)	Global	
+Manage Tracks	Global	
+Tracks:	Global	
++ New Track	Global	
+Name:	Global	
+Color:	Global	
+Delete Track	Global	
+Add Track	Global	
+Save track (Ctrl+S)	Global	
+Close	Global	
+Close dialog (Esc)	Global	
+Custom (%1)	Global	
+Save Track	Global	
+Calendar	Global	
+Previous month	Global	
+Next month	Global	
+Today	Global	
+Go to today	Global	
+Interviews	Global	
+Follow-ups	Global	
+Study targets	Global	
++ Interview	Global	
++ Interview (Ctrl+N)	Global	
++ Follow-up	Global	
++ Study target	Global	
+Nothing Planned	Global	
+Agenda	Global	
+No Day Selected	Global	
+Dashboard	Global	
+Applied this week	Global	
+Active processes	Global	
+Upcoming interviews	Global	
+Next 7 days	Global	
+Study streak	Global	
+No upcoming interviews	Global	
++ Schedule interview	Global	
+Study progress	Global	
+Hiring funnel	Global	
+No Activity Yet	Global	
++ Add application	Global	
++ Add topic	Global	
+Job Applications	Global	
+All	Global	
+Active	Global	
+Interviewing	Global	
+Offer	Global	
+Closed	Global	
+Export CSV	Global	
++ Application	Global	
+CSV files (*.csv)	Global	
+Export failed	Global	
+No Applications Yet	Global	
+No Matches	Global	
+Clear filters	Global	
+Edit...	Global	
+Change status	Global	
+Add interview...	Global	
+Open posting URL	Global	
+Duplicate	Global	
+Delete...	Global	
+Delete application	Global	
+Delete failed	Global	
+Status change failed	Global	
+Settings	GoalSpinBox	
+Appearance	GoalSpinBox	
+System Default	GoalSpinBox	
+Light	GoalSpinBox	
+Dark	GoalSpinBox	
+Theme:	GoalSpinBox	
+Indigo	GoalSpinBox	
+Teal	GoalSpinBox	
+Rose	GoalSpinBox	
+Amber	GoalSpinBox	
+Emerald	GoalSpinBox	
+Sky	GoalSpinBox	
+Accent color:	GoalSpinBox	
+Select interface language	GoalSpinBox	
+Language:	GoalSpinBox	
+Preferences	GoalSpinBox	
+Weekly study goal:	GoalSpinBox	
+Monday	GoalSpinBox	
+Sunday	GoalSpinBox	
+15 minutes	GoalSpinBox	
+30 minutes	GoalSpinBox	
+1 hour	GoalSpinBox	
+2 hours	GoalSpinBox	
+1 day	GoalSpinBox	
+2 days	GoalSpinBox	
+Custom...	GoalSpinBox	
+ min	GoalSpinBox	
+Add lead	GoalSpinBox	
+Remove selected	GoalSpinBox	
+Reset to default	GoalSpinBox	
+Data & Backups	GoalSpinBox	
+Export Applications (CSV)	GoalSpinBox	
+Export Interviews (ICS)	GoalSpinBox	
+Backup Database (JSON)	GoalSpinBox	
+Restore Database...	GoalSpinBox	
+Load Sample Data	GoalSpinBox	
+Open Data Folder	GoalSpinBox	
+Study	Global	
+No Study Topics	Global	
+No Study Tracks	Global	
++ Track	Global	
+Manage tracks...	Global	
+Board	Global	
+List	Global	
+Search topics (Ctrl+F)	Global	
++ Topic	Global	
+Delete Topic	Global	
+Interview	AgendaKindStyle	
+Follow-up	AgendaKindStyle	
+Study target	AgendaKindStyle	
+Wishlist	StatusStyle	
+Applied	StatusStyle	
+HR Screen	StatusStyle	
+Technical	StatusStyle	
+Final	StatusStyle	
+Offer	StatusStyle	
+Accepted	StatusStyle	
+Rejected	StatusStyle	
+Withdrawn	StatusStyle	
+Ghosted	StatusStyle	
+Backlog	StatusStyle	
+In Progress	StatusStyle	
+Review	StatusStyle	
+Done	StatusStyle	
+Low	StatusStyle	
+Normal	StatusStyle	
+High	StatusStyle	
+HR screen	StatusStyle	
+Live coding	StatusStyle	
+System design	StatusStyle	
+Behavioral	StatusStyle	
+Other	StatusStyle	
+Pending	StatusStyle	
+Passed	StatusStyle	
+Failed	StatusStyle	
+Cancelled	StatusStyle	
+Interview rate: 	Global	
+Weekly study goal	Global	
+Weekly goal	Global	
+Study progress rings	Global	
+Move to	Global	
+Delete topic	Global	
+Topic details	InternalWriteGuard	
+Close details	InternalWriteGuard	
+Topic title	InternalWriteGuard	
+No target date	InternalWriteGuard	
+Clear	InternalWriteGuard	
+Tags, comma separated	InternalWriteGuard	
+Notes	InternalWriteGuard	
+Checklist	InternalWriteGuard	
+New checklist item	InternalWriteGuard	
+Add	InternalWriteGuard	
+Resources	InternalWriteGuard	
+Title	InternalWriteGuard	
+URL	InternalWriteGuard	
+Resource title	InternalWriteGuard	
+https://...	InternalWriteGuard	
+Open	InternalWriteGuard	
+Delete	InternalWriteGuard	
+Log time	InternalWriteGuard	
+Select a topic	InternalWriteGuard	

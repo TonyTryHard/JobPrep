@@ -213,3 +213,14 @@ See [SPEC.md §3.7](file:///home/tony/projects/JobPrep/docs/SPEC.md#37-global) f
 
 - **Local Validation**: Run `./scripts/check.sh` (Linux) or `.\scripts\check.ps1` (Windows) before reporting changes.
 - **Continuous Integration**: GitHub Actions workflow `.github/workflows/ci.yml` runs on every pull request and push to `main`, validating GCC on `ubuntu-latest` and MSVC on `windows-latest` under `-Werror`.
+
+---
+
+## 11. Localization and Languages
+
+- **Available UI Languages**: English, Ukrainian (`Українська`), and Russian (`Русский`).
+- **Language Selection**: Configured in Settings -> General -> Language. Options are `System Default`, `English`, `Українська`, and `Русский`. Changes take effect after restarting JobPrep.
+- **Translation Infrastructure**:
+  - Translations are compiled from XML catalogs (`resources/translations/jobprep_uk.ts` and `jobprep_ru.ts`) into embedded binary resources (`/i18n/jobprep_uk.qm` and `/i18n/jobprep_ru.qm`).
+  - To verify that translation sources are synchronized with code without modifying working tree files, run `./scripts/check-translations.sh` (automatically executed as part of `./scripts/check.sh`).
+
