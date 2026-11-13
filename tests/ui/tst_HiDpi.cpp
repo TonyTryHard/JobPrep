@@ -133,6 +133,7 @@ private slots:
     void testRealTranslationRuHiDpi();
     void testDialogsFitSmallScreen();
     void testScreenshotsHiDpi();
+    void testScreenshotsI18n();
 
 private:
     QList<ClippingViolation> checkClipping(QWidget* root, const QString& contextDescription);
@@ -1296,6 +1297,137 @@ void tst_HiDpi::testScreenshotsHiDpi() {
         }
     }
     updateProgress(u"testScreenshotsHiDpi end"_s); // CI-DIAG
+}
+
+void tst_HiDpi::testScreenshotsI18n() {
+    updateProgress(u"testScreenshotsI18n start"_s); // CI-DIAG
+    const QString dir = qEnvironmentVariable("JOBPREP_I18N_IMG_DIR");
+    if (dir.isEmpty()) {
+        QSKIP("JOBPREP_I18N_IMG_DIR is not set");
+    }
+    QVERIFY(QDir().mkpath(dir));
+
+    auto& ctx = m_fix->context();
+    const QStringList langs = {u"uk"_s, u"ru"_s};
+
+    for (const auto& lang : langs) {
+        JobPrep::App::installLanguage(lang);
+
+        JobPrep::Ui::MainWindow win(ctx);
+        win.themeManager().setThemeMode(ThemeMode::Light);
+        win.resize(1100, 700);
+        win.show();
+        JobPrep::UiTest::activateWindow(&win);
+        QApplication::processEvents();
+
+        const struct {
+            int pageIdx;
+            const char* name;
+        } pages[] = {
+            {0, "home"},
+            {1, "study"},
+            {2, "jobs"},
+            {3, "calendar"},
+            {4, "settings"}
+        };
+
+        for (const auto& p : pages) {
+            win.pageStack()->setCurrentIndex(p.pageIdx);
+            if (p.pageIdx == 1) {
+                if (auto* sp = qobject_cast<JobPrep::Ui::Pages::StudyPage*>(win.pageStack()->widget(1))) {
+                    const auto topics = ctx.topics().all();
+                    if (!topics.empty()) {
+                        sp->selectTopic(topics.first().id);
+                    }
+                }
+            }
+            QApplication::processEvents();
+            const QImage img = win.grab().toImage();
+            QVERIFY(!img.isNull());
+            const QString path = QString(u"%1/%2-%3.png"_s).arg(dir, lang, QString::fromLatin1(p.name));
+            QVERIFY(img.save(path));
+        }
+
+        // Dialog 1: ApplicationDialog
+        {
+            JobPrep::Ui::Dialogs::ApplicationDialog dlg(
+                ctx.applications(), ctx.interviews(),
+                JobPrep::Ui::Dialogs::ApplicationDialog::Edit, &win);
+            const auto apps = ctx.applications().all();
+            if (!apps.isEmpty()) {
+                dlg.setApplication(apps.first());
+            }
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QApplication::processEvents();
+            const QImage img = dlg.grab().toImage();
+            QVERIFY(!img.isNull());
+            QVERIFY(img.save(QString(u"%1/%2-dialog-application.png"_s).arg(dir, lang)));
+            dlg.close();
+            QApplication::processEvents();
+        }
+
+        // Dialog 2: InterviewDialog
+        {
+            JobPrep::Ui::Dialogs::InterviewDialog dlg(
+                ctx.applications(), ctx.interviews(),
+                JobPrep::Ui::Dialogs::InterviewDialog::Create, &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QApplication::processEvents();
+            const QImage img = dlg.grab().toImage();
+            QVERIFY(!img.isNull());
+            QVERIFY(img.save(QString(u"%1/%2-dialog-interview.png"_s).arg(dir, lang)));
+            dlg.close();
+            QApplication::processEvents();
+        }
+
+        // Dialog 3: FollowUpDialog
+        {
+            JobPrep::Ui::Dialogs::FollowUpDialog dlg(
+                ctx.applications(), QDate::currentDate(), &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QApplication::processEvents();
+            const QImage img = dlg.grab().toImage();
+            QVERIFY(!img.isNull());
+            QVERIFY(img.save(QString(u"%1/%2-dialog-followup.png"_s).arg(dir, lang)));
+            dlg.close();
+            QApplication::processEvents();
+        }
+
+        // Dialog 4: TrackDialog
+        {
+            JobPrep::Ui::Dialogs::TrackDialog dlg(
+                ctx.tracks(), ctx.topics(), &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QApplication::processEvents();
+            const QImage img = dlg.grab().toImage();
+            QVERIFY(!img.isNull());
+            QVERIFY(img.save(QString(u"%1/%2-dialog-track.png"_s).arg(dir, lang)));
+            dlg.close();
+            QApplication::processEvents();
+        }
+
+        // Dialog 5: SessionDialog
+        {
+            JobPrep::Ui::Dialogs::SessionDialog dlg(
+                ctx.sessions(), ctx.topics(), &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QApplication::processEvents();
+            const QImage img = dlg.grab().toImage();
+            QVERIFY(!img.isNull());
+            QVERIFY(img.save(QString(u"%1/%2-dialog-session.png"_s).arg(dir, lang)));
+            dlg.close();
+            QApplication::processEvents();
+        }
+
+        JobPrep::App::uninstallLanguage();
+    }
+
+    updateProgress(u"testScreenshotsI18n end"_s); // CI-DIAG
 }
 
 static QString s_cfgToRemove;

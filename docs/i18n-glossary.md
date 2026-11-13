@@ -1,8 +1,8 @@
 # JobPrep Translation Glossary & Terminology Proposals
 
 > [!IMPORTANT]
-> Every row in this document is a **draft proposal for the user review and approval**.
-> No translations have been written into `jobprep_uk.ts` or `jobprep_ru.ts` in Part C (deferred to Part D).
+> Section 1 rows have been **applied** in `jobprep_uk.ts` and `jobprep_ru.ts` in Part D.
+> Open questions requiring user decision/sign-off are listed below.
 
 ## 1. Section 1: Needs the User's Decision (Domain Terminology)
 
@@ -30,50 +30,64 @@ Each term requires the user's review and explicit sign-off prior to authoring fu
   - **Option A (Full Mnemonics):** Assign unique Cyrillic accelerator letters to dialog buttons and field labels (e.g. `&Зберегти`, `&Видалити`).
   - **Option B (Recommended — Minimal Risk):** Omit mnemonics in custom application strings; rely on standard `qtbase_*.qm` accelerators for dialog buttons and global shortcuts (`Ctrl+S`, `Ctrl+N`).
 
+### Open Questions for User Sign-Off
+
+1. **Accelerators / Mnemonics (`&`):**
+   - **Applied (Option B):** Custom accelerators are omitted in Ukrainian and Russian catalogs to avoid layout collisions, untranslatable shortcuts on Latin layout, and shortcut conflicts. Standard dialog buttons (OK, Cancel, Yes, No) continue using Qt's built-in Cyrillic mnemonics via `qtbase_*.qm`.
+   - **User Choice:** Confirm Option B or decide if Option A (full custom mnemonics) is required.
+2. **User-Addressing Strings (Polite Plural):**
+   - Per style guide, UI text avoids addressing the user (`ви/ти`, `вы/ты`) unless sentence clarity demands it. Four strings in Ukrainian and three in Russian use the polite lower-case plural (`вашої/вашей`, `ви/вы`). See `docs/reports/i18n-review.md` for the exact strings.
+3. **Domain Terminology Sign-off:**
+   - `Application`: Unified as **`Заявка`** in both Ukrainian and Russian.
+   - `Follow-up`: Disambiguated as **`Фолоу-ап`** (uk) / **`Фоллоу-ап`** (ru), distinct from `Reminder` (**`Нагадування`** / **`Напоминание`**).
+   - `Target`: Translated as **`Ціль`** (uk) / **`Цель`** (ru).
+   - `Track`: Translated as **`Напрям`** (uk) / **`Направление`** (ru).
+   - `Study streak`: Translated as **`Серія навчання`** (uk) / **`Серия занятий`** (ru).
+
 ### Domain Terms Table (40 Terms)
 
-| English UI String | Context | Ukrainian Proposal | Russian Proposal | Conflict / Semantic Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `Status` | `Global` | Статус | Статус | Disambiguated between hiring stage and study topic |
-| `Applied` | `Global` | Подано | Подано | Hiring stage: application submitted |
-| `Track` | `Global` | Напрям | Направление | Study track |
-| `Priority` | `Global` | *Priority* | *Priority* | Proposal pending review |
-| `Application` | `Global` | Заявка | Заявка | User decision: unified term for job application |
-| `Interview` | `Global` | Співбесіда | Собеседование | Job interview |
-| `Topic` | `Global` | Тема | Тема | Study topic |
-| `Interview` | `NotificationText` | Співбесіда | Собеседование | Job interview |
-| `Status` | `TabScrollArea` | Статус | Статус | Disambiguated between hiring stage and study topic |
-| `Work mode` | `TabScrollArea` | *Work mode* | *Work mode* | Proposal pending review |
-| `Today` | `Global` | Сьогодні | Сегодня | Current day |
-| `Offer` | `Global` | Офер | Оффер | Hiring stage |
-| `Interview` | `AgendaKindStyle` | Співбесіда | Собеседование | Job interview |
-| `Follow-up` | `AgendaKindStyle` | Фолоу-ап | Фоллоу-ап | Distinct from Reminder (Нагадування / Напоминание) |
-| `Wishlist` | `StatusStyle` | Список бажань | Список желаний | Application wishlist |
-| `Applied` | `StatusStyle` | Подано | Подано | Hiring stage: application submitted |
-| `HR Screen` | `StatusStyle` | HR-скринінг | HR-скрининг | Interview stage |
-| `Technical` | `StatusStyle` | Технічне | Техническое | Interview type or stage |
-| `Final` | `StatusStyle` | Фінальне | Финальное | Interview stage |
-| `Offer` | `StatusStyle` | Офер | Оффер | Hiring stage |
-| `Accepted` | `StatusStyle` | Прийнято | Принято | Hiring stage outcome |
-| `Rejected` | `StatusStyle` | Відхилено | Отклонено | Hiring stage outcome |
-| `Withdrawn` | `StatusStyle` | Відкликано | Отозвано | Application withdrawn |
-| `Ghosted` | `StatusStyle` | Без відповіді | Без ответа | Application ghosted |
-| `Backlog` | `StatusStyle` | Беклог | Бэклог | Topic board status |
-| `In Progress` | `StatusStyle` | В процесі | В процессе | Topic board status |
-| `Review` | `StatusStyle` | На перегляді | На проверке | Topic board status |
-| `Done` | `StatusStyle` | Виконано | Выполнено | Topic board status |
-| `HR screen` | `StatusStyle` | HR-скринінг | HR-скрининг | Interview type |
-| `Live coding` | `StatusStyle` | Лайвкодинг | Лайвкодинг | Interview type |
-| `System design` | `StatusStyle` | Системний дизайн | Системный дизайн | Interview type |
-| `Behavioral` | `StatusStyle` | Поведінкове | Поведенческое | Interview type |
-| `Pending` | `StatusStyle` | Очікується | Ожидается | Interview outcome |
-| `Passed` | `StatusStyle` | Пройдено | Пройдено | Interview outcome |
-| `Failed` | `StatusStyle` | Не пройдено | Не пройдено | Interview outcome |
-| `Cancelled` | `StatusStyle` | Скасовано | Отменено | Interview outcome |
-| `Checklist` | `InternalWriteGuard` | *Checklist* | *Checklist* | Proposal pending review |
-| `Open` | `InternalWriteGuard` | Відкрити | Открыть | Action button to open external link |
-| `Study target` | `AgendaKindStyle` | Навчальна ціль | Учебная цель | Date-bound study topic goal |
-| `Study streak` | `Global` | Серія навчання | Серия занятий | Consecutive days of study progress |
+| English UI String | Context | Ukrainian Translation | Russian Translation | Status | Conflict / Semantic Notes |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| `Status` | `Global` | Статус | Статус | Applied | Disambiguated between hiring stage and study topic |
+| `Applied` | `Global` | Подано | Подано | Applied | Hiring stage: application submitted |
+| `Track` | `Global` | Напрям | Направление | Applied | Study track |
+| `Priority` | `Global` | Пріоритет | Приоритет | Applied | Topic priority level |
+| `Application` | `Global` | Заявка | Заявка | Applied | Unified term for job application |
+| `Interview` | `Global` | Співбесіда | Собеседование | Applied | Job interview |
+| `Topic` | `Global` | Тема | Тема | Applied | Study topic |
+| `Interview` | `NotificationText` | Співбесіда | Собеседование | Applied | Job interview |
+| `Status` | `TabScrollArea` | Статус | Статус | Applied | Disambiguated between hiring stage and study topic |
+| `Work mode` | `TabScrollArea` | Формат роботи | Формат работы | Applied | Work mode (remote, onsite, hybrid) |
+| `Today` | `Global` | Сьогодні | Сегодня | Applied | Current day |
+| `Offer` | `Global` | Офер | Оффер | Applied | Hiring stage |
+| `Interview` | `AgendaKindStyle` | Співбесіда | Собеседование | Applied | Job interview |
+| `Follow-up` | `AgendaKindStyle` | Фолоу-ап | Фоллоу-ап | Applied | Distinct from Reminder (Нагадування / Напоминание) |
+| `Wishlist` | `StatusStyle` | Список бажань | Список желаний | Applied | Application wishlist |
+| `Applied` | `StatusStyle` | Подано | Подано | Applied | Hiring stage: application submitted |
+| `HR Screen` | `StatusStyle` | HR-скринінг | HR-скрининг | Applied | Interview stage |
+| `Technical` | `StatusStyle` | Технічне | Техническое | Applied | Interview type or stage |
+| `Final` | `StatusStyle` | Фінальне | Финальное | Applied | Interview stage |
+| `Offer` | `StatusStyle` | Офер | Оффер | Applied | Hiring stage |
+| `Accepted` | `StatusStyle` | Прийнято | Принято | Applied | Hiring stage outcome |
+| `Rejected` | `StatusStyle` | Відхилено | Отклонено | Applied | Hiring stage outcome |
+| `Withdrawn` | `StatusStyle` | Відкликано | Отозвано | Applied | Application withdrawn |
+| `Ghosted` | `StatusStyle` | Без відповіді | Без ответа | Applied | Application ghosted |
+| `Backlog` | `StatusStyle` | Беклог | Бэклог | Applied | Topic board status |
+| `In Progress` | `StatusStyle` | В процесі | В процессе | Applied | Topic board status |
+| `Review` | `StatusStyle` | На перегляді | На проверке | Applied | Topic board status |
+| `Done` | `StatusStyle` | Виконано | Выполнено | Applied | Topic board status |
+| `HR screen` | `StatusStyle` | HR-скринінг | HR-скрининг | Applied | Interview type |
+| `Live coding` | `StatusStyle` | Лайвкодинг | Лайвкодинг | Applied | Interview type |
+| `System design` | `StatusStyle` | Системний дизайн | Системный дизайн | Applied | Interview type |
+| `Behavioral` | `StatusStyle` | Поведінкове | Поведенческое | Applied | Interview type |
+| `Pending` | `StatusStyle` | Очікується | Ожидается | Applied | Interview outcome |
+| `Passed` | `StatusStyle` | Пройдено | Пройдено | Applied | Interview outcome |
+| `Failed` | `StatusStyle` | Не пройдено | Не пройдено | Applied | Interview outcome |
+| `Cancelled` | `StatusStyle` | Скасовано | Отменено | Applied | Interview outcome |
+| `Checklist` | `InternalWriteGuard` | Чекліст | Чеклист | Applied | Study topic checklist |
+| `Open` | `InternalWriteGuard` | Відкрити | Открыть | Applied | Action button to open external link |
+| `Study target` | `AgendaKindStyle` | Навчальна ціль | Учебная цель | Applied | Date-bound study topic goal |
+| `Study streak` | `Global` | Серія навчання | Серия занятий | Applied | Consecutive days of study progress |
 
 ## 2. Section 2: Mechanical (Generic Labels, Buttons, Form Fields)
 
