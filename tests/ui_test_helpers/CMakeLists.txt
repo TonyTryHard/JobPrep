@@ -1,5 +1,6 @@
 add_library(jobprep_ui_test_helpers STATIC
     UiTestHelpers.cpp
+    PseudoTranslator.cpp
 )
 
 target_include_directories(jobprep_ui_test_helpers PUBLIC

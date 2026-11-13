@@ -42,6 +42,7 @@
 #include <QListView>
 #include <QPainter>
 #include <QStandardItemModel>
+#include "PseudoTranslator.h"
 #include "UiTestHelpers.h"
 
 using namespace Qt::StringLiterals;
@@ -125,6 +126,7 @@ private slots:
     void testDelegateAndWidgetTextOverlap();
     void testPagesHiDpi();
     void testDialogsHiDpi();
+    void testPseudoTranslationHiDpi();
     void testDialogsFitSmallScreen();
     void testScreenshotsHiDpi();
 
@@ -802,6 +804,111 @@ void tst_HiDpi::testDialogsHiDpi() {
     fflush(stderr);
 
     QCOMPARE(allViolations.count(), 0);
+}
+
+void tst_HiDpi::testPseudoTranslationHiDpi() {
+    updateProgress(u"testPseudoTranslationHiDpi start"_s); // CI-DIAG
+    JobPrep::UiTest::PseudoTranslator pseudo;
+    QCoreApplication::installTranslator(&pseudo);
+
+    auto& win = m_fix->window();
+    auto& ctx = m_fix->context();
+    win.show();
+    JobPrep::UiTest::activateWindow(&win);
+    QApplication::processEvents();
+
+    const QList<ThemeMode> themes = {ThemeMode::Light, ThemeMode::Dark};
+    const QList<QSize> sizes = {QSize(1100, 700), QSize(1000, 540)};
+
+    QList<ClippingViolation> allViolations;
+
+    // 1. Pages check under pseudo translation
+    for (const ThemeMode theme : themes) {
+        win.themeManager().setThemeMode(theme);
+        QApplication::processEvents();
+        const QString themeName = (theme == ThemeMode::Light ? u"Light"_s : u"Dark"_s);
+
+        for (const QSize& size : sizes) {
+            win.resize(size);
+            QApplication::processEvents();
+
+            for (int pageIdx = 0; pageIdx < 5; ++pageIdx) {
+                win.pageStack()->setCurrentIndex(pageIdx);
+                QApplication::processEvents();
+                const QString pageName = QString(u"Page_%1"_s).arg(pageIdx);
+                const QString desc = QString(u"Pseudo | %1 | %2 | %3x%4"_s)
+                                         .arg(pageName, themeName)
+                                         .arg(win.width())
+                                         .arg(win.height());
+                const auto v = checkClipping(win.pageStack()->currentWidget(), desc);
+                allViolations.append(v);
+            }
+        }
+
+        // 2. Dialogs check under pseudo translation
+        {
+            JobPrep::Ui::Dialogs::ApplicationDialog dlg(
+                ctx.applications(), ctx.interviews(),
+                JobPrep::Ui::Dialogs::ApplicationDialog::Edit, &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | ApplicationDialog | %1"_s).arg(themeName)));
+            dlg.close();
+        }
+        {
+            JobPrep::Ui::Dialogs::InterviewDialog dlg(
+                ctx.applications(), ctx.interviews(),
+                JobPrep::Ui::Dialogs::InterviewDialog::Create, &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | InterviewDialog | %1"_s).arg(themeName)));
+            dlg.close();
+        }
+        {
+            JobPrep::Ui::Dialogs::FollowUpDialog dlg(
+                ctx.applications(), QDate(2026, 11, 1), &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | FollowUpDialog | %1"_s).arg(themeName)));
+            dlg.close();
+        }
+        {
+            JobPrep::Ui::Dialogs::TrackDialog dlg(
+                ctx.tracks(), ctx.topics(), &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | TrackDialog | %1"_s).arg(themeName)));
+            dlg.close();
+        }
+        {
+            JobPrep::Ui::Dialogs::SessionDialog dlg(
+                ctx.sessions(), ctx.topics(), &win);
+            dlg.show();
+            JobPrep::UiTest::activateWindow(&dlg);
+            QCoreApplication::processEvents();
+            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | SessionDialog | %1"_s).arg(themeName)));
+            dlg.close();
+        }
+    }
+
+    QCoreApplication::removeTranslator(&pseudo);
+
+    for (const auto& viol : allViolations) {
+        fprintf(stderr, "CLIPPING_VIOLATION: [%s] %s (%s) '%s': %s\n",
+                qPrintable(viol.context),
+                qPrintable(viol.widgetClass),
+                qPrintable(viol.objectName),
+                qPrintable(viol.text),
+                qPrintable(viol.reason));
+    }
+    fflush(stderr);
+
+    QCOMPARE(allViolations.count(), 0);
+    updateProgress(u"testPseudoTranslationHiDpi end"_s); // CI-DIAG
 }
 
 void tst_HiDpi::testDialogsFitSmallScreen() {
