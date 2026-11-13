@@ -30,6 +30,10 @@ public:
     QString themeMode() const;
     void setThemeMode(const QString& mode);
 
+    static inline const QString kLanguageKey = QString::fromLatin1("ui/language");
+    static QString readLanguageSetting();
+    static QString readLanguageSetting(const QSettings& settings);
+
     QString language() const;
     void setLanguage(const QString& language);
 

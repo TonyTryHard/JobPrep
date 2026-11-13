@@ -28,6 +28,7 @@ private slots:
     void testToDayOfWeekNormalization();
     void testWeeklyGoalSurvivesRestart();
     void testLanguageSettingRoundTrip();
+    void testLanguageSettingSharedKeyAndScope();
     void testResolveLanguage_data();
     void testResolveLanguage();
     void testInstallLanguageRepeatedly();
@@ -279,6 +280,27 @@ void tst_SettingsService::testLanguageSettingRoundTrip() {
     }
 }
 
+void tst_SettingsService::testLanguageSettingSharedKeyAndScope() {
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString iniPath = tempDir.filePath(u"shared_scope.ini"_s);
+
+    // 1. Write through SettingsService
+    {
+        auto qsettings = std::make_unique<QSettings>(iniPath, QSettings::IniFormat);
+        SettingsService svc(std::move(qsettings));
+        svc.setLanguage(u"ru"_s);
+    }
+
+    // 2. Read directly through SettingsService::readLanguageSetting as used in main.cpp
+    {
+        QSettings directSettings(iniPath, QSettings::IniFormat);
+        const QString read = SettingsService::readLanguageSetting(directSettings);
+        QCOMPARE(read, u"ru"_s);
+        QCOMPARE(directSettings.value(SettingsService::kLanguageKey).toString(), u"ru"_s);
+    }
+}
+
 void tst_SettingsService::testResolveLanguage_data() {
     QTest::addColumn<QString>("setting");
     QTest::addColumn<QStringList>("uiLanguages");
@@ -397,18 +419,27 @@ void tst_SettingsService::testMainCallsInstallLanguageBeforeWidgets() {
     QVERIFY2(mainFile.open(QIODevice::ReadOnly | QIODevice::Text), "Could not open src/main.cpp");
 
     const QString content = QString::fromUtf8(mainFile.readAll());
+    const int orgPos = content.indexOf(u"setOrganizationName"_s);
+    const int appNamePos = content.indexOf(u"setApplicationName"_s);
     const int installPos = content.indexOf(u"JobPrep::App::installLanguage"_s);
+    const int readSettingPos = content.indexOf(u"SettingsService::readLanguageSetting"_s);
     const int appIconPos = content.indexOf(u"QApplication::setWindowIcon"_s);
     const int ctxPos = content.indexOf(u"JobPrep::App::AppContext ctx"_s);
     const int msgBoxPos = content.indexOf(u"QMessageBox::critical"_s);
     const int windowPos = content.indexOf(u"mainWindow(ctx"_s);
 
+    QVERIFY2(orgPos != -1, "setOrganizationName not found in main.cpp");
+    QVERIFY2(appNamePos != -1, "setApplicationName not found in main.cpp");
+    QVERIFY2(readSettingPos != -1, "SettingsService::readLanguageSetting not found in main.cpp");
     QVERIFY2(installPos != -1, "JobPrep::App::installLanguage not found in main.cpp");
     QVERIFY2(appIconPos != -1, "QApplication::setWindowIcon not found in main.cpp");
     QVERIFY2(ctxPos != -1, "AppContext not found in main.cpp");
     QVERIFY2(msgBoxPos != -1, "QMessageBox::critical not found in main.cpp");
     QVERIFY2(windowPos != -1, "mainWindow(ctx not found in main.cpp");
 
+    QVERIFY2(orgPos < readSettingPos, "setOrganizationName must precede reading settings");
+    QVERIFY2(appNamePos < readSettingPos, "setApplicationName must precede reading settings");
+    QVERIFY2(readSettingPos < installPos, "readLanguageSetting must precede installLanguage");
     QVERIFY2(installPos < appIconPos, "installLanguage must precede window icon setup");
     QVERIFY2(installPos < ctxPos, "installLanguage must precede AppContext creation");
     QVERIFY2(installPos < msgBoxPos, "installLanguage must precede QMessageBox::critical");

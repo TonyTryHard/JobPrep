@@ -67,12 +67,21 @@ void SettingsService::setThemeMode(const QString& mode) {
     emit themeModeChanged(mode);
 }
 
-QString SettingsService::language() const {
-    const QString val = m_settings->value(u"ui/language"_s, u"system"_s).toString();
+QString SettingsService::readLanguageSetting() {
+    QSettings settings;
+    return readLanguageSetting(settings);
+}
+
+QString SettingsService::readLanguageSetting(const QSettings& settings) {
+    const QString val = settings.value(kLanguageKey, u"system"_s).toString();
     if (val == u"en"_s || val == u"uk"_s || val == u"ru"_s) {
         return val;
     }
     return u"system"_s;
+}
+
+QString SettingsService::language() const {
+    return readLanguageSetting(*m_settings);
 }
 
 void SettingsService::setLanguage(const QString& language) {
@@ -80,7 +89,7 @@ void SettingsService::setLanguage(const QString& language) {
                                    ? language
                                    : u"system"_s;
     if (this->language() == normalized) return;
-    m_settings->setValue(u"ui/language"_s, normalized);
+    m_settings->setValue(kLanguageKey, normalized);
     emit languageChanged(normalized);
 }
 

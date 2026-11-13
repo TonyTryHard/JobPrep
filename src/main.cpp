@@ -30,8 +30,7 @@ int main(int argc, char* argv[]) {
 
     // Determine and install UI language before creating any widgets
     {
-        QSettings settings;
-        const QString langSetting = settings.value(u"ui/language"_s, u"system"_s).toString();
+        const QString langSetting = JobPrep::Services::SettingsService::readLanguageSetting();
         const QString effectiveLang =
             JobPrep::App::resolveLanguage(langSetting, QLocale::system().uiLanguages());
         JobPrep::App::installLanguage(effectiveLang);
