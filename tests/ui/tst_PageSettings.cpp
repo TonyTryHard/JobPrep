@@ -1262,7 +1262,12 @@ void tst_PageSettings::testGoalSpinBoxTypingRulesUnderLocales() {
         {u"7,30"_s, false, 450},
         {u"7.5"_s, false, 465},
         {u"7,5"_s, false, 465},
+        {u"7.05"_s, false, 420},
+        {u"7"_s, false, 420},
         {u"7.75"_s, true, 0},
+        {u"7."_s, true, 0},
+        {u".5"_s, true, 0},
+        {u"0.5"_s, false, 60},
         {u"8"_s, false, 480},
         {u"8 h"_s, false, 480}
     };

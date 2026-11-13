@@ -98,7 +98,16 @@ QString PseudoTranslator::pseudoLocalize(const QString& src, int n) {
         return transformed;
     }
 
-    const int expansionChars = qMax(1, qRound(normalCharCount * 0.40));
+    double expansionFactor = 0.40;
+    if (qEnvironmentVariableIsSet("JOBPREP_PSEUDO_EXPANSION")) {
+        bool ok = false;
+        const double factor = qEnvironmentVariable("JOBPREP_PSEUDO_EXPANSION").toDouble(&ok);
+        if (ok && factor > 0.0) {
+            expansionFactor = factor;
+        }
+    }
+
+    const int expansionChars = qMax(1, qRound(normalCharCount * expansionFactor));
     static const QString padChars = u"абвгдежзийклмнопрстуфхцчшщ"_s;
     QString padding;
     padding.reserve(expansionChars + 1);

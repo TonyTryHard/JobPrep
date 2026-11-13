@@ -2,13 +2,16 @@
 #include <QFile>
 #include <QString>
 #include <QStringList>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QTranslator>
 #include <QXmlStreamReader>
+#include "app/Localization.h"
 #include "domain/Structs.h"
 #include "services/ReminderService.h"
 #include "ui/FormatHelper.h"
 #include "ui/NotificationText.h"
+#include "PseudoTranslator.h"
 
 using namespace Qt::StringLiterals;
 using JobPrep::Services::Notification;
@@ -113,6 +116,9 @@ private slots:
     void testRealTsFilesSyncWithSource();
     void testPluralMechanismUkrainian();
     void testPluralMechanismRussian();
+    void testEmbeddedQmFilesExist();
+    void testMissingQtBaseNoWarningNoCrash();
+    void testEnglishFallbackAndPseudoTranslator();
 };
 
 void tst_Translations::testTsParsingAndCompletenessFixtures() {
@@ -310,6 +316,55 @@ void tst_Translations::testPluralMechanismRussian() {
     QVERIFY(tmpl5.contains(u"5 тем"_s));
 
     QCoreApplication::removeTranslator(&translator);
+}
+
+void tst_Translations::testEmbeddedQmFilesExist() {
+    QVERIFY2(QFile::exists(u":/i18n/jobprep_uk.qm"_s), "Embedded resource :/i18n/jobprep_uk.qm not found");
+    QVERIFY2(QFile::exists(u":/i18n/jobprep_ru.qm"_s), "Embedded resource :/i18n/jobprep_ru.qm not found");
+}
+
+void tst_Translations::testMissingQtBaseNoWarningNoCrash() {
+    QTemporaryDir emptyDir;
+    QVERIFY(emptyDir.isValid());
+
+    // When pointed to an empty directory, installLanguage must gracefully fail to load qtbase without crashing or warning
+    auto res = JobPrep::App::installLanguage(u"uk"_s, emptyDir.path());
+    QCOMPARE(res.language, u"uk"_s);
+    QVERIFY(res.appTranslatorLoaded);
+    QVERIFY(!res.qtBaseTranslatorLoaded);
+
+    JobPrep::App::uninstallLanguage();
+}
+
+void tst_Translations::testEnglishFallbackAndPseudoTranslator() {
+    // 1. English fallback when no translator is loaded (en)
+    JobPrep::App::uninstallLanguage();
+    QCOMPARE(FormatHelper::formatLeadTime(1440 * 1), u"1 day"_s);
+    QCOMPARE(FormatHelper::formatLeadTime(1440 * 2), u"2 days"_s);
+    QCOMPARE(FormatHelper::formatActiveProcesses(1), u"1 active process"_s);
+    QCOMPARE(FormatHelper::formatActiveProcesses(3), u"3 active processes"_s);
+    QCOMPARE(NotificationText::formatLeadTime(60 * 1), u"in 1 hour"_s);
+    QCOMPARE(NotificationText::formatLeadTime(60 * 2), u"in 2 hours"_s);
+
+    // 2. Real unfinished catalog (uk) returns clean English fallback, NOT empty or "%n"
+    auto resUk = JobPrep::App::installLanguage(u"uk"_s);
+    QVERIFY(resUk.appTranslatorLoaded);
+    QCOMPARE(FormatHelper::formatLeadTime(1440 * 1), u"1 day"_s);
+    QCOMPARE(FormatHelper::formatLeadTime(1440 * 2), u"2 days"_s);
+    QCOMPARE(FormatHelper::formatActiveProcesses(1), u"1 active process"_s);
+    QCOMPARE(FormatHelper::formatActiveProcesses(3), u"3 active processes"_s);
+    JobPrep::App::uninstallLanguage();
+
+    // 3. Pseudo-translator active: transforms text while preserving formatting
+    JobPrep::UiTest::PseudoTranslator pseudo;
+    QCoreApplication::installTranslator(&pseudo);
+
+    const QString pseudoResult1 = FormatHelper::formatLeadTime(1440 * 1);
+    QVERIFY(!pseudoResult1.isEmpty());
+    QVERIFY(pseudoResult1 != u"1 day"_s);
+    QVERIFY(pseudoResult1.contains(u'~'));
+
+    QCoreApplication::removeTranslator(&pseudo);
 }
 
 QTEST_MAIN(tst_Translations)

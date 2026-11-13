@@ -434,10 +434,14 @@ void tst_UiSmoke::testPseudoTranslationSmoke() {
     JobPrep::UiTest::PseudoTranslator pseudo;
     QCoreApplication::installTranslator(&pseudo);
 
+    JobPrep::Ui::MainWindow smokeWin(*m_ctx);
+    smokeWin.show();
+    QCoreApplication::processEvents();
+
     // 1. Visit every page
     for (int i = 0; i < 5; ++i) {
-        m_window->sidebar()->setCurrentPage(i);
-        emit m_window->sidebar()->pageSelected(i);
+        smokeWin.sidebar()->setCurrentPage(i);
+        emit smokeWin.sidebar()->pageSelected(i);
         QCoreApplication::processEvents();
     }
 
@@ -447,37 +451,37 @@ void tst_UiSmoke::testPseudoTranslationSmoke() {
         QVERIFY(dlg != nullptr);
         dlg->reject();
     });
-    m_window->findChild<QAction*>(u"HeaderNewApplication"_s)->trigger();
+    smokeWin.findChild<QAction*>(u"HeaderNewApplication"_s)->trigger();
 
     withNextModal([](QWidget* modal) {
         auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::InterviewDialog*>(modal);
         QVERIFY(dlg != nullptr);
         dlg->reject();
     });
-    m_window->findChild<QAction*>(u"HeaderNewInterview"_s)->trigger();
+    smokeWin.findChild<QAction*>(u"HeaderNewInterview"_s)->trigger();
 
     withNextModal([](QWidget* modal) {
         auto* dlg = qobject_cast<JobPrep::Ui::Dialogs::SessionDialog*>(modal);
         QVERIFY(dlg != nullptr);
         dlg->reject();
     });
-    m_window->findChild<QAction*>(u"HeaderNewSession"_s)->trigger();
+    smokeWin.findChild<QAction*>(u"HeaderNewSession"_s)->trigger();
 
     {
-        JobPrep::Ui::Dialogs::FollowUpDialog dlg(m_ctx->applications(), QDate::currentDate(), m_window.get());
+        JobPrep::Ui::Dialogs::FollowUpDialog dlg(m_ctx->applications(), QDate::currentDate(), &smokeWin);
         dlg.reject();
     }
 
     {
         JobPrep::Ui::Dialogs::TrackDialog dlg(
-            m_ctx->tracks(), m_ctx->topics(), m_window.get());
+            m_ctx->tracks(), m_ctx->topics(), &smokeWin);
         dlg.reject();
     }
 
     // 3. Toggle themes
-    m_window->themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Dark);
+    smokeWin.themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Dark);
     QCoreApplication::processEvents();
-    m_window->themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Light);
+    smokeWin.themeManager().setThemeMode(JobPrep::Ui::Theme::ThemeMode::Light);
     QCoreApplication::processEvents();
 
     QCoreApplication::removeTranslator(&pseudo);

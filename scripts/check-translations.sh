@@ -24,6 +24,12 @@ if [ -z "${LUPDATE}" ]; then
 fi
 
 echo "==> Checking translation sync with ${LUPDATE}..."
+
+JOBPREP_TS_QT_MINOR="${JOBPREP_TS_QT_MINOR:-10}"
+LUPDATE_VERSION="$("${LUPDATE}" -version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || echo "unknown")"
+LUPDATE_MAJOR_MINOR="$(echo "${LUPDATE_VERSION}" | grep -oE '^[0-9]+\.[0-9]+' || echo "")"
+LUPDATE_MINOR="${LUPDATE_MAJOR_MINOR#*.}"
+
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
@@ -37,6 +43,19 @@ DIFF_UK="$(diff -u resources/translations/jobprep_uk.ts "${TMP_DIR}/jobprep_uk.t
 DIFF_RU="$(diff -u resources/translations/jobprep_ru.ts "${TMP_DIR}/jobprep_ru.ts" || true)"
 
 if [ -n "${DIFF_UK}" ] || [ -n "${DIFF_RU}" ]; then
+    if [ -n "${LUPDATE_MINOR}" ] && [ "${LUPDATE_MINOR}" != "${JOBPREP_TS_QT_MINOR}" ]; then
+        echo "==> lupdate ${LUPDATE_VERSION} differs from generating minor 6.${JOBPREP_TS_QT_MINOR}: report only."
+        if [ -n "${DIFF_UK}" ]; then
+            echo "=== Diff for jobprep_uk.ts ==="
+            echo "${DIFF_UK}"
+        fi
+        if [ -n "${DIFF_RU}" ]; then
+            echo "=== Diff for jobprep_ru.ts ==="
+            echo "${DIFF_RU}"
+        fi
+        exit 0
+    fi
+
     echo "ERROR: Translation files are out of sync with source code!"
     if [ -n "${DIFF_UK}" ]; then
         echo "=== Diff for jobprep_uk.ts ==="

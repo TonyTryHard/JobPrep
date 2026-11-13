@@ -10,6 +10,7 @@ add_executable(tst_Translations
 
 target_include_directories(tst_Translations PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/tests/ui_test_helpers
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -21,6 +22,7 @@ target_compile_definitions(tst_Translations PRIVATE
 
 target_link_libraries(tst_Translations PRIVATE
     jobprep_core
+    jobprep_ui_test_helpers
     Qt6::Test
     Qt6::Widgets
 )

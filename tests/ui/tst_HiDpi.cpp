@@ -38,6 +38,7 @@
 #include "ui/theme/ThemeManager.h"
 #include "ui/delegates/AgendaItemDelegate.h"
 #include "ui/pages/HomePage.h"
+#include "ui/pages/StudyPage.h"
 #include "models/AgendaListModel.h"
 #include <QListView>
 #include <QPainter>
@@ -811,8 +812,8 @@ void tst_HiDpi::testPseudoTranslationHiDpi() {
     JobPrep::UiTest::PseudoTranslator pseudo;
     QCoreApplication::installTranslator(&pseudo);
 
-    auto& win = m_fix->window();
     auto& ctx = m_fix->context();
+    JobPrep::Ui::MainWindow win(ctx);
     win.show();
     JobPrep::UiTest::activateWindow(&win);
     QApplication::processEvents();
@@ -834,6 +835,14 @@ void tst_HiDpi::testPseudoTranslationHiDpi() {
 
             for (int pageIdx = 0; pageIdx < 5; ++pageIdx) {
                 win.pageStack()->setCurrentIndex(pageIdx);
+                if (pageIdx == 1) {
+                    if (auto* sp = qobject_cast<JobPrep::Ui::Pages::StudyPage*>(win.pageStack()->widget(1))) {
+                        const auto topics = ctx.topics().all();
+                        if (!topics.empty()) {
+                            sp->selectTopic(topics.first().id);
+                        }
+                    }
+                }
                 QApplication::processEvents();
                 const QString pageName = QString(u"Page_%1"_s).arg(pageIdx);
                 const QString desc = QString(u"Pseudo | %1 | %2 | %3x%4"_s)

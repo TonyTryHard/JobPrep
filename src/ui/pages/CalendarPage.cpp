@@ -221,7 +221,7 @@ void CalendarPage::setupSplitter(QVBoxLayout* layout) {
 
     const QByteArray splitterState = m_settings.calendarSplitterState();
     if (splitterState.isEmpty()) {
-        m_splitter->setSizes({640, 320});
+        m_splitter->setSizes({600, 340});
     } else {
         m_splitter->restoreState(splitterState);
     }
@@ -242,7 +242,7 @@ void CalendarPage::setupSplitter(QVBoxLayout* layout) {
 }
 
 void CalendarPage::setupAgendaPanel(QWidget* panel) {
-    const int panelMinWidth = fontMetrics().averageCharWidth() * 32;
+    const int panelMinWidth = qMax(fontMetrics().averageCharWidth() * 32, 340);
     const int panelMinHeight = fontMetrics().height() * 10;
     panel->setMinimumSize(panelMinWidth, panelMinHeight);
     auto* panelLayout = new QVBoxLayout(panel);
@@ -297,6 +297,7 @@ void CalendarPage::setupAgendaPanel(QWidget* panel) {
         tr("Use + Interview or + Follow-up to schedule something here."),
         tr("+ Interview"), m_agendaStack);
     m_agendaEmptyState->setObjectName(u"CalendarAgendaEmptyState"_s);
+    m_agendaEmptyState->layout()->setContentsMargins(8, 8, 8, 8);
     m_agendaStack->addWidget(m_agendaEmptyState);
 
     panelLayout->addWidget(m_agendaStack, 1);
