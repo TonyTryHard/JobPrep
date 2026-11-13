@@ -1095,3 +1095,196 @@ Total Test time (real) =  55.68 sec
 #### Totals by Command
 - **Test binaries:** 35 (compared to 34 in Part B; +1 binary `tst_Translations`)
 - **Test functions:** 495 (compared to 473 in Part B; +22 functions net across all binaries)
+
+---
+
+## 10. Reviewer corrections (Part D, D0)
+
+### 10.1 Complete Untrimmed Negative Control Test Run
+```bash
+JOBPREP_PSEUDO_EXPANSION=2.0 build/dev-linux/tests/ui/tst_HiDpi testPseudoTranslationHiDpi -o -,txt
+```
+```
+CI-DIAG progress: main start t=0ms
+CI-DIAG progress: main before QApplication t=0ms
+CI-DIAG progress: main after QApplication t=0ms
+********* Start testing of tst_HiDpi *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+QINFO  : tst_HiDpi::initTestCase() CI-DIAG progress: initTestCase start t=0ms
+QINFO  : tst_HiDpi::initTestCase() CI-DIAG progress: initTestCase end t=250ms
+PASS   : tst_HiDpi::initTestCase()
+QINFO  : tst_HiDpi::testPseudoTranslationHiDpi() CI-DIAG progress: testPseudoTranslationHiDpi start t=250ms
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Light | 1826x700] QLabel (StudyColumnTitle) 'Васклог~абвгдежзийклмн': width (177) < minimumSizeHint.width (181)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Light | 1826x700] QLabel (StudyColumnTitle) 'Васклог~абвгдежзийклмн': horizontalAdvance (181) > contentsRect.width (177)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Light | 1826x700] QLabel (StudyColumnTitle) 'Iн Ррогресс~абвгдежзийклмнопрсту': width (184) < minimumSizeHint.width (251)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Light | 1826x700] QLabel (StudyColumnTitle) 'Iн Ррогресс~абвгдежзийклмнопрсту': horizontalAdvance (250) > contentsRect.width (184)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x700] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвгдежзийклмнопрс': width (151) < minimumSizeHint.width (255)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x700] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвгдежзийклмнопрс': button text advance (220) > contentsRect.width (151)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x700] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абвгдежзийклмноп': width (151) < minimumSizeHint.width (244)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x700] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абвгдежзийклмноп': button text advance (210) > contentsRect.width (151)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x700] QLabel (EmptyStateTitle) 'Nотхінг Рланнед~абвгдежзийклмнопрстуфхцчшщаб': width (292) < minimumSizeHint.width (449)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x700] QLabel (EmptyStateDescription) 'Uсе + Iнтервіеш ор + Fоллош-ур то ссхедуле сометхінг хере.~абвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийкл': width (292) < minimumSizeHint.width (750)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x700] QLabel (EmptyStateDescription) 'Uсе + Iнтервіеш ор + Fоллош-ур то ссхедуле сометхінг хере.~абвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийкл': height (45) < heightForWidth (54)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Light | 1826x540] QLabel (StudyColumnTitle) 'Васклог~абвгдежзийклмн': width (177) < minimumSizeHint.width (181)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Light | 1826x540] QLabel (StudyColumnTitle) 'Васклог~абвгдежзийклмн': horizontalAdvance (181) > contentsRect.width (177)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Light | 1826x540] QLabel (StudyColumnTitle) 'Iн Ррогресс~абвгдежзийклмнопрсту': width (184) < minimumSizeHint.width (251)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Light | 1826x540] QLabel (StudyColumnTitle) 'Iн Ррогресс~абвгдежзийклмнопрсту': horizontalAdvance (250) > contentsRect.width (184)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x540] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвгдежзийклмнопрс': width (151) < minimumSizeHint.width (255)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x540] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвгдежзийклмнопрс': button text advance (220) > contentsRect.width (151)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x540] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абвгдежзийклмноп': width (151) < minimumSizeHint.width (244)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x540] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абвгдежзийклмноп': button text advance (210) > contentsRect.width (151)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x540] QLabel (EmptyStateTitle) 'Nотхінг Рланнед~абвгдежзийклмнопрстуфхцчшщаб': width (292) < minimumSizeHint.width (449)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x540] QLabel (EmptyStateDescription) 'Uсе + Iнтервіеш ор + Fоллош-ур то ссхедуле сометхінг хере.~абвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийкл': width (292) < minimumSizeHint.width (750)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1826x540] QLabel (EmptyStateDescription) 'Uсе + Iнтервіеш ор + Fоллош-ур то ссхедуле сометхінг хере.~абвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийкл': height (38) < heightForWidth (54)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Dark | 1826x700] QLabel (StudyColumnTitle) 'Васклог~абвгдежзийклмн': width (177) < minimumSizeHint.width (181)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Dark | 1826x700] QLabel (StudyColumnTitle) 'Васклог~абвгдежзийклмн': horizontalAdvance (181) > contentsRect.width (177)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Dark | 1826x700] QLabel (StudyColumnTitle) 'Iн Ррогресс~абвгдежзийклмнопрсту': width (184) < minimumSizeHint.width (251)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Dark | 1826x700] QLabel (StudyColumnTitle) 'Iн Ррогресс~абвгдежзийклмнопрсту': horizontalAdvance (250) > contentsRect.width (184)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x700] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвгдежзийклмнопрс': width (151) < minimumSizeHint.width (255)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x700] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвгдежзийклмнопрс': button text advance (220) > contentsRect.width (151)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x700] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абвгдежзийклмноп': width (151) < minimumSizeHint.width (244)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x700] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абвгдежзийклмноп': button text advance (210) > contentsRect.width (151)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x700] QLabel (EmptyStateTitle) 'Nотхінг Рланнед~абвгдежзийклмнопрстуфхцчшщаб': width (292) < minimumSizeHint.width (449)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x700] QLabel (EmptyStateDescription) 'Uсе + Iнтервіеш ор + Fоллош-ур то ссхедуле сометхінг хере.~абвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийкл': width (292) < minimumSizeHint.width (750)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x700] QLabel (EmptyStateDescription) 'Uсе + Iнтервіеш ор + Fоллош-ур то ссхедуле сометхінг хере.~абвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийкл': height (45) < heightForWidth (54)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Dark | 1826x540] QLabel (StudyColumnTitle) 'Васклог~абвгдежзийклмн': width (177) < minimumSizeHint.width (181)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Dark | 1826x540] QLabel (StudyColumnTitle) 'Васклог~абвгдежзийклмн': horizontalAdvance (181) > contentsRect.width (177)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Dark | 1826x540] QLabel (StudyColumnTitle) 'Iн Ррогресс~абвгдежзийклмнопрсту': width (184) < minimumSizeHint.width (251)
+CLIPPING_VIOLATION: [Pseudo | Page_1 | Dark | 1826x540] QLabel (StudyColumnTitle) 'Iн Ррогресс~абвгдежзийклмнопрсту': horizontalAdvance (250) > contentsRect.width (184)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x540] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвгдежзийклмнопрс': width (151) < minimumSizeHint.width (255)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x540] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвгдежзийклмнопрс': button text advance (220) > contentsRect.width (151)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x540] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абвгдежзийклмноп': width (151) < minimumSizeHint.width (244)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x540] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абвгдежзийклмноп': button text advance (210) > contentsRect.width (151)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x540] QLabel (EmptyStateTitle) 'Nотхінг Рланнед~абвгдежзийклмнопрстуфхцчшщаб': width (292) < minimumSizeHint.width (449)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x540] QLabel (EmptyStateDescription) 'Uсе + Iнтервіеш ор + Fоллош-ур то ссхедуле сометхінг хере.~абвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийкл': width (292) < minimumSizeHint.width (750)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1826x540] QLabel (EmptyStateDescription) 'Uсе + Iнтервіеш ор + Fоллош-ур то ссхедуле сометхінг хере.~абвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийклмнопрстуфхцчшщабвгдежзийкл': height (38) < heightForWidth (54)
+FAIL!  : tst_HiDpi::testPseudoTranslationHiDpi() Compared values are not the same
+   Actual   (allViolations.count()): 44
+   Expected (0)                    : 0
+   Loc: [/home/tony/projects/JobPrep/tests/ui/tst_HiDpi.cpp(919)]
+QINFO  : tst_HiDpi::cleanupTestCase() CI-DIAG progress: cleanupTestCase start t=3365ms
+QINFO  : tst_HiDpi::cleanupTestCase() CI-DIAG progress: cleanupTestCase end t=3372ms
+PASS   : tst_HiDpi::cleanupTestCase()
+Totals: 2 passed, 1 failed, 0 skipped, 0 blacklisted, 3502ms
+********* Finished testing of tst_HiDpi *********
+```
+
+### 10.2 Complete File Lists for UI Search Surfaces
+```bash
+ls -1 src/ui src/ui/pages src/ui/dialogs src/ui/widgets
+```
+```
+src/ui:
+DashboardController.cpp
+DashboardController.h
+DataToolsController.cpp
+DataToolsController.h
+FormatHelper.cpp
+FormatHelper.h
+InAppNotifier.cpp
+InAppNotifier.h
+MainWindow.cpp
+MainWindow.h
+NotificationText.cpp
+NotificationText.h
+NotifierFactory.cpp
+NotifierFactory.h
+PageBase.cpp
+PageBase.h
+ReminderCoordinator.cpp
+ReminderCoordinator.h
+Sidebar.cpp
+Sidebar.h
+StudyLogging.cpp
+StudyLogging.h
+Toast.cpp
+Toast.h
+TrayNotifier.cpp
+TrayNotifier.h
+delegates
+dialogs
+pages
+theme
+widgets
+
+src/ui/dialogs:
+ApplicationDialog.cpp
+ApplicationDialog.h
+FollowUpDialog.cpp
+FollowUpDialog.h
+InterviewDialog.cpp
+InterviewDialog.h
+SessionDialog.cpp
+SessionDialog.h
+TrackDialog.cpp
+TrackDialog.h
+
+src/ui/pages:
+CalendarPage.cpp
+CalendarPage.h
+HomePage.cpp
+HomePage.h
+JobsPage.cpp
+JobsPage.h
+SettingsPage.cpp
+SettingsPage.h
+StudyPage.cpp
+StudyPage.h
+
+src/ui/widgets:
+ChipBar.cpp
+ChipBar.h
+EmptyState.cpp
+EmptyState.h
+FunnelWidget.cpp
+FunnelWidget.h
+GoalProgressBar.cpp
+GoalProgressBar.h
+MonthView.cpp
+MonthView.h
+ProgressRing.cpp
+ProgressRing.h
+SelectionRestorer.cpp
+SelectionRestorer.h
+SingleTabDateTime.h
+StatCard.cpp
+StatCard.h
+TopicBoardColumn.cpp
+TopicBoardColumn.h
+TopicDetailPanel.cpp
+TopicDetailPanel.h
+TopicListView.cpp
+TopicListView.h
+```
+
+### 10.3 Total Message Counts by Command
+```bash
+grep -c "<source>" resources/translations/jobprep_uk.ts resources/translations/jobprep_ru.ts
+```
+```
+resources/translations/jobprep_uk.ts:506
+resources/translations/jobprep_ru.ts:506
+```
+
+```bash
+grep -c 'numerus="yes"' resources/translations/jobprep_uk.ts resources/translations/jobprep_ru.ts
+```
+```
+resources/translations/jobprep_uk.ts:12
+resources/translations/jobprep_ru.ts:12
+```
+
+### 10.4 Git Status and Git Worktree List
+```bash
+git status --short
+```
+```
+(no output)
+```
+
+```bash
+git worktree list
+```
+```
+/home/tony/projects/JobPrep a13a356 [main]
+```
