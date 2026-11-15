@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QDate>
 #include <QElapsedTimer> // CI-DIAG
+#include <QFontDatabase>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -817,94 +818,118 @@ void tst_HiDpi::testPseudoTranslationHiDpi() {
     QCoreApplication::installTranslator(&pseudo);
 
     auto& ctx = m_fix->context();
-    JobPrep::Ui::MainWindow win(ctx);
-    win.show();
-    JobPrep::UiTest::activateWindow(&win);
-    QApplication::processEvents();
 
-    const QList<ThemeMode> themes = {ThemeMode::Light, ThemeMode::Dark};
-    const QList<QSize> sizes = {QSize(1100, 700), QSize(1000, 540)};
+    struct FontPass {
+        QString family; // empty means default/current font
+        QList<ThemeMode> themes;
+        QList<QSize> sizes;
+    };
+    QList<FontPass> fontPasses;
+    // 1. Default application font (full theme and size matrix)
+    fontPasses.append({QString(), {ThemeMode::Light, ThemeMode::Dark}, {QSize(1100, 700), QSize(1000, 540)}});
+
+    // 2. DejaVu Sans (CI font matrix): if available and not already the active font, run on Light at 1100x700
+    if (QFontDatabase::hasFamily(u"DejaVu Sans"_s) && QApplication::font().family() != u"DejaVu Sans"_s) {
+        fontPasses.append({u"DejaVu Sans"_s, {ThemeMode::Light}, {QSize(1100, 700)}});
+    }
 
     QList<ClippingViolation> allViolations;
+    const QFont originalFont = QApplication::font();
 
-    // 1. Pages check under pseudo translation
-    for (const ThemeMode theme : themes) {
-        win.themeManager().setThemeMode(theme);
+    for (const auto& pass : fontPasses) {
+        if (!pass.family.isEmpty()) {
+            QApplication::setFont(QFont(pass.family, 10));
+        }
+
+        JobPrep::Ui::MainWindow win(ctx);
+        win.show();
+        JobPrep::UiTest::activateWindow(&win);
         QApplication::processEvents();
-        const QString themeName = (theme == ThemeMode::Light ? u"Light"_s : u"Dark"_s);
 
-        for (const QSize& size : sizes) {
-            win.resize(size);
+        for (const ThemeMode theme : pass.themes) {
+            win.themeManager().setThemeMode(theme);
             QApplication::processEvents();
+            const QString themeName = (theme == ThemeMode::Light ? u"Light"_s : u"Dark"_s);
 
-            for (int pageIdx = 0; pageIdx < 5; ++pageIdx) {
-                win.pageStack()->setCurrentIndex(pageIdx);
-                if (pageIdx == 1) {
-                    if (auto* sp = qobject_cast<JobPrep::Ui::Pages::StudyPage*>(win.pageStack()->widget(1))) {
-                        const auto topics = ctx.topics().all();
-                        if (!topics.empty()) {
-                            sp->selectTopic(topics.first().id);
+            for (const QSize& size : pass.sizes) {
+                win.resize(size);
+                QApplication::processEvents();
+
+                for (int pageIdx = 0; pageIdx < 5; ++pageIdx) {
+                    win.pageStack()->setCurrentIndex(pageIdx);
+                    if (pageIdx == 1) {
+                        if (auto* sp = qobject_cast<JobPrep::Ui::Pages::StudyPage*>(win.pageStack()->widget(1))) {
+                            const auto topics = ctx.topics().all();
+                            if (!topics.empty()) {
+                                sp->selectTopic(topics.first().id);
+                            }
                         }
                     }
+                    QApplication::processEvents();
+                    const QString pageName = QString(u"Page_%1"_s).arg(pageIdx);
+                    const QString desc = QString(u"Pseudo | %1 | %2 | %3x%4%5"_s)
+                                             .arg(pageName, themeName)
+                                             .arg(win.width())
+                                             .arg(win.height())
+                                             .arg(pass.family.isEmpty() ? u""_s : QString(u" | %1"_s).arg(pass.family));
+                    const auto v = checkClipping(win.pageStack()->currentWidget(), desc);
+                    allViolations.append(v);
                 }
-                QApplication::processEvents();
-                const QString pageName = QString(u"Page_%1"_s).arg(pageIdx);
-                const QString desc = QString(u"Pseudo | %1 | %2 | %3x%4"_s)
-                                         .arg(pageName, themeName)
-                                         .arg(win.width())
-                                         .arg(win.height());
-                const auto v = checkClipping(win.pageStack()->currentWidget(), desc);
-                allViolations.append(v);
+            }
+
+            // Dialogs check under pseudo translation
+            const QString fontSuffix = pass.family.isEmpty() ? u""_s : QString(u" | %1"_s).arg(pass.family);
+            {
+                JobPrep::Ui::Dialogs::ApplicationDialog dlg(
+                    ctx.applications(), ctx.interviews(),
+                    JobPrep::Ui::Dialogs::ApplicationDialog::Edit, &win);
+                dlg.show();
+                JobPrep::UiTest::activateWindow(&dlg);
+                QCoreApplication::processEvents();
+                allViolations.append(checkClipping(&dlg, QString(u"Pseudo | ApplicationDialog | %1%2"_s).arg(themeName, fontSuffix)));
+                dlg.close();
+            }
+            {
+                JobPrep::Ui::Dialogs::InterviewDialog dlg(
+                    ctx.applications(), ctx.interviews(),
+                    JobPrep::Ui::Dialogs::InterviewDialog::Create, &win);
+                dlg.show();
+                JobPrep::UiTest::activateWindow(&dlg);
+                QCoreApplication::processEvents();
+                allViolations.append(checkClipping(&dlg, QString(u"Pseudo | InterviewDialog | %1%2"_s).arg(themeName, fontSuffix)));
+                dlg.close();
+            }
+            {
+                JobPrep::Ui::Dialogs::FollowUpDialog dlg(
+                    ctx.applications(), QDate(2026, 11, 1), &win);
+                dlg.show();
+                JobPrep::UiTest::activateWindow(&dlg);
+                QCoreApplication::processEvents();
+                allViolations.append(checkClipping(&dlg, QString(u"Pseudo | FollowUpDialog | %1%2"_s).arg(themeName, fontSuffix)));
+                dlg.close();
+            }
+            {
+                JobPrep::Ui::Dialogs::TrackDialog dlg(
+                    ctx.tracks(), ctx.topics(), &win);
+                dlg.show();
+                JobPrep::UiTest::activateWindow(&dlg);
+                QCoreApplication::processEvents();
+                allViolations.append(checkClipping(&dlg, QString(u"Pseudo | TrackDialog | %1%2"_s).arg(themeName, fontSuffix)));
+                dlg.close();
+            }
+            {
+                JobPrep::Ui::Dialogs::SessionDialog dlg(
+                    ctx.sessions(), ctx.topics(), &win);
+                dlg.show();
+                JobPrep::UiTest::activateWindow(&dlg);
+                QCoreApplication::processEvents();
+                allViolations.append(checkClipping(&dlg, QString(u"Pseudo | SessionDialog | %1%2"_s).arg(themeName, fontSuffix)));
+                dlg.close();
             }
         }
 
-        // 2. Dialogs check under pseudo translation
-        {
-            JobPrep::Ui::Dialogs::ApplicationDialog dlg(
-                ctx.applications(), ctx.interviews(),
-                JobPrep::Ui::Dialogs::ApplicationDialog::Edit, &win);
-            dlg.show();
-            JobPrep::UiTest::activateWindow(&dlg);
-            QCoreApplication::processEvents();
-            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | ApplicationDialog | %1"_s).arg(themeName)));
-            dlg.close();
-        }
-        {
-            JobPrep::Ui::Dialogs::InterviewDialog dlg(
-                ctx.applications(), ctx.interviews(),
-                JobPrep::Ui::Dialogs::InterviewDialog::Create, &win);
-            dlg.show();
-            JobPrep::UiTest::activateWindow(&dlg);
-            QCoreApplication::processEvents();
-            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | InterviewDialog | %1"_s).arg(themeName)));
-            dlg.close();
-        }
-        {
-            JobPrep::Ui::Dialogs::FollowUpDialog dlg(
-                ctx.applications(), QDate(2026, 11, 1), &win);
-            dlg.show();
-            JobPrep::UiTest::activateWindow(&dlg);
-            QCoreApplication::processEvents();
-            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | FollowUpDialog | %1"_s).arg(themeName)));
-            dlg.close();
-        }
-        {
-            JobPrep::Ui::Dialogs::TrackDialog dlg(
-                ctx.tracks(), ctx.topics(), &win);
-            dlg.show();
-            JobPrep::UiTest::activateWindow(&dlg);
-            QCoreApplication::processEvents();
-            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | TrackDialog | %1"_s).arg(themeName)));
-            dlg.close();
-        }
-        {
-            JobPrep::Ui::Dialogs::SessionDialog dlg(
-                ctx.sessions(), ctx.topics(), &win);
-            dlg.show();
-            JobPrep::UiTest::activateWindow(&dlg);
-            QCoreApplication::processEvents();
-            allViolations.append(checkClipping(&dlg, QString(u"Pseudo | SessionDialog | %1"_s).arg(themeName)));
-            dlg.close();
+        if (!pass.family.isEmpty()) {
+            QApplication::setFont(originalFont);
         }
     }
 
