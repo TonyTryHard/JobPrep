@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]%/*}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "${REPO_ROOT}"
@@ -12,10 +12,6 @@ if [ -n "${QT_PREFIX_PATH:-}" ] && [ -x "${QT_PREFIX_PATH}/bin/lupdate" ]; then
     LUPDATE="${QT_PREFIX_PATH}/bin/lupdate"
 elif command -v lupdate >/dev/null 2>&1; then
     LUPDATE="$(command -v lupdate)"
-elif [ -x "/usr/lib/qt6/bin/lupdate" ]; then
-    LUPDATE="/usr/lib/qt6/bin/lupdate"
-elif [ -x "/var/tmp/qt682/6.8.2/gcc_64/bin/lupdate" ]; then
-    LUPDATE="/var/tmp/qt682/6.8.2/gcc_64/bin/lupdate"
 fi
 
 if [ -z "${LUPDATE}" ]; then
