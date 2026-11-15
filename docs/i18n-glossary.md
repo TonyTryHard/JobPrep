@@ -18,6 +18,14 @@ Each term requires the user's review and explicit sign-off prior to authoring fu
    - Unified as **`Заявка`** in both Ukrainian and Russian per user specification (distinguished from an application program via `//:` comments).
 3. **`Target`:**
    - Represents a date-bound study topic goal (**`Ціль`** in uk, **`Цель`** in ru).
+4. **`Study session` / `session`:**
+   - Unified as **`Заняття`** in uk (neuter; gen. pl. **`занять`**) and **`Занятие`** in ru. (*Reviewer proposal: changed in closeout, user may revert; in Ukrainian "сесія" primarily denotes an academic examination period*).
+5. **`Discard`:**
+   - Aligned with Qt's standard `QDialogButtonBox::Discard` translations from `qtbase_*.qm`: **`Відхилити`** in uk, **`Отклонить`** in ru.
+6. **`Custom`:**
+   - Unified as **`Власний`** in uk, **`Свой`** in ru across both `TrackDialog` and Settings.
+7. **`Sample data`:**
+   - Unified as **`Демонстраційні дані`** in uk, **`Демонстрационные данные`** in ru across titles and descriptions.
 
 ### Proposal on Accelerators / Mnemonics (`&`)
 
@@ -88,6 +96,10 @@ Each term requires the user's review and explicit sign-off prior to authoring fu
 | `Open` | `InternalWriteGuard` | Відкрити | Открыть | Applied | Action button to open external link |
 | `Study target` | `AgendaKindStyle` | Навчальна ціль | Учебная цель | Applied | Date-bound study topic goal |
 | `Study streak` | `Global` | Серія навчання | Серия занятий | Applied | Consecutive days of study progress |
+| `Study session` | `Global` | Заняття | Занятие | Applied | Changed in closeout (user may revert); uk "сесія" means exam period |
+| `Discard` | `Global` | Відхилити | Отклонить | Applied | Aligned with Qt standard QDialogButtonBox translation in qtbase |
+| `Custom` | `Global` | Власний | Свой | Applied | Unified across TrackDialog and Settings |
+| `Sample data` | `Global` | Демонстраційні дані | Демонстрационные данные | Applied | Unified across dialog titles and descriptions |
 
 ## 2. Section 2: Mechanical (Generic Labels, Buttons, Form Fields)
 

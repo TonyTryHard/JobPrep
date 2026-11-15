@@ -132,7 +132,7 @@
     </message>
     <message>
         <source>The backup file contains invalid non-positive identifiers.</source>
-        <translation>Файл резервної копії містить неприпустимі недодатні ідентифікатори.</translation>
+        <translation>Файл резервної копії містить неприпустимі ідентифікатори (нуль або від&apos;ємні значення).</translation>
     </message>
     <message>
         <source>The backup file contains unrecognized status or priority values.</source>
@@ -259,7 +259,7 @@ A safety backup of your current database will be saved to:
 Do you want to continue?</source>
         <translation>Відновлення з «%1» ЗАМІНИТЬ усі поточні дані.
 
-Захисну резервну копію вашої поточної бази даних буде збережено до:
+Захисну резервну копію поточної бази даних буде збережено до:
 %2
 
 Продовжити?</translation>
@@ -293,13 +293,13 @@ Safety backup saved to:
         <translation>Відновлення бази даних успішно завершено.
 
 Відновлені записи:
-- %1 напрямів
-- %2 тем
-- %3 підзавдань
-- %4 сесій навчання
-- %5 заявок
-- %6 записів історії статусів
-- %7 співбесід
+- Напрями: %1
+- Теми: %2
+- Підзавдання: %3
+- Заняття: %4
+- Заявки: %5
+- Записи історії статусів: %6
+- Співбесіди: %7
 
 Захисну резервну копію збережено до:
 %8</translation>
@@ -320,19 +320,19 @@ Your current database was NOT modified.</source>
         <translation>Не вдалося відновити базу даних:
 %1%2
 
-Ваша поточна база даних НЕ була змінена.</translation>
+Поточну базу даних НЕ змінено.</translation>
     </message>
     <message>
         <source>Your database already contains data. Loading sample data will add standard study tracks and topics without deleting your existing items.
 
 Do you want to continue?</source>
-        <translation>Ваша база даних вже містить дані. Завантаження демонстраційних даних додасть стандартні навчальні напрями та теми, не видаляючи наявні елементи.
+        <translation>База даних вже містить дані. Завантаження демонстраційних даних додасть стандартні навчальні напрями та теми, не видаляючи наявні елементи.
 
 Продовжити?</translation>
     </message>
     <message>
         <source>Confirm Load Sample Data</source>
-        <translation>Підтвердження завантаження демо-даних</translation>
+        <translation>Підтвердження завантаження демонстраційних даних</translation>
     </message>
     <message>
         <source>Sample Data Loaded</source>
@@ -344,7 +344,7 @@ Do you want to continue?</source>
     </message>
     <message>
         <source>Load Sample Data Failed</source>
-        <translation>Помилка завантаження демо-даних</translation>
+        <translation>Помилка завантаження демонстраційних даних</translation>
     </message>
     <message>
         <source>Could not load sample data: %1</source>
@@ -389,7 +389,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Discard changes (Esc)</source>
-        <translation>Відкинути зміни (Esc)</translation>
+        <translation>Відхилити зміни (Esc)</translation>
     </message>
     <message>
         <source>Save</source>
@@ -562,7 +562,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Interview changes are saved immediately and are not part of the Overview &quot;Discard changes?&quot; prompt.</source>
-        <translation>Зміни співбесід зберігаються негайно і не входять до запиту «Відкинути зміни?» на вкладці «Огляд».</translation>
+        <translation>Зміни співбесід зберігаються негайно і не входять до запиту «Відхилити зміни?» на вкладці «Огляд».</translation>
     </message>
     <message>
         <source>Save the application first to add interviews.</source>
@@ -634,11 +634,11 @@ Path: %1</source>
     </message>
     <message>
         <source>Discard changes?</source>
-        <translation>Відкинути зміни?</translation>
+        <translation>Відхилити зміни?</translation>
     </message>
     <message>
         <source>This application has unsaved changes. Discard them?</source>
-        <translation>Ця заявка має незбережені зміни. Відкинути їх?</translation>
+        <translation>Ця заявка має незбережені зміни. Відхилити їх?</translation>
     </message>
     <message>
         <source>Could not save: %1</source>
@@ -673,7 +673,7 @@ Path: %1</source>
     </message>
     <message>
         <source>What you will do on this day</source>
-        <translation>Що ви плануєте зробити в цей день</translation>
+        <translation>Що заплановано зробити цього дня</translation>
     </message>
     <message>
         <source>&amp;Action *</source>
@@ -780,7 +780,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Who you will talk to</source>
-        <translation>З ким ви спілкуватиметеся</translation>
+        <translation>З ким відбудеться розмова</translation>
     </message>
     <message>
         <source>&amp;Interviewer</source>
@@ -800,7 +800,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Discard changes (Esc)</source>
-        <translation>Відкинути зміни (Esc)</translation>
+        <translation>Відхилити зміни (Esc)</translation>
     </message>
     <message>
         <source>&amp;Save</source>
@@ -824,15 +824,15 @@ Path: %1</source>
     </message>
     <message>
         <source>Duration must be at least 1 minute.</source>
-        <translation>Тривалість має бути щонайменше 1 хвилину.</translation>
+        <translation>Тривалість має бути не менше 1 хвилини.</translation>
     </message>
     <message>
         <source>Discard changes?</source>
-        <translation>Відкинути зміни?</translation>
+        <translation>Відхилити зміни?</translation>
     </message>
     <message>
         <source>This interview has unsaved changes. Discard them?</source>
-        <translation>Ця співбесіда має незбережені зміни. Відкинути їх?</translation>
+        <translation>Ця співбесіда має незбережені зміни. Відхилити їх?</translation>
     </message>
     <message>
         <source>Could not save: %1</source>
@@ -855,7 +855,7 @@ Path: %1</source>
     <name>JobPrep::Ui::Dialogs::SessionDialog</name>
     <message>
         <source>Log Study Session</source>
-        <translation>Записати сесію навчання</translation>
+        <translation>Записати заняття</translation>
     </message>
     <message>
         <source>Date:</source>
@@ -887,15 +887,15 @@ Path: %1</source>
     </message>
     <message>
         <source>Discard changes (Esc)</source>
-        <translation>Відкинути зміни (Esc)</translation>
+        <translation>Відхилити зміни (Esc)</translation>
     </message>
     <message>
         <source>Log session</source>
-        <translation>Записати сесію</translation>
+        <translation>Записати заняття</translation>
     </message>
     <message>
         <source>Log session (Ctrl+S)</source>
-        <translation>Записати сесію (Ctrl+S)</translation>
+        <translation>Записати заняття (Ctrl+S)</translation>
     </message>
     <message>
         <source>(No topic)</source>
@@ -903,11 +903,11 @@ Path: %1</source>
     </message>
     <message>
         <source>Duration must be at least 1 minute.</source>
-        <translation>Тривалість має бути щонайменше 1 хвилину.</translation>
+        <translation>Тривалість має бути не менше 1 хвилини.</translation>
     </message>
     <message>
         <source>Could not log session: %1</source>
-        <translation>Не вдалося записати сесію: %1</translation>
+        <translation>Не вдалося записати заняття: %1</translation>
     </message>
 </context>
 <context>
@@ -958,7 +958,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Custom (%1)</source>
-        <translation>Користувацький (%1)</translation>
+        <translation>Власний (%1)</translation>
     </message>
     <message>
         <source>Save Track</source>
@@ -1132,11 +1132,11 @@ Path: %1</source>
     </message>
     <message>
         <source>Study session</source>
-        <translation>Сесія навчання</translation>
+        <translation>Заняття</translation>
     </message>
     <message>
         <source>Log a study session</source>
-        <translation>Записати сесію навчання</translation>
+        <translation>Записати заняття</translation>
     </message>
     <message>
         <source>Topic not found</source>
@@ -1279,7 +1279,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Log a study session or follow up on an application.</source>
-        <translation>Запишіть сесію навчання або виконайте фолоу-ап за заявкою.</translation>
+        <translation>Запишіть заняття або виконайте фолоу-ап за заявкою.</translation>
     </message>
     <message>
         <source>Today</source>
@@ -1535,15 +1535,15 @@ Path: %1</source>
     <message>
         <source>Language will take effect after restarting JobPrep.</source>
         <extracomment>Notice displayed when user changes the interface language</extracomment>
-        <translation>Мова набуде чинності після перезапуску JobPrep.</translation>
+        <translation>Мову буде змінено після перезапуску JobPrep.</translation>
     </message>
     <message>
         <source>Preferences</source>
         <translation>Параметри</translation>
     </message>
     <message>
-        <source>Weekly study goal in hours and minutes (e.g. 8, 7.5, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)</source>
-        <translation>Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7.5, 7:30, 7;30, 450 min; числа чи десяткові дроби означають години)</translation>
+        <source>Weekly study goal in hours and minutes (e.g. 8, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)</source>
+        <translation>Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7:30, 7;30, 450 min; числа чи десяткові дроби означають години)</translation>
     </message>
     <message>
         <source>Weekly study goal:</source>
@@ -1683,7 +1683,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Load Sample Data</source>
-        <translation>Завантажити демо-дані</translation>
+        <translation>Завантажити демонстраційні дані</translation>
     </message>
     <message>
         <source>Load standard interview preparation tracks and topics</source>
@@ -1710,7 +1710,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Organize your C++ and English interview topics into kanban columns and log study sessions.</source>
-        <translation>Впорядковуйте теми співбесід із C++ та English у колонках канбану та записуйте сесії навчання.</translation>
+        <translation>Впорядковуйте теми співбесід із C++ та English у колонках канбану та записуйте заняття.</translation>
     </message>
     <message>
         <source>No Matches</source>
@@ -2003,7 +2003,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Log study session for this topic</source>
-        <translation>Записати сесію навчання для цієї теми</translation>
+        <translation>Записати заняття для цієї теми</translation>
     </message>
     <message>
         <source>Select a topic</source>
@@ -2109,7 +2109,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Load sample data?</source>
-        <translation>Завантажити демо-дані?</translation>
+        <translation>Завантажити демонстраційні дані?</translation>
     </message>
     <message>
         <source>Would you like to start with a sample study plan?
@@ -2121,7 +2121,7 @@ It adds the C++ and English tracks with their topics and checklists.</source>
     </message>
     <message>
         <source>Sample data</source>
-        <translation>Демо-дані</translation>
+        <translation>Демонстраційні дані</translation>
     </message>
     <message>
         <source>The sample data could not be loaded.

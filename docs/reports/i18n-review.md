@@ -25,9 +25,9 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 
 | Context | English Source | Ukrainian Translation | Russian Translation | File |
 | :--- | :--- | :--- | :--- | :--- |
-| `DataToolsController` | Restoring from '%1' will REPLACE all current data.<br><br>A safety backup of your current database will be saved to:<br>%2<br><br>Do you want to continue? | Відновлення з «%1» ЗАМІНИТЬ усі поточні дані.<br><br>Захисну резервну копію вашої поточної бази даних буде збережено до:<br>%2<br><br>Продовжити? | Восстановление из «%1» ЗАМЕНИТ все текущие данные.<br><br>Защитная резервная копия вашей текущей базы данных будет сохранена в:<br>%2<br><br>Продолжить? | `src/ui/DataToolsController.cpp` |
-| `Dialogs::FollowUpDialog` | What you will do on this day | Що ви плануєте зробити в цей день | Что планируется сделать в этот день | `src/ui/dialogs/FollowUpDialog.cpp` |
-| `Dialogs::InterviewDialog` | Who you will talk to | З ким ви спілкуватиметеся | С кем вы будете общаться | `src/ui/dialogs/InterviewDialog.cpp` |
+| `DataToolsController` | Restoring from '%1' will REPLACE all current data.<br><br>A safety backup of your current database will be saved to:<br>%2<br><br>Do you want to continue? | Відновлення з «%1» ЗАМІНИТЬ усі поточні дані.<br><br>Захисну резервну копію поточної бази даних буде збережено до:<br>%2<br><br>Продовжити? | Восстановление из «%1» ЗАМЕНИТ все текущие данные.<br><br>Защитная резервная копия текущей базы данных будет сохранена в:<br>%2<br><br>Продолжить? | `src/ui/DataToolsController.cpp` |
+| `Dialogs::FollowUpDialog` | What you will do on this day | Що заплановано зробити цього дня | Что запланировано сделать в этот день | `src/ui/dialogs/FollowUpDialog.cpp` |
+| `Dialogs::InterviewDialog` | Who you will talk to | З ким відбудеться розмова | С кем будет разговор | `src/ui/dialogs/InterviewDialog.cpp` |
 | `Pages::HomePage` | Welcome to JobPrep! Your daily study targets, active applications, and upcoming interviews will appear here. | Ласкаво просимо до JobPrep! Ваші щоденні навчальні цілі, активні заявки та майбутні співбесіди з'являтимуться тут. | Добро пожаловать в JobPrep! Ваши ежедневные учебные цели, активные заявки и предстоящие собеседования будут отображаться здесь. | `src/ui/pages/HomePage.cpp` |
 
 ## Home (10 strings)
@@ -35,7 +35,7 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | English Source | Ukrainian Translation | Russian Translation | Source File |
 | :--- | :--- | :--- | :--- |
 | Nothing planned for today | На сьогодні нічого не заплановано | На сегодня ничего не запланировано | `src/ui/pages/HomePage.cpp` |
-| Log a study session or follow up on an application. | Запишіть сесію навчання або виконайте фолоу-ап за заявкою. | Запишите занятие или выполните фоллоу-ап по заявке. | `src/ui/pages/HomePage.cpp` |
+| Log a study session or follow up on an application. | Запишіть заняття або виконайте фолоу-ап за заявкою. | Запишите занятие или выполните фоллоу-ап по заявке. | `src/ui/pages/HomePage.cpp` |
 | Schedule your next interview stage or screening. | Заплануйте наступний етап співбесіди або скринінг. | Запланируйте следующий этап собеседования или скрининг. | `src/ui/pages/HomePage.cpp` |
 | Welcome to JobPrep! Your daily study targets, active applications, and upcoming interviews will appear here. | Ласкаво просимо до JobPrep! Ваші щоденні навчальні цілі, активні заявки та майбутні співбесіди з'являтимуться тут. | Добро пожаловать в JobPrep! Ваши ежедневные учебные цели, активные заявки и предстоящие собеседования будут отображаться здесь. | `src/ui/pages/HomePage.cpp` |
 | %1 of %2 (%3%) | %1 з %2 (%3%) | %1 из %2 (%3%) | `src/ui/widgets/GoalProgressBar.cpp` |
@@ -50,7 +50,7 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | English Source | Ukrainian Translation | Russian Translation | Source File |
 | :--- | :--- | :--- | :--- |
 | Priority: %1 | Пріоритет: %1 | Приоритет: %1 | `src/ui/delegates/TopicCardDelegate.cpp` |
-| Organize your C++ and English interview topics into kanban columns and log study sessions. | Впорядковуйте теми співбесід із C++ та English у колонках канбану та записуйте сесії навчання. | Упорядочивайте темы собеседований по C++ и English в колонках канбана и записывайте занятия. | `src/ui/pages/StudyPage.cpp` |
+| Organize your C++ and English interview topics into kanban columns and log study sessions. | Впорядковуйте теми співбесід із C++ та English у колонках канбану та записуйте заняття. | Упорядочивайте темы собеседований по C++ и English в колонках канбана и записывайте занятия. | `src/ui/pages/StudyPage.cpp` |
 | No topic matches the current search and track filter. | Жодна тема не відповідає поточному пошуку та фільтру напряму. | Ни одна тема не соответствует текущему поиску и фильтру направления. | `src/ui/pages/StudyPage.cpp` |
 | Create a study track (like C++ or English) to start planning topics. | Створіть навчальний напрям (наприклад, C++ або English), щоб розпочати планування тем. | Создайте учебное направление (например, C++ или English), чтобы начать планирование тем. | `src/ui/pages/StudyPage.cpp` |
 | Add, rename, recolor or delete tracks | Додавайте, перейменовуйте, змінюйте колір або видаляйте напрями | Добавляйте, переименовывайте, меняйте цвет или удаляйте направления | `src/ui/pages/StudyPage.cpp` |
@@ -65,7 +65,7 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | Track this topic belongs to | Напрям, до якого належить ця тема | Направление, к которому относится эта тема | `src/ui/widgets/TopicDetailPanel.cpp` |
 | Clear the target date | Очистити цільову дату | Очистить целевую дату | `src/ui/widgets/TopicDetailPanel.cpp` |
 | Only http and https links can be opened | Можна відкривати лише посилання http та https | Можно открывать только ссылки http и https | `src/ui/widgets/TopicDetailPanel.cpp` |
-| Log study session for this topic | Записати сесію навчання для цієї теми | Записать занятие для этой темы | `src/ui/widgets/TopicDetailPanel.cpp` |
+| Log study session for this topic | Записати заняття для цієї теми | Записать занятие для этой темы | `src/ui/widgets/TopicDetailPanel.cpp` |
 | Title cannot be empty. | Назва не може бути порожньою. | Название не может быть пустым. | `src/ui/widgets/TopicDetailPanel.cpp` |
 | Tracks changed. Please reselect. | Напрями змінилися. Будь ласка, виберіть знову. | Направления изменились. Пожалуйста, выберите снова. | `src/ui/widgets/TopicDetailPanel.cpp` |
 | Checklist text cannot be empty. | Текст чекліста не може бути порожнім. | Текст чеклиста не может быть пустым. | `src/ui/widgets/TopicDetailPanel.cpp` |
@@ -109,7 +109,7 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | The file is not a valid JobPrep backup (format mismatch). | Файл не є дійсною резервною копією JobPrep (невідповідність формату). | Файл не является корректной резервной копией JobPrep (несоответствие формата). | `src/ui/DataToolsController.cpp` |
 | The backup version is not supported by this version of JobPrep. | Версія резервної копії не підтримується цією версією JobPrep. | Версия резервной копии не поддерживается этой версией JobPrep. | `src/ui/DataToolsController.cpp` |
 | The backup file contains duplicate item identifiers. | Файл резервної копії містить повторювані ідентифікатори елементів. | Файл резервной копии содержит повторяющиеся идентификаторы элементов. | `src/ui/DataToolsController.cpp` |
-| The backup file contains invalid non-positive identifiers. | Файл резервної копії містить неприпустимі недодатні ідентифікатори. | Файл резервной копии содержит недопустимые неположительные идентификаторы. | `src/ui/DataToolsController.cpp` |
+| The backup file contains invalid non-positive identifiers. | Файл резервної копії містить неприпустимі ідентифікатори (нуль або від'ємні значення). | Файл резервной копии содержит недопустимые идентификаторы (ноль или отрицательные значения). | `src/ui/DataToolsController.cpp` |
 | The backup file contains unrecognized status or priority values. | Файл резервної копії містить нерозпізнані значення статусу або пріоритету. | Файл резервной копии содержит нераспознанные значения статуса или приоритета. | `src/ui/DataToolsController.cpp` |
 | The backup file contains invalid date or time format strings. | Файл резервної копії містить некоректні рядки формату дати або часу. | Файл резервной копии содержит некорректные строки формата даты или времени. | `src/ui/DataToolsController.cpp` |
 | The backup file contains broken cross-table references. | Файл резервної копії містить пошкоджені міжтабличні посилання. | Файл резервной копии содержит повреждённые межтабличные ссылки. | `src/ui/DataToolsController.cpp` |
@@ -128,22 +128,22 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | Could not create database backup:<br>%1 | Не вдалося створити резервну копію бази даних:<br>%1 | Не удалось создать резервную копию базы данных:<br>%1 | `src/ui/DataToolsController.cpp` |
 | A database restore is already in progress. | Відновлення бази даних вже виконується. | Восстановление базы данных уже выполняется. | `src/ui/DataToolsController.cpp` |
 | Restore Database from Backup | Відновити базу даних із резервної копії | Восстановить базу данных из резервной копии | `src/ui/DataToolsController.cpp` |
-| Restoring from '%1' will REPLACE all current data.<br><br>A safety backup of your current database will be saved to:<br>%2<br><br>Do you want to continue? | Відновлення з «%1» ЗАМІНИТЬ усі поточні дані.<br><br>Захисну резервну копію вашої поточної бази даних буде збережено до:<br>%2<br><br>Продовжити? | Восстановление из «%1» ЗАМЕНИТ все текущие данные.<br><br>Защитная резервная копия вашей текущей базы данных будет сохранена в:<br>%2<br><br>Продолжить? | `src/ui/DataToolsController.cpp` |
+| Restoring from '%1' will REPLACE all current data.<br><br>A safety backup of your current database will be saved to:<br>%2<br><br>Do you want to continue? | Відновлення з «%1» ЗАМІНИТЬ усі поточні дані.<br><br>Захисну резервну копію поточної бази даних буде збережено до:<br>%2<br><br>Продовжити? | Восстановление из «%1» ЗАМЕНИТ все текущие данные.<br><br>Защитная резервная копия текущей базы данных будет сохранена в:<br>%2<br><br>Продолжить? | `src/ui/DataToolsController.cpp` |
 | Restoring database from backup file. Please wait... | Відновлення бази даних із файлу резервної копії. Зачекайте... | Восстановление базы данных из файла резервной копии. Подождите... | `src/ui/DataToolsController.cpp` |
-| Database restore completed successfully.<br><br>Restored records:<br>- %1 tracks<br>- %2 topics<br>- %3 subtasks<br>- %4 study sessions<br>- %5 applications<br>- %6 status history entries<br>- %7 interviews<br><br>Safety backup saved to:<br>%8 | Відновлення бази даних успішно завершено.<br><br>Відновлені записи:<br>- %1 напрямів<br>- %2 тем<br>- %3 підзавдань<br>- %4 сесій навчання<br>- %5 заявок<br>- %6 записів історії статусів<br>- %7 співбесід<br><br>Захисну резервну копію збережено до:<br>%8 | Восстановление базы данных успешно завершено.<br><br>Восстановленные записи:<br>- %1 направлений<br>- %2 тем<br>- %3 подзадач<br>- %4 занятий<br>- %5 заявок<br>- %6 записей истории статусов<br>- %7 собеседований<br><br>Защитная резервная копия сохранена в:<br>%8 | `src/ui/DataToolsController.cpp` |
-| Could not restore database:<br>%1%2<br><br>Your current database was NOT modified. | Не вдалося відновити базу даних:<br>%1%2<br><br>Ваша поточна база даних НЕ була змінена. | Не удалось восстановить базу данных:<br>%1%2<br><br>Ваша текущая база данных НЕ была изменена. | `src/ui/DataToolsController.cpp` |
-| Your database already contains data. Loading sample data will add standard study tracks and topics without deleting your existing items.<br><br>Do you want to continue? | Ваша база даних вже містить дані. Завантаження демонстраційних даних додасть стандартні навчальні напрями та теми, не видаляючи наявні елементи.<br><br>Продовжити? | Ваша база данных уже содержит данные. Загрузка демонстрационных данных добавит стандартные направления и темы, не удаляя существующие элементы.<br><br>Продолжить? | `src/ui/DataToolsController.cpp` |
-| Confirm Load Sample Data | Підтвердження завантаження демо-даних | Подтверждение загрузки демо-данных | `src/ui/DataToolsController.cpp` |
+| Database restore completed successfully.<br><br>Restored records:<br>- %1 tracks<br>- %2 topics<br>- %3 subtasks<br>- %4 study sessions<br>- %5 applications<br>- %6 status history entries<br>- %7 interviews<br><br>Safety backup saved to:<br>%8 | Відновлення бази даних успішно завершено.<br><br>Відновлені записи:<br>- Напрями: %1<br>- Теми: %2<br>- Підзавдання: %3<br>- Заняття: %4<br>- Заявки: %5<br>- Записи історії статусів: %6<br>- Співбесіди: %7<br><br>Захисну резервну копію збережено до:<br>%8 | Восстановление базы данных успешно завершено.<br><br>Восстановленные записи:<br>- Направления: %1<br>- Темы: %2<br>- Подзадачи: %3<br>- Занятия: %4<br>- Заявки: %5<br>- Записи истории статусов: %6<br>- Собеседования: %7<br><br>Защитная резервная копия сохранена в:<br>%8 | `src/ui/DataToolsController.cpp` |
+| Could not restore database:<br>%1%2<br><br>Your current database was NOT modified. | Не вдалося відновити базу даних:<br>%1%2<br><br>Поточну базу даних НЕ змінено. | Не удалось восстановить базу данных:<br>%1%2<br><br>Текущая база данных НЕ изменена. | `src/ui/DataToolsController.cpp` |
+| Your database already contains data. Loading sample data will add standard study tracks and topics without deleting your existing items.<br><br>Do you want to continue? | База даних вже містить дані. Завантаження демонстраційних даних додасть стандартні навчальні напрями та теми, не видаляючи наявні елементи.<br><br>Продовжити? | База данных уже содержит данные. Загрузка демонстрационных данных добавит стандартные направления и темы, не удаляя существующие элементы.<br><br>Продолжить? | `src/ui/DataToolsController.cpp` |
+| Confirm Load Sample Data | Підтвердження завантаження демонстраційних даних | Подтверждение загрузки демонстрационных данных | `src/ui/DataToolsController.cpp` |
 | Sample study tracks and topics were successfully loaded. | Демонстраційні навчальні напрями та теми успішно завантажено. | Демонстрационные направления и темы успешно загружены. | `src/ui/DataToolsController.cpp` |
-| Load Sample Data Failed | Помилка завантаження демо-даних | Ошибка загрузки демо-данных | `src/ui/DataToolsController.cpp` |
+| Load Sample Data Failed | Помилка завантаження демонстраційних даних | Ошибка загрузки демонстрационных данных | `src/ui/DataToolsController.cpp` |
 | Could not load sample data: %1 | Не вдалося завантажити демонстраційні дані: %1 | Не удалось загрузить демонстрационные данные: %1 | `src/ui/DataToolsController.cpp` |
 | Could not open the data folder in file manager.<br><br>Path: %1 | Не вдалося відкрити папку даних у файловому менеджері.<br><br>Шлях: %1 | Не удалось открыть папку данных в файловом менеджере.<br><br>Путь: %1 | `src/ui/DataToolsController.cpp` |
 | Keep JobPrep running in the system tray when closing the window | Залишати JobPrep працювати в системному треї під час закриття вікна | Оставлять JobPrep работать в системном трее при закрытии окна | `src/ui/pages/SettingsPage.cpp` |
 | System tray is not available on this system | Системний трей недоступний у цій системі | Системный трей недоступен в этой системе | `src/ui/pages/SettingsPage.cpp` |
 | Select visual color theme | Виберіть візуальну кольорову тему | Выберите визуальную цветовую тему | `src/ui/pages/SettingsPage.cpp` |
 | Select accent highlight color | Виберіть акцентний колір підсвічування | Выберите акцентный цвет выделения | `src/ui/pages/SettingsPage.cpp` |
-| Language will take effect after restarting JobPrep. | Мова набуде чинності після перезапуску JobPrep. | Язык вступит в силу после перезапуска JobPrep. | `src/ui/pages/SettingsPage.cpp` |
-| Weekly study goal in hours and minutes (e.g. 8, 7.5, 7:30, 7;30, 450 min; bare numbers or decimals mean hours) | Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7.5, 7:30, 7;30, 450 min; числа чи десяткові дроби означають години) | Еженедельная учебная цель в часах и минутах (например: 8, 7.5, 7:30, 7;30, 450 min; числа или десятичные дроби означают часы) | `src/ui/pages/SettingsPage.cpp` |
+| Language will take effect after restarting JobPrep. | Мову буде змінено після перезапуску JobPrep. | Язык изменится после перезапуска JobPrep. | `src/ui/pages/SettingsPage.cpp` |
+| Weekly study goal in hours and minutes (e.g. 8, 7:30, 7;30, 450 min; bare numbers or decimals mean hours) | Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7:30, 7;30, 450 min; числа чи десяткові дроби означають години) | Еженедельная учебная цель в часах и минутах (например: 8, 7:30, 7;30, 450 min; числа или десятичные дроби означают часы) | `src/ui/pages/SettingsPage.cpp` |
 | First day of the week for calendar and study statistics | Перший день тижня для календаря та навчальної статистики | Первый день недели для календаря и учебной статистики | `src/ui/pages/SettingsPage.cpp` |
 | First day of week: | Перший день тижня: | Первый день недели: | `src/ui/pages/SettingsPage.cpp` |
 | Minimize / Close to system tray | Згортати / закривати в системний трей | Сворачивать / закрывать в системный трей | `src/ui/pages/SettingsPage.cpp` |
@@ -172,7 +172,7 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | Keep notes and outcomes for every interview stage. | Зберігайте нотатки та результати для кожного етапу співбесіди. | Сохраняйте заметки и результаты для каждого этапа собеседования. | `src/ui/dialogs/ApplicationDialog.cpp` |
 | No status changes recorded | Змін статусу не зафіксовано | Изменений статуса не зафиксировано | `src/ui/dialogs/ApplicationDialog.cpp` |
 | Status transitions will appear here as you update the application. | Зміни статусу з'являтимуться тут під час оновлення заявки. | Изменения статуса будут появляться здесь по мере обновления заявки. | `src/ui/dialogs/ApplicationDialog.cpp` |
-| Interview changes are saved immediately and are not part of the Overview "Discard changes?" prompt. | Зміни співбесід зберігаються негайно і не входять до запиту «Відкинути зміни?» на вкладці «Огляд». | Изменения собеседований сохраняются сразу и не входят в запрос «Отменить изменения?» на вкладке «Обзор». | `src/ui/dialogs/ApplicationDialog.cpp` |
+| Interview changes are saved immediately and are not part of the Overview "Discard changes?" prompt. | Зміни співбесід зберігаються негайно і не входять до запиту «Відхилити зміни?» на вкладці «Огляд». | Изменения собеседований сохраняются сразу и не входят в запрос «Отклонить изменения?» на вкладке «Обзор». | `src/ui/dialogs/ApplicationDialog.cpp` |
 | Save the application first to add interviews. | Спочатку збережіть заявку, щоб додавати співбесіди. | Сначала сохраните заявку, чтобы добавлять собеседования. | `src/ui/dialogs/ApplicationDialog.cpp` |
 | %n min | %n хв / %n хв / %n хв | %n мин / %n мин / %n мин | `src/ui/dialogs/ApplicationDialog.cpp` |
 | Add an interview to this application | Додати співбесіду до цієї заявки | Добавить собеседование к этой заявке | `src/ui/dialogs/ApplicationDialog.cpp` |
@@ -185,13 +185,13 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | Could not delete: %1 | Не вдалося видалити: %1 | Не удалось удалить: %1 | `src/ui/dialogs/ApplicationDialog.cpp` |
 | Salary min cannot be greater than salary max. | Мінімальна зарплата не може бути більшою за максимальну. | Минимальная зарплата не может быть больше максимальной. | `src/ui/dialogs/ApplicationDialog.cpp` |
 | Warning: the contact e-mail does not look like an address. | Попередження: контактний email не схожий на дійсну адресу. | Предупреждение: контактный email не похож на корректный адрес. | `src/ui/dialogs/ApplicationDialog.cpp` |
-| This application has unsaved changes. Discard them? | Ця заявка має незбережені зміни. Відкинути їх? | В этой заявке есть несохранённые изменения. Отменить их? | `src/ui/dialogs/ApplicationDialog.cpp` |
+| This application has unsaved changes. Discard them? | Ця заявка має незбережені зміни. Відхилити їх? | В этой заявке есть несохранённые изменения. Отклонить их? | `src/ui/dialogs/ApplicationDialog.cpp` |
 | Could not save: %1 | Не вдалося зберегти: %1 | Не удалось сохранить: %1 | `src/ui/dialogs/ApplicationDialog.cpp` |
 | No applications available. Add an application first. | Немає доступних заявок. Спочатку додайте заявку. | Нет доступных заявок. Сначала добавьте заявку. | `src/ui/dialogs/FollowUpDialog.cpp` |
 | Describe the follow-up action. | Опишіть дію фолоу-апу. | Опишите действие фоллоу-апа. | `src/ui/dialogs/FollowUpDialog.cpp` |
 | The application to follow up on | Заявка для фолоу-апу | Заявка для фоллоу-апа | `src/ui/dialogs/FollowUpDialog.cpp` |
 | Remind the recruiter, send a thank-you note... | Нагадати рекрутеру, надіслати подяку... | Напомнить рекрутеру, отправить благодарность... | `src/ui/dialogs/FollowUpDialog.cpp` |
-| What you will do on this day | Що ви плануєте зробити в цей день | Что планируется сделать в этот день | `src/ui/dialogs/FollowUpDialog.cpp` |
+| What you will do on this day | Що заплановано зробити цього дня | Что запланировано сделать в этот день | `src/ui/dialogs/FollowUpDialog.cpp` |
 | Planned date, taken from the selected day | Запланована дата, вибрана в календарі | Запланированная дата, выбранная в календаре | `src/ui/dialogs/FollowUpDialog.cpp` |
 | Schedule the follow-up (Ctrl+S) | Запланувати фолоу-ап (Ctrl+S) | Запланировать фоллоу-ап (Ctrl+S) | `src/ui/dialogs/FollowUpDialog.cpp` |
 | %1 already has a follow-up planned for %2. Replace it with %3? | Для %1 вже заплановано фолоу-ап на %2. Замінити його на %3? | Для %1 уже запланирован фоллоу-ап на %2. Заменить его на %3? | `src/ui/dialogs/FollowUpDialog.cpp` |
@@ -199,19 +199,19 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | Expected duration in minutes | Очікувана тривалість у хвилинах | Ожидаемая длительность в минутах | `src/ui/dialogs/InterviewDialog.cpp` |
 | Which round this is | Який це раунд | Какой это раунд | `src/ui/dialogs/InterviewDialog.cpp` |
 | Where the interview takes place | Де проходить співбесіда | Где проходит собеседование | `src/ui/dialogs/InterviewDialog.cpp` |
-| Who you will talk to | З ким ви спілкуватиметеся | С кем вы будете общаться | `src/ui/dialogs/InterviewDialog.cpp` |
+| Who you will talk to | З ким відбудеться розмова | С кем будет разговор | `src/ui/dialogs/InterviewDialog.cpp` |
 | Preparation notes, questions to ask... | Нотатки для підготовки, запитання до інтерв'юера... | Заметки для подготовки, вопросы к интервьюеру... | `src/ui/dialogs/InterviewDialog.cpp` |
 | Save the interview (Ctrl+S) | Зберегти співбесіду (Ctrl+S) | Сохранить собеседование (Ctrl+S) | `src/ui/dialogs/InterviewDialog.cpp` |
 | An application is required. | Необхідно вказати заявку. | Необходимо указать заявку. | `src/ui/dialogs/InterviewDialog.cpp` |
-| Duration must be at least 1 minute. | Тривалість має бути щонайменше 1 хвилину. | Длительность должна быть не менее 1 минуты. | `src/ui/dialogs/InterviewDialog.cpp` |
-| This interview has unsaved changes. Discard them? | Ця співбесіда має незбережені зміни. Відкинути їх? | В этом собеседовании есть несохранённые изменения. Отменить их? | `src/ui/dialogs/InterviewDialog.cpp` |
+| Duration must be at least 1 minute. | Тривалість має бути не менше 1 хвилини. | Длительность должна быть не менее 1 минуты. | `src/ui/dialogs/InterviewDialog.cpp` |
+| This interview has unsaved changes. Discard them? | Ця співбесіда має незбережені зміни. Відхилити їх? | В этом собеседовании есть несохранённые изменения. Отклонить их? | `src/ui/dialogs/InterviewDialog.cpp` |
 | Could not save: %1 | Не вдалося зберегти: %1 | Не удалось сохранить: %1 | `src/ui/dialogs/InterviewDialog.cpp` |
 | Delete this interview? This cannot be undone. | Видалити цю співбесіду? Цю дію не можна скасувати. | Удалить это собеседование? Это действие нельзя отменить. | `src/ui/dialogs/InterviewDialog.cpp` |
 | Could not delete: %1 | Не вдалося видалити: %1 | Не удалось удалить: %1 | `src/ui/dialogs/InterviewDialog.cpp` |
-| Duration must be at least 1 minute. | Тривалість має бути щонайменше 1 хвилину. | Длительность должна быть не менее 1 минуты. | `src/ui/dialogs/SessionDialog.cpp` |
-| Could not log session: %1 | Не вдалося записати сесію: %1 | Не удалось записать занятие: %1 | `src/ui/dialogs/SessionDialog.cpp` |
+| Duration must be at least 1 minute. | Тривалість має бути не менше 1 хвилини. | Длительность должна быть не менее 1 минуты. | `src/ui/dialogs/SessionDialog.cpp` |
+| Could not log session: %1 | Не вдалося записати заняття: %1 | Не удалось записать занятие: %1 | `src/ui/dialogs/SessionDialog.cpp` |
 | Track name (e.g. C++, English) | Назва напряму (наприклад, C++, English) | Название направления (например, C++, English) | `src/ui/dialogs/TrackDialog.cpp` |
-| Custom (%1) | Користувацький (%1) | Пользовательский (%1) | `src/ui/dialogs/TrackDialog.cpp` |
+| Custom (%1) | Власний (%1) | Свой (%1) | `src/ui/dialogs/TrackDialog.cpp` |
 | Track name cannot be empty. | Назва напряму не може бути порожньою. | Название направления не может быть пустым. | `src/ui/dialogs/TrackDialog.cpp` |
 | A track with this name already exists. | Напрям із такою назвою вже існує. | Направление с таким названием уже существует. | `src/ui/dialogs/TrackDialog.cpp` |
 | Could not update track: %1 | Не вдалося оновити напрям: %1 | Не удалось обновить направление: %1 | `src/ui/dialogs/TrackDialog.cpp` |

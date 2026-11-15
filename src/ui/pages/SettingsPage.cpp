@@ -295,7 +295,7 @@ void SettingsPage::setupUi() {
     m_studyGoalSpinBox = new GoalSpinBox(prefsCard);
     m_studyGoalSpinBox->setObjectName(u"SettingsStudyGoalSpinBox"_s);
     m_studyGoalSpinBox->setToolTip(
-        tr("Weekly study goal in hours and minutes (e.g. 8, 7.5, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)"));
+        tr("Weekly study goal in hours and minutes (e.g. 8, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)"));
     prefsForm->addRow(tr("Weekly study goal:"), m_studyGoalSpinBox);
 
     // B4: First day of week combo (Monday = 1, Sunday = 7)

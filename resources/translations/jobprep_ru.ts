@@ -132,7 +132,7 @@
     </message>
     <message>
         <source>The backup file contains invalid non-positive identifiers.</source>
-        <translation>Файл резервной копии содержит недопустимые неположительные идентификаторы.</translation>
+        <translation>Файл резервной копии содержит недопустимые идентификаторы (ноль или отрицательные значения).</translation>
     </message>
     <message>
         <source>The backup file contains unrecognized status or priority values.</source>
@@ -259,7 +259,7 @@ A safety backup of your current database will be saved to:
 Do you want to continue?</source>
         <translation>Восстановление из «%1» ЗАМЕНИТ все текущие данные.
 
-Защитная резервная копия вашей текущей базы данных будет сохранена в:
+Защитная резервная копия текущей базы данных будет сохранена в:
 %2
 
 Продолжить?</translation>
@@ -293,13 +293,13 @@ Safety backup saved to:
         <translation>Восстановление базы данных успешно завершено.
 
 Восстановленные записи:
-- %1 направлений
-- %2 тем
-- %3 подзадач
-- %4 занятий
-- %5 заявок
-- %6 записей истории статусов
-- %7 собеседований
+- Направления: %1
+- Темы: %2
+- Подзадачи: %3
+- Занятия: %4
+- Заявки: %5
+- Записи истории статусов: %6
+- Собеседования: %7
 
 Защитная резервная копия сохранена в:
 %8</translation>
@@ -320,19 +320,19 @@ Your current database was NOT modified.</source>
         <translation>Не удалось восстановить базу данных:
 %1%2
 
-Ваша текущая база данных НЕ была изменена.</translation>
+Текущая база данных НЕ изменена.</translation>
     </message>
     <message>
         <source>Your database already contains data. Loading sample data will add standard study tracks and topics without deleting your existing items.
 
 Do you want to continue?</source>
-        <translation>Ваша база данных уже содержит данные. Загрузка демонстрационных данных добавит стандартные направления и темы, не удаляя существующие элементы.
+        <translation>База данных уже содержит данные. Загрузка демонстрационных данных добавит стандартные направления и темы, не удаляя существующие элементы.
 
 Продолжить?</translation>
     </message>
     <message>
         <source>Confirm Load Sample Data</source>
-        <translation>Подтверждение загрузки демо-данных</translation>
+        <translation>Подтверждение загрузки демонстрационных данных</translation>
     </message>
     <message>
         <source>Sample Data Loaded</source>
@@ -344,7 +344,7 @@ Do you want to continue?</source>
     </message>
     <message>
         <source>Load Sample Data Failed</source>
-        <translation>Ошибка загрузки демо-данных</translation>
+        <translation>Ошибка загрузки демонстрационных данных</translation>
     </message>
     <message>
         <source>Could not load sample data: %1</source>
@@ -389,7 +389,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Discard changes (Esc)</source>
-        <translation>Отменить изменения (Esc)</translation>
+        <translation>Отклонить изменения (Esc)</translation>
     </message>
     <message>
         <source>Save</source>
@@ -562,7 +562,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Interview changes are saved immediately and are not part of the Overview &quot;Discard changes?&quot; prompt.</source>
-        <translation>Изменения собеседований сохраняются сразу и не входят в запрос «Отменить изменения?» на вкладке «Обзор».</translation>
+        <translation>Изменения собеседований сохраняются сразу и не входят в запрос «Отклонить изменения?» на вкладке «Обзор».</translation>
     </message>
     <message>
         <source>Save the application first to add interviews.</source>
@@ -634,11 +634,11 @@ Path: %1</source>
     </message>
     <message>
         <source>Discard changes?</source>
-        <translation>Отменить изменения?</translation>
+        <translation>Отклонить изменения?</translation>
     </message>
     <message>
         <source>This application has unsaved changes. Discard them?</source>
-        <translation>В этой заявке есть несохранённые изменения. Отменить их?</translation>
+        <translation>В этой заявке есть несохранённые изменения. Отклонить их?</translation>
     </message>
     <message>
         <source>Could not save: %1</source>
@@ -673,7 +673,7 @@ Path: %1</source>
     </message>
     <message>
         <source>What you will do on this day</source>
-        <translation>Что планируется сделать в этот день</translation>
+        <translation>Что запланировано сделать в этот день</translation>
     </message>
     <message>
         <source>&amp;Action *</source>
@@ -780,7 +780,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Who you will talk to</source>
-        <translation>С кем вы будете общаться</translation>
+        <translation>С кем будет разговор</translation>
     </message>
     <message>
         <source>&amp;Interviewer</source>
@@ -800,7 +800,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Discard changes (Esc)</source>
-        <translation>Отменить изменения (Esc)</translation>
+        <translation>Отклонить изменения (Esc)</translation>
     </message>
     <message>
         <source>&amp;Save</source>
@@ -828,11 +828,11 @@ Path: %1</source>
     </message>
     <message>
         <source>Discard changes?</source>
-        <translation>Отменить изменения?</translation>
+        <translation>Отклонить изменения?</translation>
     </message>
     <message>
         <source>This interview has unsaved changes. Discard them?</source>
-        <translation>В этом собеседовании есть несохранённые изменения. Отменить их?</translation>
+        <translation>В этом собеседовании есть несохранённые изменения. Отклонить их?</translation>
     </message>
     <message>
         <source>Could not save: %1</source>
@@ -887,7 +887,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Discard changes (Esc)</source>
-        <translation>Отменить изменения (Esc)</translation>
+        <translation>Отклонить изменения (Esc)</translation>
     </message>
     <message>
         <source>Log session</source>
@@ -958,7 +958,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Custom (%1)</source>
-        <translation>Пользовательский (%1)</translation>
+        <translation>Свой (%1)</translation>
     </message>
     <message>
         <source>Save Track</source>
@@ -1535,15 +1535,15 @@ Path: %1</source>
     <message>
         <source>Language will take effect after restarting JobPrep.</source>
         <extracomment>Notice displayed when user changes the interface language</extracomment>
-        <translation>Язык вступит в силу после перезапуска JobPrep.</translation>
+        <translation>Язык изменится после перезапуска JobPrep.</translation>
     </message>
     <message>
         <source>Preferences</source>
         <translation>Параметры</translation>
     </message>
     <message>
-        <source>Weekly study goal in hours and minutes (e.g. 8, 7.5, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)</source>
-        <translation>Еженедельная учебная цель в часах и минутах (например: 8, 7.5, 7:30, 7;30, 450 min; числа или десятичные дроби означают часы)</translation>
+        <source>Weekly study goal in hours and minutes (e.g. 8, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)</source>
+        <translation>Еженедельная учебная цель в часах и минутах (например: 8, 7:30, 7;30, 450 min; числа или десятичные дроби означают часы)</translation>
     </message>
     <message>
         <source>Weekly study goal:</source>
@@ -1683,7 +1683,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Load Sample Data</source>
-        <translation>Загрузить демо-данные</translation>
+        <translation>Загрузить демонстрационные данные</translation>
     </message>
     <message>
         <source>Load standard interview preparation tracks and topics</source>
@@ -2109,7 +2109,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Load sample data?</source>
-        <translation>Загрузить демо-данные?</translation>
+        <translation>Загрузить демонстрационные данные?</translation>
     </message>
     <message>
         <source>Would you like to start with a sample study plan?
@@ -2121,7 +2121,7 @@ It adds the C++ and English tracks with their topics and checklists.</source>
     </message>
     <message>
         <source>Sample data</source>
-        <translation>Демо-данные</translation>
+        <translation>Демонстрационные данные</translation>
     </message>
     <message>
         <source>The sample data could not be loaded.
