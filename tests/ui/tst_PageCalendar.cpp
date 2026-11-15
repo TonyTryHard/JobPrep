@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QImage>
 #include <QLabel>
+#include <QLayout>
 #include <QLineEdit>
 #include <QListView>
 #include <QListWidget>
@@ -127,6 +128,7 @@ private slots:
     void testCalendarTrackDeleteClearsMarkers();
     void testMonthViewDoubleClicksDayWithoutOpeningStudyTarget();
     void testCalendarAgendaDayNameUnderUkrainianLocale();
+    void testAgendaPanelRespectsLayoutMinimumSize();
 
 private:
     void resetCalendarData(const QDate& today);
@@ -717,6 +719,19 @@ void tst_PageCalendar::testCalendarAgendaDayNameUnderUkrainianLocale() {
 
     // Verify MonthView::monthTitle(2026, 5) shows "Травень 2026"
     QCOMPARE(JobPrep::Ui::Widgets::MonthView::monthTitle(2026, 5), u"Травень 2026"_s);
+}
+
+void tst_PageCalendar::testAgendaPanelRespectsLayoutMinimumSize() {
+    auto* page = calendarPage();
+    QVERIFY(page != nullptr);
+    auto* panel = page->findChild<QWidget*>(u"CalendarAgendaPanel"_s);
+    QVERIFY(panel != nullptr);
+    auto* btn1 = panel->findChild<QPushButton*>(u"CalendarAddInterviewBtn"_s);
+    auto* btn2 = panel->findChild<QPushButton*>(u"CalendarAddFollowUpBtn"_s);
+    QVERIFY(btn1 != nullptr);
+    QVERIFY(btn2 != nullptr);
+    const int buttonsMinW = btn1->minimumSizeHint().width() + btn2->minimumSizeHint().width();
+    QVERIFY(panel->minimumSize().width() >= buttonsMinW);
 }
 
 

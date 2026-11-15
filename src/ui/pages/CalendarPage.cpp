@@ -242,9 +242,6 @@ void CalendarPage::setupSplitter(QVBoxLayout* layout) {
 }
 
 void CalendarPage::setupAgendaPanel(QWidget* panel) {
-    const int panelMinWidth = qMax(fontMetrics().averageCharWidth() * 32, 340);
-    const int panelMinHeight = fontMetrics().height() * 10;
-    panel->setMinimumSize(panelMinWidth, panelMinHeight);
     auto* panelLayout = new QVBoxLayout(panel);
     panelLayout->setContentsMargins(16, 16, 16, 16);
     panelLayout->setSpacing(10);
@@ -276,6 +273,15 @@ void CalendarPage::setupAgendaPanel(QWidget* panel) {
     buttonGrid->addWidget(addFollowUpBtn, 0, 1);
     buttonGrid->addWidget(addTargetBtn, 1, 0, 1, 2);
     panelLayout->addLayout(buttonGrid);
+
+    const int buttonsMinWidth = addInterviewBtn->minimumSizeHint().width() +
+                                addFollowUpBtn->minimumSizeHint().width() +
+                                buttonGrid->spacing() +
+                                panelLayout->contentsMargins().left() +
+                                panelLayout->contentsMargins().right();
+    const int panelMinWidth = std::max({fontMetrics().averageCharWidth() * 32, 340, buttonsMinWidth});
+    const int panelMinHeight = fontMetrics().height() * 10;
+    panel->setMinimumSize(panelMinWidth, panelMinHeight);
 
     m_agendaStack = new QStackedWidget(panel);
     m_agendaStack->setObjectName(u"CalendarAgendaStack"_s);
