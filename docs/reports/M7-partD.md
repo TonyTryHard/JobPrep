@@ -558,3 +558,823 @@ a13a356 fix(services): unify language setting key and read function between main
 18ae6fa fix(ui): enforce ISO date format and user first-day-of-week on date edits (D0.2)
 b1e4899 fix(i18n): replace dead English plural fallback strings with literal helper (D0.1)
 ```
+
+
+---
+
+## 14. M7 Closeout: CI Red on Linux Fix, Translation Corrections, Small Leftovers
+
+### Facts (CI run `118200252685` of Part C/D commits, 2026-11-15)
+
+- **`Gate (windows-latest, Qt 6.10.3)`**: **green**, 35 of 35 tests passed, `Total Test time (real) = 533.21 sec`; the full "Run quality gate" step took ~14 minutes (within 30m timeout). Slowest tests: `tst_PageStudy` 150.9 s, `tst_HiDpi` 134.7 s, `tst_PageHome` 133.7 s, `ui_smoke` 108.8 s. Real translations (`uk`, `ru`) and pseudo-translation passed cleanly on Windows.
+- **`Gate (ubuntu-latest, Qt 6.8.2)` and `Gate (ubuntu-latest, Qt 6.10.3)`**: **red**, with the identical single failure in `tst_HiDpi::testPseudoTranslationHiDpi` (`Actual (allViolations.count()): 8, Expected 0`, `tst_HiDpi.cpp(923)`):
+  ```
+  CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1246x700] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвг': width (151) < minimumSizeHint.width (158)
+  CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1246x700] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абв': width (151) < minimumSizeHint.width (157)
+  CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1246x540] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвг': width (151) < minimumSizeHint.width (158)
+  CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1246x540] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абв': width (151) < minimumSizeHint.width (157)
+  CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1246x700] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвг': width (151) < minimumSizeHint.width (158)
+  CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1246x700] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абв': width (151) < minimumSizeHint.width (157)
+  CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1246x540] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвг': width (151) < minimumSizeHint.width (158)
+  CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1246x540] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абв': width (151) < minimumSizeHint.width (157)
+  ```
+- `testRealTranslationUkHiDpi` and `testRealTranslationRuHiDpi` **passed** on both Ubuntu jobs. The Ubuntu runner installs `fonts-dejavu-core` in the workflow step; fontconfig resolves sans-serif to `DejaVu Sans`. Because ctest failed, `check.sh` stopped before the translation-sync step; the sync check has not yet executed on CI.
+- The Part D report stated "0 clipping violations" for pseudo-translation because it ran against the local default font (`Noto Sans`), where the pseudo strings happened to fit within 151 px.
+- CI diagnostic verification: `lupdate`, `lrelease`, and `Qt6LinguistTools` exist in all three jobs; `qtbase_uk.qm` (158,274 bytes) and `qtbase_ru.qm` (203,767 bytes) exist in `<QT_PREFIX_PATH>/translations` across all three CI aqt kits (Ubuntu Qt 6.8.2, Ubuntu Qt 6.10.3, Windows Qt 6.10.3). Presence on the user's local Windows installation remains unverified.
+
+---
+
+### A. Make the CI-Font Failure Reproducible, Then Fix It
+
+#### A.1 Check Producing the Clipping Violation Message
+
+Command executed:
+```bash
+grep -n "CLIPPING_VIOLATION\|minimumSizeHint" tests/ui/tst_HiDpi.cpp tests/ui_test_helpers/*
+```
+Raw Output:
+```
+tests/ui/tst_HiDpi.cpp:449:        // 1. widget->width() >= widget->minimumSizeHint().width() and height
+tests/ui/tst_HiDpi.cpp:450:        const QSize minHint = w->minimumSizeHint();
+tests/ui/tst_HiDpi.cpp:457:                                   QString(u"width (%1) < minimumSizeHint.width (%2)"_s)
+tests/ui/tst_HiDpi.cpp:466:                                   QString(u"height (%1) < minimumSizeHint.height (%2)"_s)
+tests/ui/tst_HiDpi.cpp:565:                  win.minimumSizeHint().width(), win.minimumSizeHint().height());
+tests/ui/tst_HiDpi.cpp:583:        fprintf(stderr, "CLIPPING_VIOLATION: [%s] %s (%s) '%s': %s\n",
+tests/ui/tst_HiDpi.cpp:628:            const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
+tests/ui/tst_HiDpi.cpp:663:                          dlg.minimumSizeHint().width(), dlg.minimumSizeHint().height(),
+tests/ui/tst_HiDpi.cpp:668:                          bar ? bar->minimumSizeHint().width() : -1, bar ? bar->minimumSizeHint().height() : -1,
+tests/ui/tst_HiDpi.cpp:698:            const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
+tests/ui/tst_HiDpi.cpp:726:            const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
+tests/ui/tst_HiDpi.cpp:754:            const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
+tests/ui/tst_HiDpi.cpp:782:            const QList<QSize> dlgSizes = {dlg.sizeHint(), dlg.minimumSizeHint()};
+tests/ui/tst_HiDpi.cpp:803:        fprintf(stderr, "CLIPPING_VIOLATION: [%s] %s (%s) '%s': %s\n",
+tests/ui/tst_HiDpi.cpp:939:        fprintf(stderr, "CLIPPING_VIOLATION: [%s] %s (%s) '%s': %s\n",
+tests/ui/tst_HiDpi.cpp:1053:        fprintf(stderr, "CLIPPING_VIOLATION: [%s] %s (%s) '%s': %s\n",
+tests/ui/tst_HiDpi.cpp:1130:            const QSize msh = dlg.minimumSizeHint();
+tests/ui/tst_HiDpi.cpp:1138:        QVERIFY2(dlg.minimumSizeHint().height() <= kMaxSmallScreenHeight,
+tests/ui/tst_HiDpi.cpp:1139:                 qPrintable(QString("ApplicationDialog minimumSizeHint.height %1 > %2")
+tests/ui/tst_HiDpi.cpp:1140:                                .arg(dlg.minimumSizeHint().height()).arg(kMaxSmallScreenHeight)));
+tests/ui/tst_HiDpi.cpp:1159:        const QSize msh = dlg.minimumSizeHint();
+tests/ui/tst_HiDpi.cpp:1167:                 qPrintable(QString("InterviewDialog minimumSizeHint.height %1 > %2")
+tests/ui/tst_HiDpi.cpp:1186:        const QSize msh = dlg.minimumSizeHint();
+tests/ui/tst_HiDpi.cpp:1194:                 qPrintable(QString("FollowUpDialog minimumSizeHint.height %1 > %2")
+tests/ui/tst_HiDpi.cpp:1213:        const QSize msh = dlg.minimumSizeHint();
+tests/ui/tst_HiDpi.cpp:1221:                 qPrintable(QString("SessionDialog minimumSizeHint.height %1 > %2")
+tests/ui/tst_HiDpi.cpp:1240:        const QSize msh = dlg.minimumSizeHint();
+tests/ui/tst_HiDpi.cpp:1248:                 qPrintable(QString("TrackDialog minimumSizeHint.height %1 > %2")
+```
+
+Function implementation in `tests/ui/tst_HiDpi.cpp`:
+```bash
+sed -n '445,475p' tests/ui/tst_HiDpi.cpp
+```
+Raw Output:
+```cpp
+            if (lineEdit) return lineEdit->text();
+            return QString();
+        }();
+
+        // 1. widget->width() >= widget->minimumSizeHint().width() and height
+        const QSize minHint = w->minimumSizeHint();
+        if (minHint.isValid()) {
+            if (minHint.width() > 0 && w->width() < minHint.width()) {
+                violations.append({className,
+                                   w->objectName(),
+                                   widgetText,
+                                   contextDescription,
+                                   QString(u"width (%1) < minimumSizeHint.width (%2)"_s)
+                                       .arg(w->width())
+                                       .arg(minHint.width())});
+            }
+            if (minHint.height() > 0 && w->height() < minHint.height()) {
+                violations.append({className,
+                                   w->objectName(),
+                                   widgetText,
+                                   contextDescription,
+                                   QString(u"height (%1) < minimumSizeHint.height (%2)"_s)
+                                       .arg(w->height())
+                                       .arg(minHint.height())});
+            }
+        }
+
+        const bool elide = w->property("jobprepElide").toBool();
+
+        // 2. Non-wrapping QLabel and buttons: fontMetrics().horizontalAdvance(text) <= contentsRect().width()
+        if (label) {
+```
+
+#### A.2 Local Reproduction with CI Font
+
+Environment variable check:
+```bash
+grep -rn JOBPREP_TEST_FONT_FAMILY tests
+```
+Raw Output:
+```
+tests/ui_test_helpers/UiTestHelpers.cpp:120:    const QByteArray family = qgetenv("JOBPREP_TEST_FONT_FAMILY");
+tests/ui_test_helpers/UiTestHelpers.h:62:/// Overrides the application font if the JOBPREP_TEST_FONT_FAMILY environment variable
+tests/ui/tst_HiDpi.cpp:242:    const QString envFont = qEnvironmentVariable("JOBPREP_TEST_FONT_FAMILY");
+```
+
+Font family resolution:
+- Development machine: `fc-match` outputs `NotoSans-Regular.ttf: "Noto Sans" "Regular"`.
+- Ubuntu CI runner: installs package `fonts-dejavu-core`, resolving sans-serif to `DejaVu Sans`.
+
+Failing-before run (executed prior to commit `9ea04cb`):
+Command:
+```bash
+JOBPREP_TEST_FONT_FAMILY="DejaVu Sans" ./build/dev-linux/tests/ui/tst_HiDpi testPseudoTranslationHiDpi
+```
+Raw Output:
+```
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1246x700] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвг': width (151) < minimumSizeHint.width (158)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1246x700] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абв': width (151) < minimumSizeHint.width (157)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1246x540] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвг': width (151) < minimumSizeHint.width (158)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Light | 1246x540] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абв': width (151) < minimumSizeHint.width (157)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1246x700] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвг': width (151) < minimumSizeHint.width (158)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1246x700] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абв': width (151) < minimumSizeHint.width (157)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1246x540] QPushButton (CalendarAddInterviewBtn) '+ Iнтервіеш~абвг': width (151) < minimumSizeHint.width (158)
+CLIPPING_VIOLATION: [Pseudo | Page_3 | Dark | 1246x540] QPushButton (CalendarAddFollowUpBtn) '+ Fоллош-ур~абв': width (151) < minimumSizeHint.width (157)
+FAIL!  : tst_HiDpi::testPseudoTranslationHiDpi() 'allViolations.isEmpty()' returned FALSE. (Actual (allViolations.count()): 8, Expected: 0)
+   Loc: [/home/tony/projects/JobPrep/tests/ui/tst_HiDpi.cpp(933)]
+```
+The exact 8 violations observed on CI reproduced locally.
+
+#### A.3 Cause & Raw Geometry
+
+Diagnostic probe output under `DejaVu Sans` pseudo-translation:
+- Button `CalendarAddInterviewBtn`:
+  - `minimumSizeHint()`: `QSize(158, 32)`
+  - `sizeHint()`: `QSize(158, 32)`
+  - `actual width()`: `151`
+  - `sizePolicy`: `QSizePolicy(Horizontal: Preferred, Vertical: Fixed)`
+- Button `CalendarAddFollowUpBtn`:
+  - `minimumSizeHint()`: `QSize(157, 32)`
+  - `sizeHint()`: `QSize(157, 32)`
+  - `actual width()`: `151`
+  - `sizePolicy`: `QSizePolicy(Horizontal: Preferred, Vertical: Fixed)`
+- Buttons container (`btnRow` / `btnLayout`):
+  - 2-column grid layout with `spacing = 6 px`, side margins `16 px` each (`contentsMargins(16, 0, 16, 0)`).
+  - Required minimum width: `16 + 158 + 6 + 157 + 16 = 353 px`.
+- Splitter & Agenda panel:
+  - `QSplitter` child widget `panel`: had `panel->setMinimumWidth(panelMinWidth)` where `panelMinWidth = std::max(fontMetrics().averageCharWidth() * 32, 340) = 340 px`.
+  - When the splitter allocated 340 px to `panel`, available button row width was `340 - 32 - 6 = 302 px`.
+  - Shared equally between 2 buttons: `302 / 2 = 151 px` per button.
+  - Because `151 < 158` and `151 < 157`, both buttons were squeezed below their `minimumSizeHint`.
+- **Verdict**: **Layout defect**. The agenda panel hard-coded minimum width of 340 px was narrower than the content demanded under wider fonts or longer translations.
+
+#### A.4 Fix in Code (Not in Test)
+
+Diff applied in commit `9ea04cb` (`src/ui/pages/CalendarPage.cpp`):
+```diff
+--- a/src/ui/pages/CalendarPage.cpp
++++ b/src/ui/pages/CalendarPage.cpp
+@@ -211,8 +211,16 @@ QWidget* CalendarPage::setupAgendaPanel()
+     m_agendaList->setSelectionMode(QAbstractItemView::SingleSelection);
+     panelLayout->addWidget(m_agendaList, 1);
+ 
+-    const int panelMinWidth = std::max(fontMetrics().averageCharWidth() * 32, 340);
+-    panel->setMinimumWidth(panelMinWidth);
++    // Ensure panel width accommodates action buttons row at minimumSizeHint
++    const int buttonsMinWidth = m_agendaCardLayout->contentsMargins().left()
++                              + m_agendaCardLayout->contentsMargins().right()
++                              + addInterviewBtn->minimumSizeHint().width()
++                              + btnLayout->horizontalSpacing()
++                              + addFollowUpBtn->minimumSizeHint().width();
++    const int panelMinWidth = std::max({fontMetrics().averageCharWidth() * 32,
++                                        340,
++                                        buttonsMinWidth});
++    panel->setMinimumWidth(panelMinWidth);
+```
+
+- In English with default font, `buttonsMinWidth` is ~216 px <= 340 px; `panelMinWidth` evaluates to exactly 340 px, leaving the English layout 100% unchanged.
+- Under `DejaVu Sans` pseudo-translation, `buttonsMinWidth` is 353 px; `panelMinWidth` expands to 353 px, ensuring the buttons receive their full required width without clipping.
+- Added test slot `testAgendaPanelRespectsLayoutMinimumSize()` in `tests/ui/tst_PageCalendar.cpp`.
+- Captured before/after offscreen grabs: `docs/reports/images/calendar-pseudo-before-light.png` and `docs/reports/images/calendar-pseudo-after-light.png`. *(Note: offscreen rendering is headless and not the user's physical screen).*
+
+Passing-after run:
+Command:
+```bash
+JOBPREP_TEST_FONT_FAMILY="DejaVu Sans" ./build/dev-linux/tests/ui/tst_HiDpi testPseudoTranslationHiDpi
+```
+Raw Output:
+```
+********* Start testing of tst_HiDpi *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_HiDpi::initTestCase()
+PASS   : tst_HiDpi::testPseudoTranslationHiDpi()
+PASS   : tst_HiDpi::cleanupTestCase()
+Totals: 3 passed, 0 failed, 0 skipped, 0 blacklisted, 4569ms
+********* Finished testing of tst_HiDpi *********
+```
+
+#### A.5 Wire Pseudo-Translation Over Font Matrix
+
+In commit `5d6dfe3`, `testPseudoTranslationHiDpi` in `tests/ui/tst_HiDpi.cpp` was wired over a font matrix:
+1. Pass 1: System default font (full matrix: Light/Dark, 1100x700 / 1100x540 / 1246x700 / 1246x540).
+2. Pass 2: `DejaVu Sans` font pass (kept cheap: Light mode, 1100x700 and 1246x700) to detect CI font regressions locally without blowing up test execution time on slow runners.
+
+Slot duration before and after (measured with `-o -,xunitxml`):
+- Before (`5d6dfe3~1`):
+  ```xml
+  <testcase name="testPseudoTranslationHiDpi" result="pass" time="2.966392"/>
+  ```
+- After (`5d6dfe3`):
+  ```xml
+  <testcase name="testPseudoTranslationHiDpi" result="pass" time="4.569480"/>
+  ```
+Net increase is ~1.6 s locally.
+
+#### A.6 Real-Translation Slots Run Under DejaVu Sans
+
+Commands executed:
+```bash
+JOBPREP_TEST_FONT_FAMILY="DejaVu Sans" ./build/dev-linux/tests/ui/tst_HiDpi testRealTranslationUkHiDpi
+```
+Raw Output:
+```
+********* Start testing of tst_HiDpi *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_HiDpi::initTestCase()
+PASS   : tst_HiDpi::testRealTranslationUkHiDpi()
+PASS   : tst_HiDpi::cleanupTestCase()
+Totals: 3 passed, 0 failed, 0 skipped, 0 blacklisted, 3185ms
+********* Finished testing of tst_HiDpi *********
+```
+
+```bash
+JOBPREP_TEST_FONT_FAMILY="DejaVu Sans" ./build/dev-linux/tests/ui/tst_HiDpi testRealTranslationRuHiDpi
+```
+Raw Output:
+```
+********* Start testing of tst_HiDpi *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_HiDpi::initTestCase()
+PASS   : tst_HiDpi::testRealTranslationRuHiDpi()
+PASS   : tst_HiDpi::cleanupTestCase()
+Totals: 3 passed, 0 failed, 0 skipped, 0 blacklisted, 3181ms
+********* Finished testing of tst_HiDpi *********
+```
+Both real Ukrainian and Russian translation slots pass cleanly with 0 violations under `DejaVu Sans`.
+
+---
+
+### B. Translation Corrections & Review Implementation
+
+Applied in commit `5e092b2`.
+
+#### B.1 Ukrainian: "сесія" -> "заняття"
+In Ukrainian, "сесія" denotes an academic exam period; for study sessions, the proper term is **"заняття"** (neuter; gen. pl. "занять").
+All 6 occurrences in `resources/translations/jobprep_uk.ts` were replaced:
+- `Log a study session` -> `Записати заняття`
+- `Log study session for this topic` -> `Записати заняття для цієї теми`
+- `Log a study session or follow up on an application.` -> `Запишіть заняття або виконайте фолоу-ап за заявкою.`
+- `Could not log session: %1` -> `Не вдалося записати заняття: %1`
+- `Study session` -> `Заняття`
+- `session` -> `заняття`
+
+Post-edit verification:
+```bash
+grep -n "сесі" resources/translations/jobprep_uk.ts
+```
+Raw Output:
+`(no output, exit code 1)`
+
+#### B.2 Ukrainian Grammar
+In `InterviewDialog` and `SessionDialog`:
+- Old: `Тривалість має бути щонайменше 1 хвилину.`
+- Corrected: `Тривалість має бути не менше 1 хвилини.` (Russian `не менее 1 минуты` retained).
+
+#### B.3 Restore Summary List
+Replaced genitive plurals with label-colon structured items:
+- Ukrainian:
+  ```
+  - Напрями: %1<br>- Теми: %2<br>- Підзавдання: %3<br>- Заняття: %4<br>- Заявки: %5<br>- Записи історії статусів: %6<br>- Співбесіди: %7
+  ```
+- Russian:
+  ```
+  - Направления: %1<br>- Темы: %2<br>- Подзадачи: %3<br>- Занятия: %4<br>- Заявки: %5<br>- Записи истории статусов: %6<br>- Собеседования: %7
+  ```
+
+#### B.4 Register of Language Note
+Replaced legalistic register (`набуде чинності` / `вступит в силу`):
+- Ukrainian: `Мову буде змінено після перезапуску JobPrep.`
+- Russian: `Язык изменится после перезапуска JobPrep.`
+
+#### B.5 Consistency Across Catalogs
+1. **"Custom (%1)"**: Replaced `Користувацький` / `Пользовательский` with `Власний (%1)` / `Свой (%1)` in `TrackDialog`, matching Settings.
+2. **"sample data"**: Unified all occurrences to `демонстраційні дані` / `демонстрационные данные` (including titles "Confirm Load Sample Data", "Load Sample Data Failed").
+3. **"Discard"**: Inspected Qt standard translation via `lconvert`:
+   ```bash
+   /usr/lib/qt6/bin/lconvert -i /usr/share/qt6/translations/qtbase_ru.qm -o /tmp/qtbase_ru.ts && /usr/lib/qt6/bin/lconvert -i /usr/share/qt6/translations/qtbase_uk.qm -o /tmp/qtbase_uk.ts && grep -n -B2 -A3 "Discard" /tmp/qtbase_*.ts
+   ```
+   Raw Output:
+   ```
+   /tmp/qtbase_ru.ts-1723-    <message>
+   /tmp/qtbase_ru.ts:1724:        <source>Discard</source>
+   /tmp/qtbase_ru.ts-1725-        <translation>Отклонить</translation>
+   /tmp/qtbase_ru.ts-1726-    </message>
+   --
+   /tmp/qtbase_uk.ts-1726-    <message>
+   /tmp/qtbase_uk.ts:1727:        <source>Discard</source>
+   /tmp/qtbase_uk.ts-1728-        <translation>Відхилити</translation>
+   /tmp/qtbase_uk.ts-1729-    </message>
+   ```
+   Qt's standard `qtbase` buttons translate Discard as **`Відхилити`** (uk) and **`Отклонить`** (ru). Aligned our strings accordingly (`Відхилити зміни?`, `Отклонить изменения?`).
+4. **Addressing & Possessives**:
+   - Impersonal addressing in calendar notes: uk `Що заплановано зробити цього дня`, `З ким відбудеться розмова`; ru `Что запланировано сделать в этот день`, `С кем будет разговор`.
+   - Dropped unneeded possessives in `DataToolsController`:
+     - uk: `Захисну резервну копію поточної бази даних буде збережено до:`, `Поточну базу даних НЕ змінено.`, `База даних вже містить дані.`
+     - ru: `Защитная резервная копия текущей базы данных будет сохранена в:`, `Текущая база данных НЕ изменена.`, `База данных уже содержит данные.`
+
+#### B.6 Non-Positive Identifiers
+- uk: `Файл резервної копії містить неприпустимі ідентифікатори (нуль або від'ємні значення).`
+- ru: `Файл резервной копии содержит недопустимые идентификаторы (ноль или отрицательные значения).`
+
+#### B.7 Apostrophe Consistency
+Audited Ukrainian apostrophe usage in `resources/translations/jobprep_uk.ts`:
+```bash
+grep -c "’" resources/translations/jobprep_uk.ts; grep -c "&apos;" resources/translations/jobprep_uk.ts
+```
+Raw Output:
+```
+0
+13
+```
+Zero typographic `’` characters exist. All 13 Ukrainian apostrophes strictly use standard ASCII apostrophe `'` encoded as `&apos;` in XML (`з&apos;являтимуться`, `обов&apos;язкові`, `Зв&apos;язатися`, `інтерв&apos;юера`, `від&apos;ємні`).
+
+#### B.8 Weekly Study Goal Hint Update
+English source string in `src/ui/pages/SettingsPage.cpp` updated from `8, 7.5, 7:30, 7;30, 450 min` to:
+`Weekly study goal in hours and minutes (e.g. 8, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)`
+Updated corresponding Ukrainian and Russian translations.
+
+Inventory of `7.5` references across the repository:
+```bash
+grep -rn "7\.5" src tests resources docs
+```
+Findings and verdicts:
+1. `src/ui/widgets/MonthView.cpp:260`: `qMax(7.5, baseFont.pointSizeF() - 1.0)` — font size clamping calculation (unrelated; stays).
+2. `src/ui/delegates/AgendaItemDelegate.cpp:34, 133`: `qMax(7.5, ...)` — font size clamping calculation (unrelated; stays).
+3. `src/ui/pages/SettingsPage.cpp:66`: code comment listing test cases for the typing parser — stays as internal developer documentation.
+4. `tests/ui/tst_HiDpi.cpp:263`: font calculation (unrelated; stays).
+5. `tests/ui/tst_PageSettings.cpp:425, 1263`: tests for typing parser `7.5` producing 465 min — stays per specification rule ("Do not change the parsing rules or the tests of the typing rules (7.5 still gives 465)").
+6. `docs/reports/*`: historical milestone reports (stays as historical record).
+7. `docs/SPEC.md:468`: §14 historical changelog for entry 1.13 (stays as historical record).
+
+Parser analysis for token `min`:
+- The parser evaluates `min` as an explicit recognized unit word via regex `(?:min|mins|minutes?)`.
+- Tokens `хв` and `мин` are currently **not** recognized (treated as invalid and rejected).
+- Phrase *"bare numbers or decimals mean hours"*: The phrase is inaccurate with respect to decimal fractions: the parser treats `.` and `,` strictly as time separators `<hours>.<minutes>` rather than decimal floats, where single-digit minutes represent tens of minutes (`.5` = 50 min).
+  - Parser outputs:
+    - `7.5` -> 465 min (7h 50m = 470m, rounded to 15m step = 465m)
+    - `7,5` -> 465 min (7h 50m = 470m, rounded to 15m step = 465m)
+    - `7.25` -> 450 min (7h 25m = 445m, rounded to 15m step = 450m)
+
+#### Raw Translation Tag Diff (Commit `5e092b2`)
+
+Command:
+```bash
+git diff -U0 5d6dfe3 5e092b2 resources/translations | grep -E '^[-+] *<(translation|numerusform)'
+```
+Raw Output:
+```
+-        <translation>Файл резервной копии содержит недопустимые неположительные идентификаторы.</translation>
++        <translation>Файл резервной копии содержит недопустимые идентификаторы (ноль или отрицательные значения).</translation>
+-        <translation>Ваша база данных уже содержит данные. Загрузка демонстрационных данных добавит стандартные направления и темы, не удаляя существующие элементы.
++        <translation>База данных уже содержит данные. Загрузка демонстрационных данных добавит стандартные направления и темы, не удаляя существующие элементы.
+-        <translation>Подтверждение загрузки демо-данных</translation>
++        <translation>Подтверждение загрузки демонстрационных данных</translation>
+-        <translation>Ошибка загрузки демо-данных</translation>
++        <translation>Ошибка загрузки демонстрационных данных</translation>
+-        <translation>Отменить изменения (Esc)</translation>
++        <translation>Отклонить изменения (Esc)</translation>
+-        <translation>Изменения собеседований сохраняются сразу и не входят в запрос «Отменить изменения?» на вкладке «Обзор».</translation>
++        <translation>Изменения собеседований сохраняются сразу и не входят в запрос «Отклонить изменения?» на вкладке «Обзор».</translation>
+-        <translation>Отменить изменения?</translation>
++        <translation>Отклонить изменения?</translation>
+-        <translation>В этой заявке есть несохранённые изменения. Отменить их?</translation>
++        <translation>В этой заявке есть несохранённые изменения. Отклонить их?</translation>
+-        <translation>Что планируется сделать в этот день</translation>
++        <translation>Что запланировано сделать в этот день</translation>
+-        <translation>С кем вы будете общаться</translation>
++        <translation>С кем будет разговор</translation>
+-        <translation>Отменить изменения (Esc)</translation>
++        <translation>Отклонить изменения (Esc)</translation>
+-        <translation>Отменить изменения?</translation>
++        <translation>Отклонить изменения?</translation>
+-        <translation>В этом собеседовании есть несохранённые изменения. Отменить их?</translation>
++        <translation>В этом собеседовании есть несохранённые изменения. Отклонить их?</translation>
+-        <translation>Отменить изменения (Esc)</translation>
++        <translation>Отклонить изменения (Esc)</translation>
+-        <translation>Пользовательский (%1)</translation>
++        <translation>Свой (%1)</translation>
+-        <translation>Язык вступит в силу после перезапуска JobPrep.</translation>
++        <translation>Язык изменится после перезапуска JobPrep.</translation>
+-        <translation>Еженедельная учебная цель в часах и минутах (например: 8, 7.5, 7:30, 7;30, 450 min; числа или десятичные дроби означают часы)</translation>
++        <translation>Еженедельная учебная цель в часах и минутах (например: 8, 7:30, 7;30, 450 min; числа или десятичные дроби означают часы)</translation>
+-        <translation>Загрузить демо-данные</translation>
++        <translation>Загрузить демонстрационные данные</translation>
+-        <translation>Загрузить демо-данные?</translation>
++        <translation>Загрузить демонстрационные данные?</translation>
+-        <translation>Демо-данные</translation>
++        <translation>Демонстрационные данные</translation>
+-        <translation>Организуйте темы собеседований по C++ и English в колонках канбана и записывайте учебные занятия.</translation>
++        <translation>Организуйте темы собеседований по C++ и English в колонках канбана и записывайте занятия.</translation>
+-        <translation>Записать учебное занятие или выполнить фоллоу-ап по заявке.</translation>
++        <translation>Запишите занятие или выполните фоллоу-ап по заявке.</translation>
+-        <translation>Защитная резервная копия вашей текущей базы данных будет сохранена в: %1<br><br>Ваша текущая база данных НЕ изменена.</translation>
++        <translation>Защитная резервная копия текущей базы данных будет сохранена в: %1<br><br>Текущая база данных НЕ изменена.</translation>
+-        <translation>Восстановление базы данных успешно завершено из резервной копии:<br><b>%8</b><br><br>Восстановлено элементов:<br>- %1 направлений<br>- %2 тем<br>- %3 подзадач<br>- %4 учебных занятий<br>- %5 заявок<br>- %6 записей истории статусов<br>- %7 собеседований</translation>
++        <translation>Восстановление базы данных успешно завершено из резервной копии:<br><b>%8</b><br><br>Восстановлено элементов:<br>- Направления: %1<br>- Темы: %2<br>- Подзадачи: %3<br>- Занятия: %4<br>- Заявки: %5<br>- Записи истории статусов: %6<br>- Собеседования: %7</translation>
+-        <translation>Файл резервної копії містить неприпустимі непозитивні ідентифікатори.</translation>
++        <translation>Файл резервної копії містить неприпустимі ідентифікатори (нуль або від&apos;ємні значення).</translation>
+-        <translation>Ваша база даних вже містить дані. Завантаження демонстраційних даних додасть стандартні напрями та теми, не видаляючи наявні елементи.
++        <translation>База даних вже містить дані. Завантаження демонстраційних даних додасть стандартні напрями та теми, не видаляючи наявні елементи.
+-        <translation>Підтвердження завантаження демо-даних</translation>
++        <translation>Підтвердження завантаження демонстраційних даних</translation>
+-        <translation>Помилка завантаження демо-даних</translation>
++        <translation>Помилка завантаження демонстраційних даних</translation>
+-        <translation>Відкинути зміни (Esc)</translation>
++        <translation>Відхилити зміни (Esc)</translation>
+-        <translation>Зміни співбесід зберігаються відразу й не входять до запиту «Відкинути зміни?» на вкладці «Огляд».</translation>
++        <translation>Зміни співбесід зберігаються відразу й не входять до запиту «Відхилити зміни?» на вкладці «Огляд».</translation>
+-        <translation>Відкинути зміни?</translation>
++        <translation>Відхилити зміни?</translation>
+-        <translation>Ця заявка має незбережені зміни. Відкинути їх?</translation>
++        <translation>Ця заявка має незбережені зміни. Відхилити їх?</translation>
+-        <translation>Що ви плануєте зробити в цей день</translation>
++        <translation>Що заплановано зробити цього дня</translation>
+-        <translation>З ким ви спілкуватиметеся</translation>
++        <translation>З ким відбудеться розмова</translation>
+-        <translation>Відкинути зміни (Esc)</translation>
++        <translation>Відхилити зміни (Esc)</translation>
+-        <translation>Тривалість має бути щонайменше 1 хвилину.</translation>
++        <translation>Тривалість має бути не менше 1 хвилини.</translation>
+-        <translation>Відкинути зміни?</translation>
++        <translation>Відхилити зміни?</translation>
+-        <translation>Ця співбесіда має незбережені зміни. Відкинути їх?</translation>
++        <translation>Ця співбесіда має незбережені зміни. Відхилити їх?</translation>
+-        <translation>Записати сесію навчання</translation>
++        <translation>Записати заняття</translation>
+-        <translation>Відкинути зміни (Esc)</translation>
++        <translation>Відхилити зміни (Esc)</translation>
+-        <translation>Записати сесію</translation>
++        <translation>Записати заняття</translation>
+-        <translation>Записати сесію (Ctrl+S)</translation>
++        <translation>Записати заняття (Ctrl+S)</translation>
+-        <translation>Тривалість має бути щонайменше 1 хвилину.</translation>
++        <translation>Тривалість має бути не менше 1 хвилини.</translation>
+-        <translation>Не вдалося записати сесію: %1</translation>
++        <translation>Не вдалося записати заняття: %1</translation>
+-        <translation>Користувацький (%1)</translation>
++        <translation>Власний (%1)</translation>
+-        <translation>Сесія навчання</translation>
++        <translation>Заняття</translation>
+-        <translation>Записати сесію навчання</translation>
++        <translation>Записати заняття</translation>
+-        <translation>Запишіть сесію навчання або виконайте фолоу-ап за заявкою.</translation>
++        <translation>Запишіть заняття або виконайте фолоу-ап за заявкою.</translation>
+-        <translation>Мова набуде чинності після перезапуску JobPrep.</translation>
++        <translation>Мову буде змінено після перезапуску JobPrep.</translation>
+-        <translation>Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7.5, 7:30, 7;30, 450 min; числа чи десяткові дроби означають години)</translation>
++        <translation>Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7:30, 7;30, 450 min; числа чи десяткові дроби означають години)</translation>
+-        <translation>Завантажити демо-дані</translation>
++        <translation>Завантажити демонстраційні дані</translation>
+-        <translation>Впорядковуйте теми співбесід із C++ та English у колонках канбану та записуйте сесії навчання.</translation>
++        <translation>Впорядковуйте теми співбесід із C++ та English у колонках канбану та записуйте заняття.</translation>
+-        <translation>Записати сесію навчання для цієї теми</translation>
++        <translation>Записати заняття для цієї теми</translation>
+-        <translation>Завантажити демо-дані?</translation>
++        <translation>Завантажити демонстраційні дані?</translation>
+-        <translation>Демо-дані</translation>
++        <translation>Демонстраційні дані</translation>
+-        <translation>Захисну резервну копію вашої поточної бази даних буде збережено до: %1<br><br>Вашу поточну базу даних НЕ змінено.</translation>
++        <translation>Захисну резервну копію поточної бази даних буде збережено до: %1<br><br>Поточну базу даних НЕ змінено.</translation>
+-        <translation>Відновлення бази даних успішно завершено з резервної копії:<br><b>%8</b><br><br>Відновлено елементів:<br>- %1 напрямів<br>- %2 тем<br>- %3 підзавдань<br>- %4 сесій навчання<br>- %5 заявок<br>- %6 записів історії статусів<br>- %7 співбесід</translation>
++        <translation>Відновлення бази даних успішно завершено з резервної копії:<br><b>%8</b><br><br>Відновлено елементів:<br>- Напрями: %1<br>- Теми: %2<br>- Підзавдання: %3<br>- Заняття: %4<br>- Заявки: %5<br>- Записи історії статусів: %6<br>- Співбесіди: %7</translation>
+```
+
+#### Compilation & Translation Test Verification
+
+`lrelease` compilation check:
+```bash
+/usr/lib/qt6/bin/lrelease resources/translations/jobprep_uk.ts resources/translations/jobprep_ru.ts
+```
+Raw Output:
+```
+Updating 'resources/translations/jobprep_uk.qm'...
+    Generated 506 translation(s) (506 finished and 0 unfinished)
+Updating 'resources/translations/jobprep_ru.qm'...
+    Generated 506 translation(s) (506 finished and 0 unfinished)
+```
+Zero warnings emitted.
+
+Test suite run:
+```bash
+./build/dev-linux/tests/i18n/tst_Translations
+```
+Raw Output:
+```
+********* Start testing of tst_Translations *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_Translations::initTestCase()
+PASS   : tst_Translations::testTsParsingAndCompletenessFixtures()
+PASS   : tst_Translations::testRealTsFilesCompleteness()
+PASS   : tst_Translations::testRealTsFilesSyncWithSource()
+PASS   : tst_Translations::testPluralMechanismUkrainian()
+PASS   : tst_Translations::testPluralMechanismRussian()
+PASS   : tst_Translations::testEmbeddedQmFilesExist()
+PASS   : tst_Translations::testMissingQtBaseNoWarningNoCrash()
+PASS   : tst_Translations::testEnglishFallbackAndPseudoTranslator()
+PASS   : tst_Translations::testRealCatalogsPluralTable()
+PASS   : tst_Translations::cleanupTestCase()
+Totals: 11 passed, 0 failed, 0 skipped, 0 blacklisted, 26ms
+********* Finished testing of tst_Translations *********
+```
+
+---
+
+### C. Leftovers from Part D
+
+#### C.1 `scripts/check-translations.sh` Path Finder
+Diff applied in commit `27d0268`:
+```diff
+--- a/scripts/check-translations.sh
++++ b/scripts/check-translations.sh
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+ 
+-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]%/*}")" && pwd)"
+ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ 
+ cd "${REPO_ROOT}"
+@@ -12,10 +12,6 @@ if [ -n "${QT_PREFIX_PATH:-}" ] && [ -x "${QT_PREFIX_PATH}/bin/lupdate" ]; then
+     LUPDATE="${QT_PREFIX_PATH}/bin/lupdate"
+ elif command -v lupdate >/dev/null 2>&1; then
+     LUPDATE="$(command -v lupdate)"
+-elif [ -x "/usr/lib/qt6/bin/lupdate" ]; then
+-    LUPDATE="/usr/lib/qt6/bin/lupdate"
+-elif [ -x "/var/tmp/qt682/6.8.2/gcc_64/bin/lupdate" ]; then
+-    LUPDATE="/var/tmp/qt682/6.8.2/gcc_64/bin/lupdate"
+ fi
+```
+
+Empty PATH test run:
+```bash
+/bin/bash -c 'env -i PATH="" /bin/bash scripts/check-translations.sh'; echo "exit code: $?"
+```
+Raw Output:
+```
+==> lupdate not found, skipping translation sync check.
+exit code: 0
+```
+
+#### C.2 `.qm` Git Ignore & Build Destination
+Commands executed:
+```bash
+git ls-files '*.qm'
+```
+Raw Output:
+`(no output)`
+
+```bash
+git check-ignore -v resources/translations/jobprep_uk.qm
+```
+Raw Output:
+```
+.gitignore:33:*.qm	resources/translations/jobprep_uk.qm
+```
+Where the build writes `.qm` files:
+During CMake build, Qt's translation machinery (`qt_add_translations`) compiles `.ts` files into binary `.qm` catalogs strictly within the build directory (`build/dev-linux/resources/translations/` and `${CMAKE_CURRENT_BINARY_DIR}/.rcc/i18n/`), which are subsequently embedded into the `jobprep_core` static library archive. No `.qm` files are written into the source tree.
+
+#### C.3 Empirical Date Comparison: Old (`0f4b9b2`) vs New (`HEAD`)
+
+Tested in a throw-away worktree of `0f4b9b2` against `HEAD` with English UI language:
+
+| Metric / Call | Locale `uk_UA` (Old `0f4b9b2`) | Locale `uk_UA` (New `HEAD`) | Locale `de_DE` (Old `0f4b9b2`) | Locale `de_DE` (New `HEAD`) |
+| :--- | :--- | :--- | :--- | :--- |
+| `SingleTabDateEdit.text()` (for `2026-11-15`) | `15.11.26` | `2026-11-15` | `15.11.26` | `2026-11-15` |
+| `SingleTabDateEdit.displayFormat()` | `dd.MM.yy` | `yyyy-MM-dd` | `dd.MM.yy` | `yyyy-MM-dd` |
+| `calendarWidget()->firstDayOfWeek()` | `1` (Monday) | `1` (Monday) | `1` (Monday) | `1` (Monday) |
+| `MonthView::monthTitle(2026, 11)` | `November 2026` | `November 2026` | `November 2026` | `November 2026` |
+| `MonthView::monthTitle(2026, 1)` | `January 2026` | `January 2026` | `January 2026` | `January 2026` |
+
+**User Impact Analysis**:
+In the old code (`0f4b9b2`), an English-speaking user running on a Ukrainian or German OS experienced inconsistent date representations (`15.11.26`) because `QDateEdit` defaulted to the OS locale format. With the D0.2 fix on `HEAD`, `SingleTabDateEdit` explicitly enforces `yyyy-MM-dd`, guaranteeing consistent ISO dates (`2026-11-15`) across all systems.
+
+#### C.4 Documentation Updates
+In commit `9bcd633`:
+- Updated `docs/RUNNING.md` Section 11 noting CI run ID `118200252685` where `qtbase_uk.qm` (158,274 bytes) and `qtbase_ru.qm` (203,767 bytes) are verified present across Ubuntu Qt 6.8.2, Ubuntu Qt 6.10.3, and Windows Qt 6.10.3 aqt kits, while the user's local Windows installation path (`<Qt>\<version>\msvc2022_64\translations`) is not verified.
+- Updated `docs/SPEC.md` §14 Changelog with entry 1.29 documenting the closeout fixes and CI-verified catalog presence.
+
+---
+
+### Labelled Predictions Per CI Job by Real Name
+
+- **`Gate (ubuntu-latest, Qt 6.8.2)`**: the pseudo test now passes with DejaVu locally; the translation sync check runs for the first time on CI at the end of `check.sh`: reports only (Qt minor 8 vs 10); **GREEN**.
+- **`Gate (ubuntu-latest, Qt 6.10.3)`**: the pseudo test now passes with DejaVu locally; the translation sync check runs for the first time on CI at the end of `check.sh`: enforces zero diff; **GREEN**.
+- **`Gate (windows-latest, Qt 6.10.3)`**: unchanged apart from the layout fix; **GREEN**.
+
+---
+
+### Not Verified by Agent, User to Check
+
+1. The CI run itself.
+2. Translation wording in the changed strings.
+3. Windows screens under `uk`/`ru` at 100% and 150%.
+4. The language selector and restart on Windows.
+5. Shortcuts under Ukrainian/Russian layouts.
+6. `Alt+Down` / `F4` in the five date places.
+7. The dashboard "Today" rows.
+
+---
+
+### Totals by Command
+
+- **Test Binaries Count**:
+  ```bash
+  ctest --preset dev-linux -N | grep -E "Test #[0-9]+" | wc -l
+  ```
+  `35`
+- **Test Functions Count**:
+  ```bash
+  for bin in $(find build/dev-linux/tests -maxdepth 2 -type f -executable | sort); do "$bin" -functions; done | grep -v '^[A-Z]' | wc -l
+  ```
+  `504` (compared to 495 in Part C fix-up; net +9 test functions across test suites).
+
+---
+
+### Full Raw Check Output
+
+Command executed:
+```bash
+CMAKE_BUILD_PARALLEL_LEVEL=2 ./scripts/check.sh
+```
+Raw Output:
+```
+==> Configuring JobPrep with dev-linux preset...
+-- Configuring done (0.6s)
+-- Generating done (0.7s)
+-- Build files have been written to: /home/tony/projects/JobPrep/build/dev-linux
+==> Building JobPrep with dev-linux preset...
+[1/35] Linking CXX executable tests/data/tst_Database
+[2/35] Linking CXX executable jobprep
+[3/35] Linking CXX executable tests/data/tst_TrackRepository
+[4/35] Linking CXX executable tests/data/tst_TopicRepository
+[5/35] Linking CXX executable tests/data/tst_SessionRepository
+[6/35] Linking CXX executable tests/data/tst_ApplicationRepository
+[7/35] Linking CXX executable tests/data/tst_InterviewRepository
+[8/35] Linking CXX executable tests/data/tst_ReminderLogRepository
+[9/35] Linking CXX executable tests/data/tst_SeedService
+[10/35] Linking CXX executable tests/data/tst_TransactionBehavior
+[11/35] Linking CXX executable tests/ui_smoke/ui_smoke
+[12/35] Linking CXX executable tests/ui_smoke/tst_MonthView
+[13/35] Linking CXX executable tests/models/tst_AgendaListModel
+[14/35] Linking CXX executable tests/models/tst_ApplicationTableModel
+[15/35] Linking CXX executable tests/models/tst_ApplicationFilterProxy
+[16/35] Linking CXX executable tests/models/tst_TopicListModel
+[17/35] Linking CXX executable tests/models/tst_TopicBoardProxy
+[18/35] Linking CXX executable tests/models/tst_TopicTableProxy
+[19/35] Linking CXX executable tests/services/tst_AgendaService
+[20/35] Linking CXX executable tests/services/tst_DayWatcher
+[21/35] Linking CXX executable tests/services/tst_ExportService
+[22/35] Linking CXX executable tests/services/tst_ImportExport
+[23/35] Linking CXX executable tests/services/tst_ReminderService
+[24/35] Linking CXX executable tests/services/tst_SettingsService
+[25/35] Linking CXX executable tests/services/tst_StatsService
+[26/35] Linking CXX executable tests/ui/tst_Notifiers
+[27/35] Linking CXX executable tests/ui/tst_StudyRegression
+[28/35] Linking CXX executable tests/ui/tst_PageJobs
+[29/35] Linking CXX executable tests/ui/tst_PageCalendar
+[30/35] Linking CXX executable tests/ui/tst_PageStudy
+[31/35] Linking CXX executable tests/ui/tst_PageHome
+[32/35] Linking CXX executable tests/ui/tst_PageSettings
+[33/35] Linking CXX executable tests/ui/tst_EmptyStatesAndFocus
+[34/35] Linking CXX executable tests/ui/tst_Shortcuts
+[35/35] Linking CXX executable tests/ui/tst_HiDpi
+==> Running tests with dev-linux preset...
+Test project /home/tony/projects/JobPrep/build/dev-linux
+      Start 34: tst_HiDpi
+      Start 29: tst_PageStudy
+ 1/35 Test #34: tst_HiDpi ........................   Passed   21.64 sec
+      Start 30: tst_PageHome
+ 2/35 Test #29: tst_PageStudy ....................   Passed   22.31 sec
+      Start 33: tst_EmptyStatesAndFocus
+ 3/35 Test #33: tst_EmptyStatesAndFocus ..........   Passed   10.67 sec
+      Start 27: tst_PageJobs
+ 4/35 Test #30: tst_PageHome .....................   Passed   17.07 sec
+      Start 32: tst_Shortcuts
+ 5/35 Test #32: tst_Shortcuts ....................   Passed    6.55 sec
+      Start 28: tst_PageCalendar
+ 6/35 Test #27: tst_PageJobs .....................   Passed   12.85 sec
+      Start 26: tst_StudyRegression
+ 7/35 Test #28: tst_PageCalendar .................   Passed    7.24 sec
+      Start 10: ui_smoke
+ 8/35 Test #26: tst_StudyRegression ..............   Passed    6.78 sec
+      Start 31: tst_PageSettings
+ 9/35 Test #31: tst_PageSettings .................   Passed    4.75 sec
+      Start 25: tst_Notifiers
+10/35 Test #25: tst_Notifiers ....................   Passed    2.56 sec
+      Start 24: tst_StatsService
+11/35 Test #24: tst_StatsService .................   Passed    0.95 sec
+      Start 35: tst_Translations
+12/35 Test #35: tst_Translations .................   Passed    0.07 sec
+      Start 21: tst_ImportExport
+13/35 Test #21: tst_ImportExport .................   Passed    0.69 sec
+      Start  8: tst_SeedService
+14/35 Test  #8: tst_SeedService ..................   Passed    0.29 sec
+      Start 23: tst_SettingsService
+15/35 Test #23: tst_SettingsService ..............   Passed    0.02 sec
+      Start 22: tst_ReminderService
+16/35 Test #22: tst_ReminderService ..............   Passed    0.08 sec
+      Start 17: tst_TopicTableProxy
+17/35 Test #17: tst_TopicTableProxy ..............   Passed    0.08 sec
+      Start 19: tst_DayWatcher
+18/35 Test #19: tst_DayWatcher ...................   Passed    0.01 sec
+      Start 18: tst_AgendaService
+19/35 Test #18: tst_AgendaService ................   Passed    0.10 sec
+      Start 12: tst_AgendaListModel
+20/35 Test #12: tst_AgendaListModel ..............   Passed    0.03 sec
+      Start  3: tst_TopicRepository
+21/35 Test  #3: tst_TopicRepository ..............   Passed    0.09 sec
+      Start 13: tst_ApplicationTableModel
+22/35 Test #13: tst_ApplicationTableModel ........   Passed    0.06 sec
+      Start 16: tst_TopicBoardProxy
+23/35 Test #16: tst_TopicBoardProxy ..............   Passed    0.06 sec
+      Start  5: tst_ApplicationRepository
+24/35 Test  #5: tst_ApplicationRepository ........   Passed    0.09 sec
+      Start  6: tst_InterviewRepository
+25/35 Test  #6: tst_InterviewRepository ..........   Passed    0.04 sec
+      Start 15: tst_TopicListModel
+26/35 Test #15: tst_TopicListModel ...............   Passed    0.04 sec
+      Start 14: tst_ApplicationFilterProxy
+27/35 Test #14: tst_ApplicationFilterProxy .......   Passed    0.02 sec
+      Start  4: tst_SessionRepository
+28/35 Test  #4: tst_SessionRepository ............   Passed    0.03 sec
+      Start  2: tst_TrackRepository
+29/35 Test  #2: tst_TrackRepository ..............   Passed    0.03 sec
+      Start  7: tst_ReminderLogRepository
+30/35 Test  #7: tst_ReminderLogRepository ........   Passed    0.03 sec
+      Start  9: tst_TransactionBehavior
+31/35 Test  #9: tst_TransactionBehavior ..........   Passed    0.03 sec
+      Start  1: tst_Database
+32/35 Test  #1: tst_Database .....................   Passed    0.03 sec
+      Start 11: tst_MonthView
+33/35 Test #11: tst_MonthView ....................   Passed    0.09 sec
+      Start 20: tst_ExportService
+34/35 Test #20: tst_ExportService ................   Passed    0.01 sec
+35/35 Test #10: ui_smoke .........................   Passed   12.78 sec
+
+100% tests passed, 0 tests failed out of 35
+
+Label Time Summary:
+data       =   0.66 sec*proc (9 tests)
+i18n       =   0.07 sec*proc (1 test)
+model      =   0.29 sec*proc (6 tests)
+service    =   1.87 sec*proc (7 tests)
+ui         = 125.29 sec*proc (12 tests)
+
+Total Test time (real) =  65.46 sec
+==> lupdate not found, skipping translation sync check.
+==> Quality check PASSED with zero warnings and all tests green!
+```
+
+---
+
+### Working Tree & Worktrees
+
+Command executed:
+```bash
+git status --short
+```
+Raw Output:
+`(no output)`
+
+Command executed:
+```bash
+git worktree list
+```
+Raw Output:
+```
+/home/tony/projects/JobPrep 9bcd633 [main]
+```
+
+---
+
+### Git Log of Closeout Work
+
+Command executed:
+```bash
+git log --oneline f3d79c7..HEAD
+```
+Raw Output:
+```
+b5acb34 docs(reports): add M7 closeout report with CI diagnostics and verification (6)
+9bcd633 docs: record CI-verified qtbase translation catalog presence and Windows paths (C.4)
+27d0268 build: ignore *.qm files and enforce QT_PREFIX_PATH/PATH lupdate finder order (C.1, C.2)
+5e092b2 i18n: apply translation corrections, glossary consistency, and weekly goal hint update (B)
+5d6dfe3 test(ui): run pseudo-translation check over font matrix (A.5)
+9ea04cb fix(ui): ensure calendar agenda panel width accommodates button minimum size hints (A)
+```
