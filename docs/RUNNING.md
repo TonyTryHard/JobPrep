@@ -229,7 +229,10 @@ See [SPEC.md §3.7](file:///home/tony/projects/JobPrep/docs/SPEC.md#37-global) f
   - Standard dialog buttons (e.g., *OK*, *Cancel*, *Yes*, *No*, *Save*, *Discard*) and common widgets rely on Qt's system catalogs (`qtbase_uk.qm` and `qtbase_ru.qm`).
   - **Where `qtbase_*.qm` must be**:
     - **Linux**: In the Qt install translations folder, resolved via `QLibraryInfo::path(QLibraryInfo::TranslationsPath)` (typically `/usr/share/qt6/translations` or `$QT_PREFIX_PATH/translations`).
-    - **Windows**: Located in `%QT_PREFIX_PATH%\translations` (or alongside the binary in a `translations/` subfolder). *Note:* Windows runtime loading of `qtbase_*.qm` depends on the specific Qt kit installed and is not verified by agent until the CI diagnostic runs on Windows.
+    - **Windows**: Located in `%QT_PREFIX_PATH%\translations` (or alongside the binary in a `translations/` subfolder).
+  - **Catalog Presence & CI Verification**:
+    - **CI-verified facts (run ID `118200252685`, 2026-11-15)**: `qtbase_uk.qm` (158,274 bytes) and `qtbase_ru.qm` (203,767 bytes) are verified present in `<QT_PREFIX_PATH>/translations` across all three aqt-installed Qt kits in CI: Ubuntu Qt 6.8.2, Ubuntu Qt 6.10.3, and Windows Qt 6.10.3.
+    - **Local Windows Installations**: On the user's own local Windows Qt installation, the path is `<Qt>\<version>\msvc2022_64\translations` and presence is **not verified** by agent.
 - **Translation Sync Verification**:
   - To verify that translation sources are synchronized with code without churning file timestamps or line numbers, run `./scripts/check-translations.sh` (automatically executed by `./scripts/check.sh`).
 
