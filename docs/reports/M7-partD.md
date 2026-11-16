@@ -1824,3 +1824,148 @@ Because this agent operates headless on Linux under `QT_QPA_PLATFORM=offscreen`,
 2. **Russian language selector item:** In Settings -> General -> Language, verify that the default item reads **`Системный (по умолчанию)`** (masculine form).
 3. **Weekly study goal Cyrillic input:** In Settings -> General -> Weekly study goal, verify typing `150мин` and `150 хв` evaluates to `2 h 30 min` (clamped/rounded), and verify that invalid syntax (e.g. `150x`) is rejected.
 4. **Dark theme check boxes:** In Settings, switch to Dark theme and verify that the subtask check boxes in `TopicDetailPanel` (unchecked and checked states) and all modal dialog checkboxes are distinctly visible at 100% and 150% display scaling.
+
+
+---
+
+## 8. Verification Commands, Raw Output & Git Status
+
+### Full `./scripts/check.sh` Run
+
+Command executed:
+```bash
+CMAKE_BUILD_PARALLEL_LEVEL=2 ./scripts/check.sh
+```
+Raw Output:
+```
+==> Configuring JobPrep with dev-linux preset...
+-- Configuring done (0.2s)
+-- Generating done (0.2s)
+-- Build files have been written to: /home/tony/projects/JobPrep/build/dev-linux
+==> Building JobPrep with dev-linux preset...
+[1/4] Automatic MOC and UIC for target tst_StudyRegression
+[2/3] Building CXX object tests/ui/CMakeFiles/tst_StudyRegression.dir/tst_StudyRegression.cpp.o
+[3/3] Linking CXX executable tests/ui/tst_StudyRegression
+==> Running tests with dev-linux preset...
+Test project /home/tony/projects/JobPrep/build/dev-linux
+      Start 30: tst_PageHome
+      Start 27: tst_PageJobs
+ 1/35 Test #27: tst_PageJobs .....................   Passed   13.10 sec
+      Start 28: tst_PageCalendar
+ 2/35 Test #30: tst_PageHome .....................   Passed   16.98 sec
+      Start 34: tst_HiDpi
+ 3/35 Test #28: tst_PageCalendar .................   Passed    7.19 sec
+      Start 29: tst_PageStudy
+ 4/35 Test #34: tst_HiDpi ........................   Passed   19.03 sec
+      Start 33: tst_EmptyStatesAndFocus
+ 5/35 Test #29: tst_PageStudy ....................   Passed   19.57 sec
+      Start 32: tst_Shortcuts
+ 6/35 Test #33: tst_EmptyStatesAndFocus ..........   Passed   11.08 sec
+      Start 25: tst_Notifiers
+ 7/35 Test #32: tst_Shortcuts ....................   Passed    8.00 sec
+      Start 26: tst_StudyRegression
+ 8/35 Test #25: tst_Notifiers ....................   Passed    2.58 sec
+      Start 31: tst_PageSettings
+ 9/35 Test #31: tst_PageSettings .................   Passed    4.92 sec
+      Start 10: ui_smoke
+10/35 Test #26: tst_StudyRegression ..............   Passed   10.05 sec
+      Start 24: tst_StatsService
+11/35 Test #24: tst_StatsService .................   Passed    0.97 sec
+      Start 21: tst_ImportExport
+12/35 Test #21: tst_ImportExport .................   Passed    0.68 sec
+      Start  8: tst_SeedService
+13/35 Test  #8: tst_SeedService ..................   Passed    0.27 sec
+      Start 23: tst_SettingsService
+14/35 Test #23: tst_SettingsService ..............   Passed    0.02 sec
+      Start 22: tst_ReminderService
+15/35 Test #22: tst_ReminderService ..............   Passed    0.08 sec
+      Start 17: tst_TopicTableProxy
+16/35 Test #17: tst_TopicTableProxy ..............   Passed    0.07 sec
+      Start 18: tst_AgendaService
+17/35 Test #18: tst_AgendaService ................   Passed    0.09 sec
+      Start  5: tst_ApplicationRepository
+18/35 Test  #5: tst_ApplicationRepository ........   Passed    0.09 sec
+      Start 15: tst_TopicListModel
+19/35 Test #15: tst_TopicListModel ...............   Passed    0.04 sec
+      Start 12: tst_AgendaListModel
+20/35 Test #12: tst_AgendaListModel ..............   Passed    0.03 sec
+      Start  6: tst_InterviewRepository
+21/35 Test  #6: tst_InterviewRepository ..........   Passed    0.03 sec
+      Start 13: tst_ApplicationTableModel
+22/35 Test #13: tst_ApplicationTableModel ........   Passed    0.06 sec
+      Start 19: tst_DayWatcher
+23/35 Test #19: tst_DayWatcher ...................   Passed    0.01 sec
+      Start  3: tst_TopicRepository
+24/35 Test  #3: tst_TopicRepository ..............   Passed    0.08 sec
+      Start 16: tst_TopicBoardProxy
+25/35 Test #16: tst_TopicBoardProxy ..............   Passed    0.05 sec
+      Start  4: tst_SessionRepository
+26/35 Test  #4: tst_SessionRepository ............   Passed    0.03 sec
+      Start 14: tst_ApplicationFilterProxy
+27/35 Test #14: tst_ApplicationFilterProxy .......   Passed    0.02 sec
+      Start  2: tst_TrackRepository
+28/35 Test  #2: tst_TrackRepository ..............   Passed    0.02 sec
+      Start 11: tst_MonthView
+29/35 Test #11: tst_MonthView ....................   Passed    0.09 sec
+      Start  7: tst_ReminderLogRepository
+30/35 Test  #7: tst_ReminderLogRepository ........   Passed    0.02 sec
+      Start 35: tst_Translations
+31/35 Test #35: tst_Translations .................   Passed    0.07 sec
+      Start  9: tst_TransactionBehavior
+32/35 Test  #9: tst_TransactionBehavior ..........   Passed    0.03 sec
+      Start  1: tst_Database
+33/35 Test  #1: tst_Database .....................   Passed    0.03 sec
+      Start 20: tst_ExportService
+34/35 Test #20: tst_ExportService ................   Passed    0.01 sec
+35/35 Test #10: ui_smoke .........................   Passed   12.47 sec
+
+100% tests passed, 0 tests failed out of 35
+
+Label Time Summary:
+data       =   0.62 sec*proc (9 tests)
+i18n       =   0.07 sec*proc (1 test)
+model      =   0.27 sec*proc (6 tests)
+service    =   1.85 sec*proc (7 tests)
+ui         = 125.05 sec*proc (12 tests)
+
+Total Test time (real) =  67.06 sec
+==> lupdate not found, skipping translation sync check.
+==> Quality check PASSED with zero warnings and all tests green!
+```
+
+### Working Tree & Worktrees
+
+Command executed:
+```bash
+git status --short
+```
+Raw Output:
+```
+(no output)
+```
+
+Command executed:
+```bash
+git worktree list
+```
+Raw Output:
+```
+/home/tony/projects/JobPrep 7fce164 [main]
+```
+
+### Git Log of Manual Fixes Work
+
+Command executed:
+```bash
+git log --oneline origin/main..HEAD
+```
+Raw Output:
+```
+7fce164 test(ui): write checklist contrast screenshots only when absent
+e4c01bc docs(reports): append M7 manual-check fixes report to M7-partD (6)
+cdec129 docs: document accepted weekly goal units in RUNNING.md and record SPEC §14 changelog (5)
+e6e3cb9 feat(theme): style check box indicators with accent color for dark contrast (4)
+ec3aac1 feat(settings): parse Ukrainian and Russian minute units in weekly goal (3)
+40e6b0f i18n: fix Russian gender agreement for system language item (2)
+769ffbf fix(ui): ensure calendar popup view receives explicit keyboard focus (1)
+```
