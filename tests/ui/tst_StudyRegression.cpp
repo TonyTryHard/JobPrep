@@ -1323,7 +1323,10 @@ void tst_StudyRegression::testCheckboxIndicatorContrastAcrossAppDarkAndLight() {
                         const double beforeUnchecked = sampleBeforeContrast(1, false);
                         fprintf(stderr, "BEFORE FIX CONTRAST: mode=%s scale=1.0 checked=%.2f:1 unchecked=%.2f:1\n",
                                 qPrintable(modeStr), beforeChecked, beforeUnchecked);
-                        imgBefore.save(QDir(imagesDir).filePath(QString(u"checklist-before-%1.png"_s).arg(modeStr)));
+                        const QString beforeImgPath = QDir(imagesDir).filePath(QString(u"checklist-before-%1.png"_s).arg(modeStr));
+                        if (!QFile::exists(beforeImgPath)) {
+                            imgBefore.save(beforeImgPath);
+                        }
 
                         // Restore full theme with indicator rules
                         qApp->setStyleSheet(fullQss);
@@ -1384,8 +1387,10 @@ void tst_StudyRegression::testCheckboxIndicatorContrastAcrossAppDarkAndLight() {
 
             if (scale == 1.0) {
                 const QString imgPath = QDir(imagesDir).filePath(QString(u"checklist-after-%1.png"_s).arg(modeStr));
-                QImage grabImg = vp->grab().toImage();
-                grabImg.save(imgPath);
+                if (!QFile::exists(imgPath)) {
+                    QImage grabImg = vp->grab().toImage();
+                    grabImg.save(imgPath);
+                }
             }
 
             // Assert that checked differs from unchecked
