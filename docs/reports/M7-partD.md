@@ -1378,3 +1378,449 @@ b5acb34 docs(reports): add M7 closeout report with CI diagnostics and verificati
 5d6dfe3 test(ui): run pseudo-translation check over font matrix (A.5)
 9ea04cb fix(ui): ensure calendar agenda panel width accommodates button minimum size hints (A)
 ```
+
+
+---
+
+# M7 Manual-Check Fixes
+
+**Date:** 2026-11-16  
+**Status:** Complete  
+**Platform / Environment:** Linux x86_64 (Ubuntu 26.04), GCC 15.2.0, Qt 6.10.2 shared, CMake 3.31.6, Ninja 1.13.1  
+**Build Configuration:** `dev-linux` preset (`-g -std=c++20 -Wall -Wextra -Wpedantic -Wshadow -Werror -DJOBPREP_WERROR=ON`)  
+**Parallelism:** `CMAKE_BUILD_PARALLEL_LEVEL=2`  
+
+---
+
+## 1. Facts as Given (User Manual Check on Windows 10, 2026-11-16)
+
+1. **Date popup arrows:** Alt+Down and F4 opened the calendar popup everywhere, but on the **Study page** date control, arrow keys did not move the calendar selection until a date had been picked with the mouse. Opening the popup by mouse click on the drop-down button had the same defect. The spin-box part changed the date with Up/Down as expected. The other four date places behaved correctly. Suspected cause: keyboard focus was not being delivered to the calendar's internal view when the popup opened on an embedded form page.
+2. **Language selector item gender:** In Russian, the word `System (default)` must agree with "язык" (masculine, `Системный (по умолчанию)`), whereas it was previously translated in feminine form (`Системная по умолчанию`). In Ukrainian, "мова" is feminine and `Системна за замовчуванням` is correct.
+3. **Weekly study goal units:** `450 min` was parsed as 450 minutes, but typing `150мин` (or `150 хв`) was silently ignored as a unit and interpreted as 150 hours, then capped at 40 hours (2400 minutes). An unrecognised unit must be rejected as an error, and Cyrillic minute units must be supported.
+4. **Dark theme check box visibility:** In dark theme, the check boxes of the checklist items in `TopicDetailPanel` were almost invisible (dark indicator border/fill on dark background; only the focus ring made the control visible). Light theme was fine.
+
+---
+
+## 2. Item 1: Study Page Date Popup Focus & Arrow Navigation
+
+### Investigation and Comparison
+
+Command executed:
+```bash
+grep -rn "SingleTabDateEdit\|QDateEdit" src
+```
+Raw Output:
+```
+src/ui/widgets/SingleTabDateTime.h:5:#include <QDateEdit>
+src/ui/widgets/SingleTabDateTime.h:25:/// A QDateEdit where Tab and Backtab advance to the next or previous widget
+src/ui/widgets/SingleTabDateTime.h:28:class SingleTabDateEdit : public QDateEdit {
+src/ui/widgets/SingleTabDateTime.h:31:        return QCoreApplication::translate("SingleTabDateEdit", sourceText, disambiguation, n);
+src/ui/widgets/SingleTabDateTime.h:34:    explicit SingleTabDateEdit(QWidget* parent = nullptr)
+src/ui/widgets/SingleTabDateTime.h:35:        : QDateEdit(parent) {
+src/ui/widgets/SingleTabDateTime.h:46:    explicit SingleTabDateEdit(const QDate& date, QWidget* parent = nullptr)
+src/ui/widgets/SingleTabDateTime.h:47:        : QDateEdit(date, parent) {
+src/ui/widgets/SingleTabDateTime.h:82:        QDateEdit::setCalendarPopup(enable);
+src/ui/widgets/SingleTabDateTime.h:90:            QCoreApplication::translate("SingleTabDateEdit", "Press Alt+Down or F4 to open calendar");
+src/ui/widgets/SingleTabDateTime.h:92:            QDateEdit::setToolTip(hint);
+src/ui/widgets/SingleTabDateTime.h:94:            QDateEdit::setToolTip(tip);
+src/ui/widgets/SingleTabDateTime.h:96:            QDateEdit::setToolTip(tip + QString(u'\n') + hint);
+src/ui/widgets/SingleTabDateTime.h:184:        return QDateEdit::eventFilter(watched, event);
+src/ui/widgets/SingleTabDateTime.h:190:                QCoreApplication::translate("SingleTabDateEdit", "Press Alt+Down or F4 to open calendar");
+src/ui/widgets/SingleTabDateTime.h:194:                QDateEdit::setToolTip(combined);
+src/ui/widgets/SingleTabDateTime.h:204:        return QDateEdit::event(e);
+src/ui/widgets/SingleTabDateTime.h:213:        QDateEdit::keyPressEvent(event);
+src/ui/widgets/TopicDetailPanel.h:10:class QDateEdit;
+src/ui/widgets/TopicDetailPanel.h:123:    QDateEdit* m_dateEdit{nullptr};
+src/ui/widgets/TopicDetailPanel.cpp:6:#include <QDateEdit>
+src/ui/widgets/TopicDetailPanel.cpp:143:    m_dateEdit = new SingleTabDateEdit(m_form);
+src/ui/widgets/TopicDetailPanel.cpp:295:    connect(m_dateEdit, &QDateEdit::dateChanged, this, [this](const QDate& d) {
+src/ui/dialogs/InterviewDialog.cpp:5:#include <QDateEdit>
+src/ui/dialogs/InterviewDialog.cpp:98:    m_dateEdit = new Widgets::SingleTabDateEdit(this);
+src/ui/dialogs/InterviewDialog.cpp:202:    connect(m_dateEdit, &QDateEdit::dateChanged, this, &InterviewDialog::onFormChanged);
+src/ui/dialogs/SessionDialog.h:10:class QDateEdit;
+src/ui/dialogs/SessionDialog.h:57:    QDateEdit* m_dateEdit{nullptr};
+src/ui/dialogs/ApplicationDialog.cpp:6:#include <QDateEdit>
+src/ui/dialogs/ApplicationDialog.cpp:209:    m_appliedDateEdit = new Widgets::SingleTabDateEdit(page);
+src/ui/dialogs/ApplicationDialog.cpp:229:    m_nextActionDateEdit = new Widgets::SingleTabDateEdit(page);
+src/ui/dialogs/ApplicationDialog.cpp:275:    connect(m_appliedDateEdit, &QDateEdit::dateChanged, this, &ApplicationDialog::onFormChanged);
+src/ui/dialogs/ApplicationDialog.cpp:278:    connect(m_nextActionDateEdit, &QDateEdit::dateChanged, this, &ApplicationDialog::onFormChanged);
+src/ui/dialogs/ApplicationDialog.cpp:285:    connect(m_appliedDateEnabled, &QCheckBox::toggled, m_appliedDateEdit, &QDateEdit::setEnabled);
+src/ui/dialogs/ApplicationDialog.cpp:286:    connect(m_nextActionDateEnabled, &QCheckBox::toggled, m_nextActionDateEdit, &QDateEdit::setEnabled);
+src/ui/dialogs/InterviewDialog.h:8:class QDateEdit;
+src/ui/dialogs/InterviewDialog.h:89:    QDateEdit* m_dateEdit{nullptr};
+src/ui/dialogs/ApplicationDialog.h:9:class QDateEdit;
+src/ui/dialogs/ApplicationDialog.h:110:    QDateEdit* m_appliedDateEdit{nullptr};
+src/ui/dialogs/ApplicationDialog.h:113:    QDateEdit* m_nextActionDateEdit{nullptr};
+src/ui/dialogs/SessionDialog.cpp:4:#include <QDateEdit>
+src/ui/dialogs/SessionDialog.cpp:49:    m_dateEdit = new Widgets::SingleTabDateEdit(today, this);
+src/ui/dialogs/SessionDialog.cpp:106:    connect(m_dateEdit, &QDateEdit::dateChanged, this, &SessionDialog::onFormChanged);
+```
+
+**Control Inventory (5 Date Controls in Total):**
+1. `ApplicationDialog`: `m_appliedDateEdit` (object name `ApplicationAppliedDateEdit`)
+2. `ApplicationDialog`: `m_nextActionDateEdit` (object name `ApplicationNextActionDateEdit`)
+3. `InterviewDialog`: `m_dateEdit` (object name `InterviewDateEdit`)
+4. `SessionDialog`: `m_dateEdit` (object name `SessionDateEdit`)
+5. Study Page (`TopicDetailPanel`): `m_dateEdit` (object name `StudyDetailDateEdit`)
+
+**Parent Chain Comparison:**
+- Working controls (1-4): Embedded in top-level modal dialog windows (`ApplicationDialog`, `InterviewDialog`, `SessionDialog`). When modal dialogs display a calendar popup, the popup's window modality and window activation automatically focus the newly mapped popup child.
+- Study page control (5): Embedded in `TopicDetailPanel` -> `QScrollArea (StudyDetailScroll)` -> `StudyPage` -> `QStackedWidget (PageStack)` -> `MainWindow`. Inside `MainWindow` without a modal dialog loop, the internal `QTableView` inside `QCalendarWidget` did not reliably obtain active keyboard focus upon popup mapping until a mouse click forced focus onto the calendar view.
+
+**Side-by-Side Open & Focus Code:**
+
+*Before:*
+```cpp
+void openCalendarPopup() {
+    if (!calendarPopup()) return;
+    syncCalendarFirstDayOfWeek();
+    if (calendarWidget() && calendarWidget()->isVisible()) return;
+
+    QStyleOptionComboBox opt;
+    opt.initFrom(this);
+    opt.rect = rect();
+    opt.subControls = QStyle::SC_All;
+    opt.state |= QStyle::State_Enabled;
+    const QRect arrowRect = style()->subControlRect(
+        QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, this);
+    const QPoint clickPos = arrowRect.center();
+    QMouseEvent press(QEvent::MouseButtonPress, clickPos, mapToGlobal(clickPos),
+                      Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(this, &press);
+}
+```
+
+*After (Fix in shared `SingleTabDateEdit`):*
+```cpp
+void setupCalendarPopupFocus() {
+    syncCalendarFirstDayOfWeek();
+    if (auto* cal = calendarWidget()) {
+        cal->setFocusPolicy(Qt::StrongFocus);
+        if (auto* calTable = cal->findChild<QTableView*>()) {
+            calTable->setFocusPolicy(Qt::StrongFocus);
+            cal->setFocusProxy(calTable);
+        }
+        cal->installEventFilter(this);
+        if (auto* win = cal->window()) {
+            win->installEventFilter(this);
+        }
+    }
+}
+
+void focusCalendarView() {
+    if (auto* cal = calendarWidget()) {
+        auto* calTable = cal->findChild<QTableView*>();
+        QWidget* target = calTable ? static_cast<QWidget*>(calTable) : static_cast<QWidget*>(cal);
+        target->setFocus(Qt::PopupFocusReason);
+        QTimer::singleShot(0, target, [this, target]() {
+            if (calendarWidget() && calendarWidget()->isVisible()) {
+                target->setFocus(Qt::PopupFocusReason);
+                if (qEnvironmentVariableIntValue("JOBPREP_DEBUG_DATEPOPUP") == 1) {
+                    logDatePopupDebug();
+                }
+            }
+        });
+    }
+}
+```
+
+### Table-Driven Test & Verification
+
+Automated test `tst_Shortcuts::testDateCalendarPopupArrows` runs table-driven across all 5 controls using all 3 opening triggers (Alt+Down, F4, mouse click on the drop-down arrow). It asserts that `QApplication::focusWidget()` is the calendar's internal `QTableView` (`QtPrivate::QCalendarView`), and that `Key_Down` (+7 days), `Key_Right` (+1 day), and `Key_PageDown` (+1 month) update the selected date before closing via Escape.
+
+Command executed:
+```bash
+JOBPREP_DEBUG_DATEPOPUP=1 /home/tony/projects/JobPrep/build/dev-linux/tests/ui/tst_Shortcuts testDateCalendarPopupArrows
+```
+Raw Output:
+```
+********* Start testing of tst_Shortcuts *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_Shortcuts::initTestCase()
+JOBPREP_DEBUG_DATEPOPUP: popup=0x55c3071778b0 class=QCalendarPopup flags=0x8800f009 visible=1
+JOBPREP_DEBUG_DATEPOPUP: focusWidget=0x55c307170350 class=QtPrivate::QCalendarView name=qt_calendar_calendarview
+JOBPREP_DEBUG_DATEPOPUP:   chain[0]: 0x55c307170350 class=QtPrivate::QCalendarView name=qt_calendar_calendarview
+JOBPREP_DEBUG_DATEPOPUP:   chain[1]: 0x55c3070f61a0 class=QCalendarWidget name=
+JOBPREP_DEBUG_DATEPOPUP:   chain[2]: 0x55c3071778b0 class=QCalendarPopup name=qt_datetimedit_calendar
+JOBPREP_DEBUG_DATEPOPUP:   chain[3]: 0x55c306cb4c20 class=QDateEdit name=InterviewDateEdit
+ARROWS_TEST: control=InterviewDateEdit method=0 focusWidget=0x55c307170350 (QtPrivate::QCalendarView, name=qt_calendar_calendarview) calTable=0x55c307170350
+PASS   : tst_Shortcuts::testDateCalendarPopupArrows(InterviewDateEdit)
+PASS   : tst_Shortcuts::testDateCalendarPopupArrows(ApplicationAppliedDateEdit)
+PASS   : tst_Shortcuts::testDateCalendarPopupArrows(ApplicationNextActionDateEdit)
+PASS   : tst_Shortcuts::testDateCalendarPopupArrows(SessionDateEdit)
+ARROWS_TEST: control=TopicDetailPanelDateEdit method=0 focusWidget=0x55c306eb0d60 (QtPrivate::QCalendarView, name=qt_calendar_calendarview) calTable=0x55c306eb0d60
+ARROWS_TEST: control=TopicDetailPanelDateEdit method=1 focusWidget=0x55c306eb0d60 (QtPrivate::QCalendarView, name=qt_calendar_calendarview) calTable=0x55c306eb0d60
+ARROWS_TEST: control=TopicDetailPanelDateEdit method=2 focusWidget=0x55c306eb0d60 (QtPrivate::QCalendarView, name=qt_calendar_calendarview) calTable=0x55c306eb0d60
+PASS   : tst_Shortcuts::testDateCalendarPopupArrows(TopicDetailPanelDateEdit)
+PASS   : tst_Shortcuts::cleanupTestCase()
+Totals: 7 passed, 0 failed, 0 skipped, 0 blacklisted, 1857ms
+********* Finished testing of tst_Shortcuts *********
+```
+Slot duration: **1857 ms**.
+
+---
+
+## 3. Item 2: Language Selector Item Gender in Russian
+
+### Inspection and Changes
+
+Command executed:
+```bash
+grep -n "System Default" resources/translations/*.ts
+```
+Raw Output:
+```
+resources/translations/jobprep_ru.ts:1480:        <source>System Default</source>
+resources/translations/jobprep_uk.ts:1480:        <source>System Default</source>
+```
+
+Command executed:
+```bash
+grep -n "Системн\|системн" resources/translations/*.ts
+```
+Raw Output:
+```
+resources/translations/jobprep_ru.ts:1465:        <translation>Оставлять JobPrep работать в системном трее при закрытии окна</translation>
+resources/translations/jobprep_ru.ts:1469:        <translation>Системный трей недоступен в этой системе</translation>
+resources/translations/jobprep_ru.ts:1481:        <translation>Системный (по умолчанию)</translation>
+resources/translations/jobprep_ru.ts:1570:        <translation>Сворачивать / закрывать в системный трей</translation>
+resources/translations/jobprep_ru.ts:2227:        <translation>Системный дизайн</translation>
+resources/translations/jobprep_uk.ts:1465:        <translation>Залишати JobPrep працювати в системному треї під час закриття вікна</translation>
+resources/translations/jobprep_uk.ts:1469:        <translation>Системний трей недоступний у цій системі</translation>
+resources/translations/jobprep_uk.ts:1481:        <translation>Системна за замовчуванням</translation>
+resources/translations/jobprep_uk.ts:1570:        <translation>Згортати / закривати в системний трей</translation>
+resources/translations/jobprep_uk.ts:2227:        <translation>Системний дизайн</translation>
+```
+
+- In Russian: `Системная по умолчанию` was corrected to **`Системный (по умолчанию)`** (masculine, agreeing with masculine noun "язык").
+- In Ukrainian: `Системна за замовчуванням` is correct (feminine, agreeing with feminine noun "мова") and remains unchanged.
+- Documentation in `docs/i18n-glossary.md` and `docs/reports/i18n-review.md` updated to match.
+
+Raw translation diff across commits:
+```bash
+git diff -U0 origin/main..HEAD resources/translations | grep -E '^[-+] *<(translation|numerusform)'
+```
+Raw Output:
+```
+-        <translation>Системная по умолчанию</translation>
++        <translation>Системный (по умолчанию)</translation>
+-        <translation>Еженедельная учебная цель в часах и минутах (например: 8, 7:30, 7;30, 450 min; числа или десятичные дроби означают часы)</translation>
++        <translation>Еженедельная учебная цель в часах и минутах (например: 8, 7:30, 7;30, 450 мин; числа или десятичные дроби означают часы)</translation>
+-        <translation>Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7:30, 7;30, 450 min; числа чи десяткові дроби означають години)</translation>
++        <translation>Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7:30, 7;30, 450 хв; числа чи десяткові дроби означають години)</translation>
+```
+
+---
+
+## 4. Item 3: Weekly Goal: Cyrillic Minute Units & Parser Hardening
+
+### Parser Implementation & Behavior
+
+Code in `src/ui/pages/SettingsPage.cpp`:
+```cpp
+std::optional<int> parseGoalMinutes(const QString& text) {
+    const QString clean = text.trimmed();
+    if (clean.isEmpty()) return std::nullopt;
+    const QString lower = clean.toLower();
+
+    // 1. Explicit minutes with suffix: e.g. "90 min", "90min", "90 mins", "90 minute", "90 minutes",
+    //    "150мин", "150 мин", "150 хв", "150хв", "150 минут", "150 минуты", "150 хвилин", "150 хвилини",
+    //    case-insensitively with optional trailing dot. 'm' is ambiguous and explicitly not accepted.
+    static const QRegularExpression minOnlyRe(
+        uR"(^(\d+)\s*(?:min(?:s|utes?)?|мин(?:ут[ы]?)?|хв(?:илин[и]?)?)\.?$)"_s,
+        QRegularExpression::CaseInsensitiveOption);
+    auto match = minOnlyRe.match(lower);
+    if (match.hasMatch()) {
+        bool ok = false;
+        const int mins = match.captured(1).toInt(&ok);
+        if (!ok) return std::nullopt;
+        const int rounded = static_cast<int>(std::round(static_cast<double>(mins) / 15.0)) * 15;
+        return std::clamp(rounded, 60, 2400);
+    }
+    // ...
+}
+```
+
+**Unit Handling & Error Behavior:**
+- **Before:** `150мин` and `150 хв` did not match the English-only `minOnlyRe` (`min|mins|minutes?`). The parser fell through to `hoursOnlyRe`, extracting digits `150` as hours (9000 minutes), which was then capped at 40 hours (2400 minutes).
+- **After:** `150мин` and `150 хв` match `minOnlyRe`, evaluating to 150 minutes (2 h 30 min).
+- **Invalid Units:** Unrecognised unit suffixes (e.g. `150x`, `150m`, `мин150`, `2г`, `2 ч`) return `std::nullopt`. `GoalSpinBox::valueFromText` preserves the prior valid value (`parsed.value_or(value())`), and `fixup()` restores the display string, completely eliminating silent incorrect guessing.
+- **Accepted Hour Units:** Currently accepted hour suffixes are English only: `h`, `hrs`, `hr`, `hours`, `hour`.
+- **Hour Suffix Proposal:** In a future update, support Ukrainian (`г`, `год`, `годин`, `години`) and Russian (`ч`, `час`, `часов`, `часа`) hour suffixes to allow symmetric localized hour typing.
+- **Hint Updates:** In `jobprep_uk.ts` and `jobprep_ru.ts`, the hint examples were updated from `450 min` to `450 хв` and `450 мин`, respectively. English source remains unchanged.
+
+### Test Execution
+
+Command executed:
+```bash
+/home/tony/projects/JobPrep/build/dev-linux/tests/ui/tst_PageSettings testGoalSpinBoxMinuteUnitsUkRu
+```
+Raw Output:
+```
+********* Start testing of tst_PageSettings *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_PageSettings::initTestCase()
+PASS   : tst_PageSettings::testGoalSpinBoxMinuteUnitsUkRu()
+PASS   : tst_PageSettings::cleanupTestCase()
+Totals: 3 passed, 0 failed, 0 skipped, 0 blacklisted, 102ms
+********* Finished testing of tst_PageSettings *********
+```
+Slot duration: **102 ms**.
+
+---
+
+## 5. Item 4: Dark Theme Check Box Contrast
+
+### Root Cause Analysis
+
+Command executed:
+```bash
+grep -rn "indicator\|ItemIsUserCheckable\|CheckState" src resources
+```
+Raw Output:
+```
+src/ui/widgets/TopicListView.h:14:/// - Full-column drag-over highlight and empty-column drop indicator
+src/ui/widgets/TopicDetailPanel.cpp:495:            if (item && (item->flags() & Qt::ItemIsUserCheckable)) {
+src/ui/widgets/TopicDetailPanel.cpp:496:                item->setCheckState(item->checkState() == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+src/ui/widgets/TopicDetailPanel.cpp:680:        item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable);
+src/ui/widgets/TopicDetailPanel.cpp:681:        item->setCheckState(subtask.done ? Qt::Checked : Qt::Unchecked);
+resources/styles/theme.qss:175:/* CheckBox and Checkable item indicators */
+resources/styles/theme.qss:185:QCheckBox::indicator,
+resources/styles/theme.qss:186:QListView::indicator,
+resources/styles/theme.qss:187:QListWidget::indicator,
+resources/styles/theme.qss:188:#StudyDetailCheckList::indicator {
+```
+
+Checklist items in `TopicDetailPanel` are managed by a `QListWidget` (`StudyDetailCheckList`) using `Qt::ItemIsUserCheckable`. Without explicit QSS styling for `::indicator`, Qt rendered default Fusion indicators using dark base colors on the dark `#161b22` card background. This resulted in an unchecked indicator contrast of only **1.03:1 to 1.12:1** (nearly invisible).
+
+### Styling Fix
+
+Added central theme rules in `resources/styles/theme.qss` for `QCheckBox::indicator`, `QListView::indicator`, `QListWidget::indicator`, and `#StudyDetailCheckList::indicator`:
+- **Unchecked:** 2px solid border using theme `@accent` on `@surface` neutral fill.
+- **Checked:** 2px solid `@accent` border, `@accent` fill, and a crisp white SVG checkmark (`:/icons/check.svg`).
+- **Hover / Focus:** Border changes to `@accentHover` or `@accent`.
+- **Disabled:** Dimmed `@textMuted` border and `@surfaceAlt` fill.
+
+### Contrast Test Results (WCAG 3:1 Component Threshold)
+
+Automated verification in `tst_StudyRegression::testCheckboxIndicatorContrastAcrossAppDarkAndLight` renders the checklist, Settings checkbox, and ApplicationDialog checkboxes under Dark and Light themes at 1.0x and 1.5x scales:
+
+Command executed:
+```bash
+/home/tony/projects/JobPrep/build/dev-linux/tests/ui/tst_StudyRegression testCheckboxIndicatorContrastAcrossAppDarkAndLight
+```
+Raw Output:
+```
+********* Start testing of tst_StudyRegression *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 15.2.0), ubuntu 26.04
+PASS   : tst_StudyRegression::initTestCase()
+BEFORE FIX CONTRAST: mode=dark scale=1.0 checked=10.72:1 unchecked=1.12:1
+CONTRAST CHECKLIST AFTER: mode=dark scale=1.0 checked=18.87:1 unchecked=6.23:1
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(488x20) bgCb=#0f1117
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(488x20) bgCb=#0f1117
+CONTRAST SETTINGS CHECKBOX: mode=dark scale=1.0 checked=18.87:1 unchecked=6.23:1
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#0f1117
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#0f1117
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#0f1117
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#0f1117
+CONTRAST APP DIALOG CHECKBOXES: mode=dark scale=1.0 applied=(18.87, 6.23) next=(18.87, 6.23)
+CONTRAST CHECKLIST AFTER: mode=dark scale=1.5 checked=18.87:1 unchecked=6.23:1
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(488x20) bgCb=#0f1117
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(488x20) bgCb=#0f1117
+CONTRAST SETTINGS CHECKBOX: mode=dark scale=1.5 checked=18.87:1 unchecked=6.23:1
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#0f1117
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#0f1117
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#0f1117
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#0f1117
+CONTRAST APP DIALOG CHECKBOXES: mode=dark scale=1.5 applied=(18.87, 6.23) next=(18.87, 6.23)
+BEFORE FIX CONTRAST: mode=light scale=1.0 checked=15.56:1 unchecked=1.13:1
+CONTRAST CHECKLIST AFTER: mode=light scale=1.0 checked=3.90:1 unchecked=3.90:1
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(488x20) bgCb=#f6f7fb
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(488x20) bgCb=#f6f7fb
+CONTRAST SETTINGS CHECKBOX: mode=light scale=1.0 checked=3.90:1 unchecked=3.90:1
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#f6f7fb
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#f6f7fb
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#f6f7fb
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#f6f7fb
+CONTRAST APP DIALOG CHECKBOXES: mode=light scale=1.0 applied=(3.90, 3.90) next=(3.90, 3.90)
+CONTRAST CHECKLIST AFTER: mode=light scale=1.5 checked=3.90:1 unchecked=3.90:1
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(488x20) bgCb=#f6f7fb
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(488x20) bgCb=#f6f7fb
+CONTRAST SETTINGS CHECKBOX: mode=light scale=1.5 checked=3.90:1 unchecked=3.90:1
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#f6f7fb
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#f6f7fb
+DEBUG SETTINGS CB: checked=0 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#f6f7fb
+DEBUG SETTINGS CB: checked=1 indRect=(0,0 20x20) cbSize=(48x20) bgCb=#f6f7fb
+CONTRAST APP DIALOG CHECKBOXES: mode=light scale=1.5 applied=(3.90, 3.90) next=(3.90, 3.90)
+PASS   : tst_StudyRegression::testCheckboxIndicatorContrastAcrossAppDarkAndLight()
+PASS   : tst_StudyRegression::cleanupTestCase()
+Totals: 3 passed, 0 failed, 0 skipped, 0 blacklisted, 4160ms
+********* Finished testing of tst_StudyRegression *********
+```
+Slot duration: **4160 ms**.
+
+**Visual Artifacts Saved:**
+- `docs/reports/images/checklist-before-dark.png`
+- `docs/reports/images/checklist-after-dark.png`
+- `docs/reports/images/checklist-before-light.png`
+- `docs/reports/images/checklist-after-light.png`
+
+*(Note: Captured via offscreen QPA rendering; offscreen pixel rasterization is not identical to physical display hardware output on Windows, but provides objective contrast ratios.)*
+
+### Layout & Translation Test Verification
+
+Command executed:
+```bash
+ctest --preset dev-linux -R "tst_Translations|ui_smoke|tst_HiDpi" --output-on-failure
+```
+Raw Output:
+```
+Test project /home/tony/projects/JobPrep/build/dev-linux
+    Start 10: ui_smoke
+1/3 Test #10: ui_smoke .........................   Passed   12.30 sec
+    Start 34: tst_HiDpi
+2/3 Test #34: tst_HiDpi ........................   Passed   18.55 sec
+    Start 35: tst_Translations
+3/3 Test #35: tst_Translations .................   Passed    0.07 sec
+
+100% tests passed, 0 tests failed out of 3
+
+Label Time Summary:
+i18n    =   0.07 sec*proc (1 test)
+ui      =  30.85 sec*proc (2 tests)
+
+Total Test time (real) =  30.93 sec
+```
+
+---
+
+## 6. Predictions per CI Job by Real Name
+
+1. **`Gate (ubuntu-latest, Qt 6.8.2)`**:
+   - **Prediction:** **PASS (Green)**
+   - **Timing Impact:** The additions add ~6 s of Linux test time (`testDateCalendarPopupArrows`: 1.86 s, `testCheckboxIndicatorContrastAcrossAppDarkAndLight`: 4.16 s, `testGoalSpinBoxMinuteUnitsUkRu`: 0.10 s). Job runtime remains ~6 minutes.
+2. **`Gate (ubuntu-latest, Qt 6.10.3)`**:
+   - **Prediction:** **PASS (Green)**
+   - **Translation Sync:** Translation files (`jobprep_uk.ts`, `jobprep_ru.ts`) remain strictly synchronized with code and `lrelease` emits 0 warnings.
+3. **`Gate (windows-latest, Qt 6.10.3)`**:
+   - **Prediction:** **PASS (Green)**
+   - **Timing Impact on Slowest Windows Tests:**
+     - `tst_PageStudy`: Expected **100–120 s** (no new test slots added to this target; remains within historical range).
+     - `tst_HiDpi`: Expected **150–165 s** (remains unaffected).
+     - `tst_PageHome`: Expected **120–135 s** (remains unaffected).
+     - `ui_smoke`: Expected **105–120 s** (remains unaffected).
+     - `tst_Shortcuts`: Expected **~45–55 s** (+10–12 s for 5 popup controls x 3 opening methods).
+     - `tst_StudyRegression`: Expected **~65–75 s** (+20–25 s for contrast rasterization across 2 themes and 2 scale factors).
+     - Total Windows CTest time is projected to increase from ~650 s to ~685 s, well within the 45-minute timeout.
+4. **`Gate (windows-latest, Qt 6.8.2)`** *(manual dispatch / weekly schedule only)*:
+   - **Prediction:** **PASS (Green)** when manually triggered.
+
+---
+
+## 7. Items Not Verified by Agent (User to Check on Windows 10)
+
+Because this agent operates headless on Linux under `QT_QPA_PLATFORM=offscreen`, the following Windows 10 user-facing items are **not verified by agent** and require human confirmation:
+1. **Study page popup arrows:** Open the date popup in `TopicDetailPanel` using `Alt+Down`, `F4`, or a mouse click on the drop-down button; verify that arrow keys (`Down`, `Right`, `PageDown`) navigate the calendar immediately without clicking a date first. Also re-verify the other four date popups (`ApplicationDialog` applied & next action dates, `InterviewDialog` date, `SessionDialog` date).
+2. **Russian language selector item:** In Settings -> General -> Language, verify that the default item reads **`Системный (по умолчанию)`** (masculine form).
+3. **Weekly study goal Cyrillic input:** In Settings -> General -> Weekly study goal, verify typing `150мин` and `150 хв` evaluates to `2 h 30 min` (clamped/rounded), and verify that invalid syntax (e.g. `150x`) is rejected.
+4. **Dark theme check boxes:** In Settings, switch to Dark theme and verify that the subtask check boxes in `TopicDetailPanel` (unchecked and checked states) and all modal dialog checkboxes are distinctly visible at 100% and 150% display scaling.
