@@ -81,7 +81,7 @@ Open the **x64 Native Tools Command Prompt for VS 2022**.
 ### Step 2: Configure Environment and Build
 
 ```cmd
-set QT_PREFIX_PATH=C:\Qt\6.8.2\msvc2022_64
+set PATH=D:\Qt_new\6.10.2\msvc2022_64\bin;%PATH%
 set PATH=%QT_PREFIX_PATH%\bin;%PATH%
 
 cmake --preset dev-windows
