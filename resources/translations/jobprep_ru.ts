@@ -1478,7 +1478,7 @@ Path: %1</source>
     </message>
     <message>
         <source>System Default</source>
-        <translation>Системная по умолчанию</translation>
+        <translation>Системный (по умолчанию)</translation>
     </message>
     <message>
         <source>Light</source>

@@ -140,6 +140,7 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | Could not open the data folder in file manager.<br><br>Path: %1 | Не вдалося відкрити папку даних у файловому менеджері.<br><br>Шлях: %1 | Не удалось открыть папку данных в файловом менеджере.<br><br>Путь: %1 | `src/ui/DataToolsController.cpp` |
 | Keep JobPrep running in the system tray when closing the window | Залишати JobPrep працювати в системному треї під час закриття вікна | Оставлять JobPrep работать в системном трее при закрытии окна | `src/ui/pages/SettingsPage.cpp` |
 | System tray is not available on this system | Системний трей недоступний у цій системі | Системный трей недоступен в этой системе | `src/ui/pages/SettingsPage.cpp` |
+| System Default | Системна (за замовчуванням) | Системный (по умолчанию) | `src/ui/pages/SettingsPage.cpp` |
 | Select visual color theme | Виберіть візуальну кольорову тему | Выберите визуальную цветовую тему | `src/ui/pages/SettingsPage.cpp` |
 | Select accent highlight color | Виберіть акцентний колір підсвічування | Выберите акцентный цвет выделения | `src/ui/pages/SettingsPage.cpp` |
 | Language will take effect after restarting JobPrep. | Мову буде змінено після перезапуску JobPrep. | Язык изменится после перезапуска JobPrep. | `src/ui/pages/SettingsPage.cpp` |
