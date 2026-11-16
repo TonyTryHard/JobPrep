@@ -33,12 +33,15 @@ std::optional<int> parseGoalMinutes(const QString& text) {
     if (clean.isEmpty()) {
         return std::nullopt;
     }
+    const QString lower = clean.toLower();
 
-    // 1. Explicit minutes with 'min' suffix: e.g. "90 min", "90min", "90 mins", "90 minute", "90 minutes"
+    // 1. Explicit minutes with suffix: e.g. "90 min", "90min", "90 mins", "90 minute", "90 minutes",
+    //    "150мин", "150 мин", "150 хв", "150хв", "150 минут", "150 минуты", "150 хвилин", "150 хвилини",
+    //    case-insensitively with optional trailing dot. 'm' is ambiguous and explicitly not accepted.
     static const QRegularExpression minOnlyRe(
-        uR"(^(\d+)\s*(?:min|mins|minutes?)$)"_s,
+        uR"(^(\d+)\s*(?:min(?:s|utes?)?|мин(?:ут[ы]?)?|хв(?:илин[и]?)?)\.?$)"_s,
         QRegularExpression::CaseInsensitiveOption);
-    auto match = minOnlyRe.match(clean);
+    auto match = minOnlyRe.match(lower);
     if (match.hasMatch()) {
         bool ok = false;
         const int mins = match.captured(1).toInt(&ok);
@@ -47,11 +50,11 @@ std::optional<int> parseGoalMinutes(const QString& text) {
         return std::clamp(rounded, 60, 2400);
     }
 
-    // 2. Hours and minutes with 'h': e.g. "7 h 30 min", "7h 30 min", "7h 30", "7 h 30"
+    // 2. Hours and minutes with 'h': e.g. "7 h 30 min", "7h 30 min", "7h 30", "7 h 30", "7 h 30 хв", "7 h 30 мин"
     static const QRegularExpression hMinRe(
-        uR"(^(\d+)\s*h\s*(\d{1,2})\s*(?:min|mins|minutes?)?$)"_s,
+        uR"(^(\d+)\s*h\s*(\d{1,2})\s*(?:min(?:s|utes?)?|мин(?:ут[ы]?)?|хв(?:илин[и]?)?\.?)?$)"_s,
         QRegularExpression::CaseInsensitiveOption);
-    match = hMinRe.match(clean);
+    match = hMinRe.match(lower);
     if (match.hasMatch()) {
         const int h = match.captured(1).toInt();
         const QString mStr = match.captured(2);
@@ -67,7 +70,7 @@ std::optional<int> parseGoalMinutes(const QString& text) {
     static const QRegularExpression sepRe(
         uR"(^(\d+)\s*([:;.,])\s*(\d+)\s*(?:h|hrs?|hours?)?$)"_s,
         QRegularExpression::CaseInsensitiveOption);
-    match = sepRe.match(clean);
+    match = sepRe.match(lower);
     if (match.hasMatch()) {
         const int h = match.captured(1).toInt();
         const QString minPart = match.captured(3);
@@ -94,7 +97,7 @@ std::optional<int> parseGoalMinutes(const QString& text) {
     static const QRegularExpression hoursOnlyRe(
         uR"(^(\d+)\s*(?:h|hrs?|hours?)?$)"_s,
         QRegularExpression::CaseInsensitiveOption);
-    match = hoursOnlyRe.match(clean);
+    match = hoursOnlyRe.match(lower);
     if (match.hasMatch()) {
         const int h = match.captured(1).toInt();
         const int total = h * 60;
@@ -143,11 +146,15 @@ public:
         if (parsed.has_value()) {
             return QValidator::Acceptable;
         }
-        if (clean.endsWith(u':') || clean.endsWith(u';') ||
-            clean.endsWith(u'.') || clean.endsWith(u',') ||
-            clean.endsWith(u'h') || clean.endsWith(u'm') ||
-            clean.endsWith(u"mi", Qt::CaseInsensitive)) {
-            return QValidator::Intermediate;
+        const QString lower = clean.toLower();
+        if (lower.startsWith(u'-') || (!lower.isEmpty() && !lower.at(0).isDigit())) {
+            return QValidator::Invalid;
+        }
+        static const QRegularExpression validCharsRe(
+            uR"(^[0-9\s:;.,hrminutesминхвли]+$)"_s,
+            QRegularExpression::CaseInsensitiveOption);
+        if (!validCharsRe.match(clean).hasMatch()) {
+            return QValidator::Invalid;
         }
         return QValidator::Intermediate;
     }
