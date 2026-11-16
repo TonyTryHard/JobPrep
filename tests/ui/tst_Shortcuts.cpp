@@ -71,6 +71,8 @@ private slots:
     // M7 Item 2 date controls keyboard popup
     void testDateControlsKeyboardPopup_data();
     void testDateControlsKeyboardPopup();
+    void testDateCalendarPopupArrows_data();
+    void testDateCalendarPopupArrows();
     void testDateEditTranslationContext();
     void testDateEditDisplayFormatAndFirstDayOfWeek();
     void testNativeThemeNoiseFilter_data();
@@ -709,10 +711,10 @@ void tst_Shortcuts::testDateControlsKeyboardPopup() {
             topic.title = u"Test Topic"_s;
             topic.trackId = track.id;
             ctx.topics().insert(topic);
+            studyPage->selectTopic(topic.id);
+            QCoreApplication::processEvents();
             auto* detailPanel = studyPage->findChild<JobPrep::Ui::Widgets::TopicDetailPanel*>();
             QVERIFY(detailPanel != nullptr);
-            detailPanel->loadFrom(topic.id);
-            detailPanel->setVisible(true);
             dateEdit = detailPanel->findChild<QDateEdit*>(u"StudyDetailDateEdit"_s);
         }
 
@@ -884,6 +886,148 @@ void tst_Shortcuts::testDateControlsKeyboardPopup() {
             << " style=" << styleKey
             << " openThemeDataWarnings=" << noiseWarnings << "\n";
         out.flush();
+    }
+}
+
+void tst_Shortcuts::testDateCalendarPopupArrows_data() {
+    QTest::addColumn<QString>("controlName");
+
+    QTest::newRow("InterviewDateEdit") << QString("InterviewDateEdit");
+    QTest::newRow("ApplicationAppliedDateEdit") << QString("ApplicationAppliedDateEdit");
+    QTest::newRow("ApplicationNextActionDateEdit") << QString("ApplicationNextActionDateEdit");
+    QTest::newRow("SessionDateEdit") << QString("SessionDateEdit");
+    QTest::newRow("TopicDetailPanelDateEdit") << QString("TopicDetailPanelDateEdit");
+}
+
+void tst_Shortcuts::testDateCalendarPopupArrows() {
+    QFETCH(QString, controlName);
+
+    auto& ctx = m_fix->context();
+    std::unique_ptr<JobPrep::Ui::Dialogs::InterviewDialog> interviewDlg;
+    std::unique_ptr<JobPrep::Ui::Dialogs::ApplicationDialog> appDlg;
+    std::unique_ptr<JobPrep::Ui::Dialogs::SessionDialog> sessionDlg;
+    QWidget* topContainer = nullptr;
+    QDateEdit* dateEdit = nullptr;
+
+    if (controlName == u"InterviewDateEdit"_s) {
+        interviewDlg = std::make_unique<JobPrep::Ui::Dialogs::InterviewDialog>(
+            ctx.applications(), ctx.interviews(), JobPrep::Ui::Dialogs::InterviewDialog::Create);
+        topContainer = interviewDlg.get();
+        dateEdit = interviewDlg->findChild<QDateEdit*>(u"InterviewDateEdit"_s);
+    } else if (controlName == u"ApplicationAppliedDateEdit"_s || controlName == u"ApplicationNextActionDateEdit"_s) {
+        appDlg = std::make_unique<JobPrep::Ui::Dialogs::ApplicationDialog>(
+            ctx.applications(), ctx.interviews(), JobPrep::Ui::Dialogs::ApplicationDialog::Create);
+        topContainer = appDlg.get();
+        if (controlName == u"ApplicationAppliedDateEdit"_s) {
+            auto* check = appDlg->findChild<QCheckBox*>(u"FieldAppliedDateCheck"_s);
+            if (check) check->setChecked(true);
+            dateEdit = appDlg->findChild<QDateEdit*>(u"FieldAppliedDate"_s);
+        } else {
+            auto* check = appDlg->findChild<QCheckBox*>(u"FieldNextActionDateCheck"_s);
+            if (check) check->setChecked(true);
+            dateEdit = appDlg->findChild<QDateEdit*>(u"FieldNextActionDate"_s);
+        }
+    } else if (controlName == u"SessionDateEdit"_s) {
+        sessionDlg = std::make_unique<JobPrep::Ui::Dialogs::SessionDialog>(
+            ctx.sessions(), ctx.topics());
+        topContainer = sessionDlg.get();
+        dateEdit = sessionDlg->findChild<QDateEdit*>(u"SessionDateEdit"_s);
+    } else if (controlName == u"TopicDetailPanelDateEdit"_s) {
+        auto& win = m_fix->window();
+        win.pageStack()->setCurrentIndex(1); // StudyPage
+        QCoreApplication::processEvents();
+        auto* studyPage = win.findChild<JobPrep::Ui::Pages::StudyPage*>();
+        topContainer = &win;
+        static int testTrackCounter = 200;
+        JobPrep::Domain::Track track;
+        track.name = QString(u"Track %1"_s).arg(testTrackCounter++);
+        ctx.tracks().insert(track);
+        JobPrep::Domain::Topic topic;
+        topic.title = u"Test Topic"_s;
+        topic.trackId = track.id;
+        topic.targetDate = QDate(2026, 11, 16);
+        ctx.topics().insert(topic);
+        studyPage->selectTopic(topic.id);
+        QCoreApplication::processEvents();
+        auto* detailPanel = studyPage->findChild<JobPrep::Ui::Widgets::TopicDetailPanel*>();
+        QVERIFY(detailPanel != nullptr);
+        dateEdit = detailPanel->findChild<QDateEdit*>(u"StudyDetailDateEdit"_s);
+    }
+
+    QVERIFY(topContainer != nullptr);
+    QVERIFY(dateEdit != nullptr);
+
+    topContainer->show();
+    activateWindow(topContainer);
+    QCoreApplication::processEvents();
+
+    enum OpenMethod { AltDown = 0, F4Key = 1, MouseClick = 2 };
+    const QList<OpenMethod> methods = {AltDown, F4Key, MouseClick};
+
+    for (OpenMethod method : methods) {
+        if (dateEdit->calendarWidget() && dateEdit->calendarWidget()->isVisible()) {
+            QTest::keyClick(dateEdit->calendarWidget(), Qt::Key_Escape);
+            QCoreApplication::processEvents();
+        }
+
+        dateEdit->setFocus();
+        QCoreApplication::processEvents();
+
+        if (method == AltDown) {
+            QWidget* keyTarget = dateEdit->focusWidget() ? dateEdit->focusWidget() : static_cast<QWidget*>(dateEdit);
+            QTest::keyClick(keyTarget, Qt::Key_Down, Qt::AltModifier);
+        } else if (method == F4Key) {
+            QWidget* keyTarget = dateEdit->focusWidget() ? dateEdit->focusWidget() : static_cast<QWidget*>(dateEdit);
+            QTest::keyClick(keyTarget, Qt::Key_F4, Qt::NoModifier);
+        } else if (method == MouseClick) {
+            QStyleOptionComboBox opt;
+            opt.initFrom(dateEdit);
+            opt.rect = dateEdit->rect();
+            opt.subControls = QStyle::SC_All;
+            opt.state |= QStyle::State_Enabled;
+            const QRect arrowRect = dateEdit->style()->subControlRect(
+                QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, dateEdit);
+            if (arrowRect.isEmpty()) {
+                continue;
+            }
+            QTest::mouseClick(dateEdit, Qt::LeftButton, Qt::NoModifier, arrowRect.center());
+        }
+        QCoreApplication::processEvents();
+
+        QVERIFY2(dateEdit->calendarWidget() && dateEdit->calendarWidget()->isVisible(),
+                 qPrintable(QString(u"Popup failed to open for %1 via method %2"_s)
+                                .arg(controlName).arg(static_cast<int>(method))));
+
+        QWidget* fw = QApplication::focusWidget();
+        auto* calTable = dateEdit->calendarWidget()->findChild<QTableView*>();
+        QVERIFY2(calTable != nullptr, "Calendar widget must contain a QTableView");
+
+        if (qEnvironmentVariableIntValue("JOBPREP_DEBUG_DATEPOPUP") == 1) {
+            fprintf(stderr, "ARROWS_TEST: control=%s method=%d focusWidget=%p (%s, name=%s) calTable=%p\n",
+                    qPrintable(controlName), static_cast<int>(method),
+                    static_cast<void*>(fw), fw ? fw->metaObject()->className() : "null",
+                    fw ? qPrintable(fw->objectName()) : "",
+                    static_cast<void*>(calTable));
+        }
+
+        QCOMPARE(fw, calTable);
+
+        const QDate initialDate = dateEdit->calendarWidget()->selectedDate();
+        QTest::keyClick(fw, Qt::Key_Down);
+        QCoreApplication::processEvents();
+        QCOMPARE(dateEdit->calendarWidget()->selectedDate(), initialDate.addDays(7));
+
+        QTest::keyClick(fw, Qt::Key_Right);
+        QCoreApplication::processEvents();
+        QCOMPARE(dateEdit->calendarWidget()->selectedDate(), initialDate.addDays(8));
+
+        QTest::keyClick(fw, Qt::Key_PageDown);
+        QCoreApplication::processEvents();
+        QCOMPARE(dateEdit->calendarWidget()->selectedDate(), initialDate.addDays(8).addMonths(1));
+
+        QTest::keyClick(fw, Qt::Key_Escape);
+        QCoreApplication::processEvents();
+        QVERIFY(!dateEdit->calendarWidget()->isVisible());
     }
 }
 

@@ -1543,7 +1543,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Weekly study goal in hours and minutes (e.g. 8, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)</source>
-        <translation>Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7:30, 7;30, 450 min; числа чи десяткові дроби означають години)</translation>
+        <translation>Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7:30, 7;30, 450 хв; числа чи десяткові дроби означають години)</translation>
     </message>
     <message>
         <source>Weekly study goal:</source>

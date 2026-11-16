@@ -574,6 +574,11 @@ Kanban for applications, per-company contacts directory, salary comparison chart
   - **Pseudo-translation font matrix (A.5):** Extended `tst_HiDpi::testPseudoTranslationHiDpi` to execute over a font matrix including DejaVu Sans alongside the default system font.
   - **Translation corrections & glossary consistency (B):** Applied review corrections to `jobprep_uk.ts` and `jobprep_ru.ts` (study session -> "заняття", grammar fixes, structured summary list, register, unified glossary terms, ASCII apostrophe normalization) and updated Settings weekly goal hint (`7:30`).
   - **Build tooling leftovers (C.1, C.2):** Ignored `*.qm` files in `.gitignore` and enforced `QT_PREFIX_PATH/bin`, `PATH` search order in `scripts/check-translations.sh`.
+- 1.30 — M7 manual-check fixes: Date popup keyboard focus, language selector Russian agreement, Cyrillic minute units, and dark theme check box contrast:
+  - **Date popup focus & arrow navigation (1):** Ensured calendar popup table view receives explicit keyboard focus (`setupCalendarPopupFocus` and `focusCalendarView`) on popup open across all opening methods (Alt+Down, F4, mouse click on arrow button), fixing keyboard arrow navigation without requiring prior mouse selection.
+  - **Language selector gender agreement (2):** Corrected Russian language item translation to `Системный (по умолчанию)` (masculine, agreeing with "язык") while retaining Ukrainian `Системна (за замовчуванням)` (feminine, agreeing with "мова").
+  - **Weekly goal Cyrillic minute units (3):** Added support for Ukrainian (`хв`, `хвилин`, `хвилини`) and Russian (`мин`, `минут`, `минуты`) units with case-insensitivity and optional trailing dot. Unrecognised units now cleanly reject invalid input rather than defaulting to hours.
+  - **Dark theme check box contrast (4):** Styled check boxes and checkable list items via theme QSS with the active accent color (`@accent`) for borders and checked background fill, paired with a high-contrast monochrome checkmark icon (`check.svg`), achieving >= 3:1 WCAG contrast across Dark and Light themes at 100% and 150% display scales.
 
 
 

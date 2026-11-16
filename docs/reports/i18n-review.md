@@ -140,10 +140,11 @@ Where unavoidable, the polite plural form in lower case is employed (`вашої
 | Could not open the data folder in file manager.<br><br>Path: %1 | Не вдалося відкрити папку даних у файловому менеджері.<br><br>Шлях: %1 | Не удалось открыть папку данных в файловом менеджере.<br><br>Путь: %1 | `src/ui/DataToolsController.cpp` |
 | Keep JobPrep running in the system tray when closing the window | Залишати JobPrep працювати в системному треї під час закриття вікна | Оставлять JobPrep работать в системном трее при закрытии окна | `src/ui/pages/SettingsPage.cpp` |
 | System tray is not available on this system | Системний трей недоступний у цій системі | Системный трей недоступен в этой системе | `src/ui/pages/SettingsPage.cpp` |
+| System Default | Системна (за замовчуванням) | Системный (по умолчанию) | `src/ui/pages/SettingsPage.cpp` |
 | Select visual color theme | Виберіть візуальну кольорову тему | Выберите визуальную цветовую тему | `src/ui/pages/SettingsPage.cpp` |
 | Select accent highlight color | Виберіть акцентний колір підсвічування | Выберите акцентный цвет выделения | `src/ui/pages/SettingsPage.cpp` |
 | Language will take effect after restarting JobPrep. | Мову буде змінено після перезапуску JobPrep. | Язык изменится после перезапуска JobPrep. | `src/ui/pages/SettingsPage.cpp` |
-| Weekly study goal in hours and minutes (e.g. 8, 7:30, 7;30, 450 min; bare numbers or decimals mean hours) | Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7:30, 7;30, 450 min; числа чи десяткові дроби означають години) | Еженедельная учебная цель в часах и минутах (например: 8, 7:30, 7;30, 450 min; числа или десятичные дроби означают часы) | `src/ui/pages/SettingsPage.cpp` |
+| Weekly study goal in hours and minutes (e.g. 8, 7:30, 7;30, 450 min; bare numbers or decimals mean hours) | Щотижнева навчальна ціль у годинах і хвилинах (наприклад: 8, 7:30, 7;30, 450 хв; числа чи десяткові дроби означають години) | Еженедельная учебная цель в часах и минутах (например: 8, 7:30, 7;30, 450 мин; числа или десятичные дроби означают часы) | `src/ui/pages/SettingsPage.cpp` |
 | First day of the week for calendar and study statistics | Перший день тижня для календаря та навчальної статистики | Первый день недели для календаря и учебной статистики | `src/ui/pages/SettingsPage.cpp` |
 | First day of week: | Перший день тижня: | Первый день недели: | `src/ui/pages/SettingsPage.cpp` |
 | Minimize / Close to system tray | Згортати / закривати в системний трей | Сворачивать / закрывать в системный трей | `src/ui/pages/SettingsPage.cpp` |

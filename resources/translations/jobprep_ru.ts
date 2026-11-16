@@ -1478,7 +1478,7 @@ Path: %1</source>
     </message>
     <message>
         <source>System Default</source>
-        <translation>Системная по умолчанию</translation>
+        <translation>Системный (по умолчанию)</translation>
     </message>
     <message>
         <source>Light</source>
@@ -1543,7 +1543,7 @@ Path: %1</source>
     </message>
     <message>
         <source>Weekly study goal in hours and minutes (e.g. 8, 7:30, 7;30, 450 min; bare numbers or decimals mean hours)</source>
-        <translation>Еженедельная учебная цель в часах и минутах (например: 8, 7:30, 7;30, 450 min; числа или десятичные дроби означают часы)</translation>
+        <translation>Еженедельная учебная цель в часах и минутах (например: 8, 7:30, 7;30, 450 мин; числа или десятичные дроби означают часы)</translation>
     </message>
     <message>
         <source>Weekly study goal:</source>

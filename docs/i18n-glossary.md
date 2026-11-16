@@ -316,7 +316,7 @@ This section contains **281 mechanical UI terms** (standard button labels, table
 | `Status change failed` | `Global` | *Status change failed* | *Status change failed* | Proposal pending review |
 | `Settings` | `GoalSpinBox` | Налаштування | Настройки | Navigation page |
 | `Appearance` | `GoalSpinBox` | *Appearance* | *Appearance* | Proposal pending review |
-| `System Default` | `GoalSpinBox` | *System Default* | *System Default* | Proposal pending review |
+| `System Default` | `SettingsPage` | Системна (за замовчуванням) | Системный (по умолчанию) | Applied | Language / theme selection |
 | `Light` | `GoalSpinBox` | *Light* | *Light* | Proposal pending review |
 | `Dark` | `GoalSpinBox` | *Dark* | *Dark* | Proposal pending review |
 | `Theme:` | `GoalSpinBox` | *Theme:* | *Theme:* | Proposal pending review |

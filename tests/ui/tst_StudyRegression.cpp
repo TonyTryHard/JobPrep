@@ -1,6 +1,7 @@
 #include <memory>
 #include <QApplication>
 #include <QCalendarWidget>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDateEdit>
 #include <QKeyEvent>
@@ -26,6 +27,8 @@
 #include "models/TopicListModel.h"
 #include "services/SettingsService.h"
 #include "ui/MainWindow.h"
+#include "ui/dialogs/ApplicationDialog.h"
+#include "ui/pages/SettingsPage.h"
 #if __has_include("ui/InAppNotifier.h")
 #include "ui/InAppNotifier.h"
 #endif
@@ -67,6 +70,7 @@ private slots:
     void testChecklistStartupContrastDarkAndLight();
     void testChecklistAddFocusScrollAndOverflowSizing();
     void testGeneralStartupContrastAllPagesBothThemes();
+    void testCheckboxIndicatorContrastAcrossAppDarkAndLight();
 
 private:
     std::unique_ptr<JobPrep::Tests::TestSettingsScope> m_settingsScope;
@@ -1205,6 +1209,281 @@ void tst_StudyRegression::testGeneralStartupContrastAllPagesBothThemes() {
 
     testMode(u"dark"_s);
     testMode(u"light"_s);
+}
+
+void tst_StudyRegression::testCheckboxIndicatorContrastAcrossAppDarkAndLight() {
+    const double scales[] = {1.0, 1.5};
+    const QString modes[] = {u"dark"_s, u"light"_s};
+
+    const QString imagesDir =
+#ifdef QT_TESTCASE_SOURCEDIR
+        QDir(QString::fromUtf8(QT_TESTCASE_SOURCEDIR)).filePath(u"../../docs/reports/images"_s);
+#else
+        u"docs/reports/images"_s;
+#endif
+    QDir().mkpath(imagesDir);
+
+    for (const auto& modeStr : modes) {
+        for (double scale : scales) {
+            {
+                Services::SettingsService settings;
+                settings.setThemeMode(modeStr);
+                settings.setAccentPreset(u"indigo"_s);
+            }
+
+            App::AppContext ctx(u":memory:"_s);
+            ctx.themeManager().setThemeMode(modeStr == u"dark"_s ? Theme::ThemeMode::Dark : Theme::ThemeMode::Light);
+            ctx.themeManager().setAccentPreset(Theme::AccentPreset::Indigo);
+
+            Track track;
+            track.name = u"C++"_s;
+            track.color = u"#3b82f6"_s;
+            ctx.tracks().insert(track);
+            const int trackId = ctx.tracks().all().last().id;
+
+            Topic topic;
+            topic.trackId = trackId;
+            topic.title = u"Checkboxes Topic"_s;
+            topic.status = TopicStatus::InProgress;
+            ctx.topics().insert(topic);
+            const int topicId = ctx.topics().all().last().id;
+
+            Subtask st1;
+            st1.topicId = topicId;
+            st1.text = u"Completed task"_s;
+            st1.position = 0;
+            st1.done = true;
+            ctx.topics().addSubtask(st1);
+
+            Subtask st2;
+            st2.topicId = topicId;
+            st2.text = u"Pending task"_s;
+            st2.position = 1;
+            st2.done = false;
+            ctx.topics().addSubtask(st2);
+
+            MainWindow win(ctx);
+            win.resize(1200, 800);
+            win.show();
+            QCoreApplication::processEvents();
+
+            win.sidebar()->setCurrentPage(1);
+            emit win.sidebar()->pageSelected(1);
+            QCoreApplication::processEvents();
+
+            auto* colInProgress = win.findChild<Widgets::TopicBoardColumn*>(u"StudyColumnInProgress"_s);
+            auto* detailPanel = win.findChild<Widgets::TopicDetailPanel*>(u"StudyDetailPanel"_s);
+            auto* checkList = detailPanel ? detailPanel->findChild<QListWidget*>(u"StudyDetailCheckList"_s) : nullptr;
+            QVERIFY(colInProgress && detailPanel && checkList);
+
+            const QRect cardRect = colInProgress->list()->visualRect(colInProgress->proxy()->index(0, 0));
+            QTest::mouseClick(colInProgress->list()->viewport(), Qt::LeftButton, Qt::NoModifier, cardRect.center());
+            QCoreApplication::processEvents();
+
+            QCOMPARE(checkList->count(), 2);
+
+            // If 100% scale, capture before state without custom indicator rules for comparison
+            if (scale == 1.0) {
+                const QString fullQss = qApp->styleSheet();
+                const int idx = fullQss.indexOf(u"/* CheckBox and Checkable item indicators */"_s);
+                if (idx >= 0) {
+                    const int endIdx = fullQss.indexOf(u"/* Cards & Containers */"_s, idx);
+                    if (endIdx > idx) {
+                        const QString stripped = fullQss.left(idx) + fullQss.mid(endIdx);
+                        qApp->setStyleSheet(stripped);
+                        QCoreApplication::processEvents();
+
+                        // Measure before contrast in dark and light
+                        QWidget* vpBefore = checkList->viewport();
+                        const QImage imgBefore = vpBefore->grab().toImage();
+                        const QColor bgBefore = imgBefore.pixelColor(2, 2);
+                        auto sampleBeforeContrast = [&](int row, bool checked) -> double {
+                            auto* item = checkList->item(row);
+                            const QRect rowRect = checkList->visualItemRect(item);
+                            QStyleOptionViewItem opt;
+                            opt.initFrom(checkList);
+                            opt.rect = rowRect;
+                            opt.checkState = checked ? Qt::Checked : Qt::Unchecked;
+                            QRect indRect = checkList->style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &opt, checkList);
+                            if (indRect.isEmpty() || !indRect.isValid()) {
+                                indRect = QRect(rowRect.left() + 4, rowRect.top() + (rowRect.height() - 16) / 2, 16, 16);
+                            }
+                            double maxC = 1.0;
+                            for (int y = indRect.top(); y <= indRect.bottom(); ++y) {
+                                for (int x = indRect.left(); x <= indRect.right(); ++x) {
+                                    if (x >= 0 && x < imgBefore.width() && y >= 0 && y < imgBefore.height()) {
+                                        const double cr = calcContrastRatio(imgBefore.pixelColor(x, y), bgBefore);
+                                        if (cr > maxC) maxC = cr;
+                                    }
+                                }
+                            }
+                            return maxC;
+                        };
+                        const double beforeChecked = sampleBeforeContrast(0, true);
+                        const double beforeUnchecked = sampleBeforeContrast(1, false);
+                        fprintf(stderr, "BEFORE FIX CONTRAST: mode=%s scale=1.0 checked=%.2f:1 unchecked=%.2f:1\n",
+                                qPrintable(modeStr), beforeChecked, beforeUnchecked);
+                        const QString beforeImgPath = QDir(imagesDir).filePath(QString(u"checklist-before-%1.png"_s).arg(modeStr));
+                        if (!QFile::exists(beforeImgPath)) {
+                            imgBefore.save(beforeImgPath);
+                        }
+
+                        // Restore full theme with indicator rules
+                        qApp->setStyleSheet(fullQss);
+                        QCoreApplication::processEvents();
+                    }
+                }
+            }
+
+            // 1. Render checkList viewport
+            QWidget* vp = checkList->viewport();
+            QImage imgVp(qRound(vp->width() * scale), qRound(vp->height() * scale), QImage::Format_ARGB32_Premultiplied);
+            imgVp.setDevicePixelRatio(scale);
+            imgVp.fill(Qt::transparent);
+            vp->render(&imgVp);
+
+            const QColor bgRow = imgVp.pixelColor(qRound(2 * scale), qRound(2 * scale));
+
+            auto sampleIndicatorContrast = [&](int row, bool checked) -> double {
+                auto* item = checkList->item(row);
+                const QRect rowRect = checkList->visualItemRect(item);
+                QStyleOptionViewItem opt;
+                opt.initFrom(checkList);
+                opt.rect = rowRect;
+                opt.checkState = checked ? Qt::Checked : Qt::Unchecked;
+                QRect indRect = checkList->style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &opt, checkList);
+                if (indRect.isEmpty() || !indRect.isValid()) {
+                    indRect = QRect(rowRect.left() + 4, rowRect.top() + (rowRect.height() - 16) / 2, 16, 16);
+                }
+
+                const int x0 = qMax(0, qRound(indRect.left() * scale));
+                const int x1 = qMin(imgVp.width() - 1, qRound(indRect.right() * scale));
+                const int y0 = qMax(0, qRound(indRect.top() * scale));
+                const int y1 = qMin(imgVp.height() - 1, qRound(indRect.bottom() * scale));
+
+                double maxContrast = 1.0;
+                for (int y = y0; y <= y1; ++y) {
+                    for (int x = x0; x <= x1; ++x) {
+                        const QColor px = imgVp.pixelColor(x, y);
+                        const double cr = calcContrastRatio(px, bgRow);
+                        if (cr > maxContrast) maxContrast = cr;
+                    }
+                }
+                return maxContrast;
+            };
+
+            const double checkedContrast = sampleIndicatorContrast(0, true);
+            const double uncheckedContrast = sampleIndicatorContrast(1, false);
+
+            fprintf(stderr, "CONTRAST CHECKLIST AFTER: mode=%s scale=%.1f checked=%.2f:1 unchecked=%.2f:1\n",
+                    qPrintable(modeStr), scale, checkedContrast, uncheckedContrast);
+
+            QVERIFY2(checkedContrast >= 3.0,
+                     qPrintable(QString("[%1-scale%2] Checked indicator contrast %3:1 is below 3:1")
+                                    .arg(modeStr).arg(scale).arg(checkedContrast, 0, 'f', 2)));
+            QVERIFY2(uncheckedContrast >= 3.0,
+                     qPrintable(QString("[%1-scale%2] Unchecked indicator contrast %3:1 is below 3:1")
+                                    .arg(modeStr).arg(scale).arg(uncheckedContrast, 0, 'f', 2)));
+
+            if (scale == 1.0) {
+                const QString imgPath = QDir(imagesDir).filePath(QString(u"checklist-after-%1.png"_s).arg(modeStr));
+                if (!QFile::exists(imgPath)) {
+                    QImage grabImg = vp->grab().toImage();
+                    grabImg.save(imgPath);
+                }
+            }
+
+            // Assert that checked differs from unchecked
+            auto* item0 = checkList->item(0);
+            auto* item1 = checkList->item(1);
+            const QRect r0 = checkList->visualItemRect(item0);
+            const QRect r1 = checkList->visualItemRect(item1);
+            bool pixelDiff = false;
+            for (int dy = 4; dy < 12; ++dy) {
+                for (int dx = 4; dx < 12; ++dx) {
+                    if (imgVp.pixelColor(qRound((r0.left() + dx) * scale), qRound((r0.top() + dy) * scale)) !=
+                        imgVp.pixelColor(qRound((r1.left() + dx) * scale), qRound((r1.top() + dy) * scale))) {
+                        pixelDiff = true;
+                        break;
+                    }
+                }
+                if (pixelDiff) break;
+            }
+            QVERIFY2(pixelDiff, "Checked and unchecked indicators must differ in pixel content");
+
+            // 2. SettingsPage QCheckBox (closeToTrayCheck)
+            Ui::Pages::SettingsPage settingsPage(ctx.settings(), ctx.themeManager(), true);
+            settingsPage.resize(600, 400);
+            settingsPage.show();
+            QCoreApplication::processEvents();
+            auto* trayCheck = settingsPage.closeToTrayCheck();
+            QVERIFY(trayCheck != nullptr);
+
+            auto sampleCheckBoxContrast = [&](QCheckBox* cb, bool checked) -> double {
+                cb->setChecked(checked);
+                QCoreApplication::processEvents();
+                QImage imgCb(qRound(cb->width() * scale), qRound(cb->height() * scale), QImage::Format_ARGB32_Premultiplied);
+                imgCb.setDevicePixelRatio(scale);
+                imgCb.fill(Qt::transparent);
+                cb->render(&imgCb);
+
+                const QColor bgCb = cb->palette().color(QPalette::Window);
+                QStyleOptionButton opt;
+                opt.initFrom(cb);
+                opt.state |= (checked ? QStyle::State_On : QStyle::State_Off);
+                QRect indRect = cb->style()->subElementRect(QStyle::SE_CheckBoxIndicator, &opt, cb);
+                if (indRect.isEmpty() || !indRect.isValid()) {
+                    indRect = QRect(0, (cb->height() - 16) / 2, 16, 16);
+                }
+
+                const int x0 = qMax(0, qRound(indRect.left() * scale));
+                const int x1 = qMin(imgCb.width() - 1, qRound(indRect.right() * scale));
+                const int y0 = qMax(0, qRound(indRect.top() * scale));
+                const int y1 = qMin(imgCb.height() - 1, qRound(indRect.bottom() * scale));
+
+                fprintf(stderr, "DEBUG SETTINGS CB: checked=%d indRect=(%d,%d %dx%d) cbSize=(%dx%d) bgCb=%s\n",
+                        checked, indRect.x(), indRect.y(), indRect.width(), indRect.height(),
+                        cb->width(), cb->height(), qPrintable(bgCb.name()));
+                double maxContrast = 1.0;
+                for (int y = y0; y <= y1; ++y) {
+                    for (int x = x0; x <= x1; ++x) {
+                        const QColor px = imgCb.pixelColor(x, y);
+                        const double cr = calcContrastRatio(px, bgCb);
+                        if (cr > maxContrast) maxContrast = cr;
+                    }
+                }
+                return maxContrast;
+            };
+
+            const double trayUnchecked = sampleCheckBoxContrast(trayCheck, false);
+            const double trayChecked = sampleCheckBoxContrast(trayCheck, true);
+            fprintf(stderr, "CONTRAST SETTINGS CHECKBOX: mode=%s scale=%.1f checked=%.2f:1 unchecked=%.2f:1\n",
+                    qPrintable(modeStr), scale, trayChecked, trayUnchecked);
+            QVERIFY2(trayUnchecked >= 3.0, qPrintable(QString("Settings checkbox unchecked contrast %1 below 3:1").arg(trayUnchecked)));
+            QVERIFY2(trayChecked >= 3.0, qPrintable(QString("Settings checkbox checked contrast %1 below 3:1").arg(trayChecked)));
+
+            // 3. ApplicationDialog check boxes (m_appliedDateEnabled, m_nextActionDateEnabled)
+            Ui::Dialogs::ApplicationDialog appDlg(ctx.applications(), ctx.interviews(), Ui::Dialogs::ApplicationDialog::Create);
+            appDlg.resize(500, 600);
+            appDlg.show();
+            QCoreApplication::processEvents();
+            auto* appliedCheck = appDlg.findChild<QCheckBox*>(u"FieldAppliedDateCheck"_s);
+            auto* nextActionCheck = appDlg.findChild<QCheckBox*>(u"FieldNextActionDateCheck"_s);
+            QVERIFY(appliedCheck != nullptr);
+            QVERIFY(nextActionCheck != nullptr);
+
+            const double appAppliedUnchecked = sampleCheckBoxContrast(appliedCheck, false);
+            const double appAppliedChecked = sampleCheckBoxContrast(appliedCheck, true);
+            const double appNextUnchecked = sampleCheckBoxContrast(nextActionCheck, false);
+            const double appNextChecked = sampleCheckBoxContrast(nextActionCheck, true);
+            fprintf(stderr, "CONTRAST APP DIALOG CHECKBOXES: mode=%s scale=%.1f applied=(%.2f, %.2f) next=(%.2f, %.2f)\n",
+                    qPrintable(modeStr), scale, appAppliedChecked, appAppliedUnchecked, appNextChecked, appNextUnchecked);
+            QVERIFY2(appAppliedUnchecked >= 3.0, "Application appliedDate checkbox unchecked contrast below 3:1");
+            QVERIFY2(appAppliedChecked >= 3.0, "Application appliedDate checkbox checked contrast below 3:1");
+            QVERIFY2(appNextUnchecked >= 3.0, "Application nextAction checkbox unchecked contrast below 3:1");
+            QVERIFY2(appNextChecked >= 3.0, "Application nextAction checkbox checked contrast below 3:1");
+        }
+    }
 }
 
 QTEST_MAIN(tst_StudyRegression)

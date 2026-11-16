@@ -172,6 +172,76 @@ QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
     border: 1px solid @accent;
 }
 
+/* CheckBox and Checkable item indicators */
+QCheckBox {
+    color: @text;
+    spacing: 8px;
+}
+
+QCheckBox:disabled {
+    color: @textMuted;
+}
+
+QCheckBox::indicator,
+QListView::indicator,
+QListWidget::indicator,
+#StudyDetailCheckList::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 2px solid @accent;
+    background-color: @surface;
+}
+
+QCheckBox::indicator:hover,
+QListView::indicator:hover,
+QListWidget::indicator:hover,
+#StudyDetailCheckList::indicator:hover {
+    border-color: @accentHover;
+}
+
+QCheckBox::indicator:focus,
+QListView::indicator:focus,
+QListWidget::indicator:focus,
+#StudyDetailCheckList::indicator:focus {
+    border-color: @accent;
+}
+
+QCheckBox::indicator:checked,
+QListView::indicator:checked,
+QListWidget::indicator:checked,
+#StudyDetailCheckList::indicator:checked {
+    border: 2px solid @accent;
+    background-color: @accent;
+    image: url(:/icons/check.svg);
+}
+
+QCheckBox::indicator:checked:hover,
+QListView::indicator:checked:hover,
+QListWidget::indicator:checked:hover,
+#StudyDetailCheckList::indicator:checked:hover {
+    border-color: @accentHover;
+    background-color: @accentHover;
+    image: url(:/icons/check.svg);
+}
+
+QCheckBox::indicator:disabled,
+QListView::indicator:disabled,
+QListWidget::indicator:disabled,
+#StudyDetailCheckList::indicator:disabled {
+    border-color: @textMuted;
+    background-color: @surfaceAlt;
+}
+
+QCheckBox::indicator:checked:disabled,
+QListView::indicator:checked:disabled,
+QListWidget::indicator:checked:disabled,
+#StudyDetailCheckList::indicator:checked:disabled {
+    border-color: @textMuted;
+    background-color: @textMuted;
+    image: url(:/icons/check.svg);
+}
+
 /* Combobox */
 QComboBox {
     background-color: @surface;

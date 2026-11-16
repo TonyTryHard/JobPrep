@@ -149,6 +149,7 @@ private slots:
     void testLanguageSelectorAndRestartNote();
     void testGoalSpinBoxTranslationContext();
     void testGoalSpinBoxTypingRulesUnderLocales();
+    void testGoalSpinBoxMinuteUnitsUkRu();
 
     // B6: Painted & contrast tests
     void testSettingsPageStructure();
@@ -1270,6 +1271,92 @@ void tst_PageSettings::testGoalSpinBoxTypingRulesUnderLocales() {
         {u"0.5"_s, false, 60},
         {u"8"_s, false, 480},
         {u"8 h"_s, false, 480}
+    };
+
+    for (const auto& loc : testLocales) {
+        QLocale::setDefault(loc);
+        AppContext ctx(u":memory:"_s);
+        SettingsPage page(ctx.settings(), ctx.themeManager(), false);
+        auto* spin = page.studyGoalSpinBox();
+        QVERIFY(spin != nullptr);
+        auto* edit = spin->findChild<QLineEdit*>();
+        QVERIFY(edit != nullptr);
+
+        for (const auto& tc : cases) {
+            spin->setValue(480);
+            edit->setText(tc.input);
+            QTest::keyClick(edit, Qt::Key_Return);
+
+            if (tc.isError) {
+                QCOMPARE(spin->value(), 480);
+            } else {
+                QCOMPARE(spin->value(), tc.expectedMinutes);
+            }
+        }
+    }
+}
+
+void tst_PageSettings::testGoalSpinBoxMinuteUnitsUkRu() {
+    const QLocale savedLocale = QLocale();
+    struct LocaleRestore {
+        QLocale orig;
+        ~LocaleRestore() { QLocale::setDefault(orig); }
+    } guard{savedLocale};
+
+    const QList<QLocale> testLocales = {
+        QLocale(QLocale::English),
+        QLocale(QLocale::Ukrainian),
+        QLocale(QLocale::Russian)
+    };
+
+    struct TestCase {
+        QString input;
+        bool isError;
+        int expectedMinutes;
+    };
+
+    const QList<TestCase> cases = {
+        // Basic minute parsing in English, Ukrainian, and Russian
+        {u"150min"_s, false, 150},
+        {u"150 min"_s, false, 150},
+        {u"150мин"_s, false, 150},
+        {u"150 мин"_s, false, 150},
+        {u"150хв"_s, false, 150},
+        {u"150 хв"_s, false, 150},
+
+        // Case-insensitivity (including Unicode Cyrillic upper / title case)
+        {u"150МИН"_s, false, 150},
+        {u"150 МИН"_s, false, 150},
+        {u"150Хв"_s, false, 150},
+        {u"150 Хв"_s, false, 150},
+        {u"150ХВ"_s, false, 150},
+        {u"150 ХВ"_s, false, 150},
+
+        // Optional trailing dot
+        {u"150 min."_s, false, 150},
+        {u"150 мин."_s, false, 150},
+        {u"150 хв."_s, false, 150},
+
+        // Full words
+        {u"150 minutes"_s, false, 150},
+        {u"150 минут"_s, false, 150},
+        {u"150 минуты"_s, false, 150},
+        {u"150 хвилин"_s, false, 150},
+        {u"150 хвилини"_s, false, 150},
+
+        // Clamping & rounding
+        {u"3000 мин"_s, false, 2400}, // Clamped to 40 hours (2400 min)
+        {u"30 хв"_s, false, 60},      // Clamped up to minimum (60 min)
+        {u"155 мин"_s, false, 150},   // Rounded to nearest 15-min step (155 -> 150)
+
+        // Negative / error cases (should preserve prior value 480)
+        {u"150x"_s, true, 0},
+        {u"мин150"_s, true, 0},
+        {u""_s, true, 0},
+        {u"-5мин"_s, true, 0},
+        {u"150m"_s, true, 0},         // 'm' is ambiguous and explicitly not accepted
+        {u"2г"_s, true, 0},           // unrecognised Ukrainian hour abbreviation is not accepted
+        {u"2 ч"_s, true, 0}           // unrecognised Russian hour abbreviation is not accepted
     };
 
     for (const auto& loc : testLocales) {

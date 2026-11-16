@@ -236,3 +236,15 @@ See [SPEC.md §3.7](file:///home/tony/projects/JobPrep/docs/SPEC.md#37-global) f
 - **Translation Sync Verification**:
   - To verify that translation sources are synchronized with code without churning file timestamps or line numbers, run `./scripts/check-translations.sh` (automatically executed by `./scripts/check.sh`).
 
+---
+
+## 12. Weekly Study Goal Syntax and Units
+
+The weekly study goal in **Settings** (`Ctrl+,`) accepts time durations between 1 and 40 hours (60 to 2,400 minutes, rounded to 15-minute intervals):
+- **Hours format**: Bare numbers (e.g. `8`), hours with separator (e.g. `7:30`, `7;30`, `7.30`, `7,30`), or single-digit tens of minutes (e.g. `7.5` = 7 h 50 min).
+- **Minutes format**: A number followed by minute units, case-insensitively, with or without a space, and with an optional trailing dot:
+  - **English**: `min`, `minutes` (e.g. `450 min`, `450min`, `450 minutes`)
+  - **Ukrainian**: `хв`, `хвилин`, `хвилини` (e.g. `450 хв`, `450хв`, `450 хвилин`)
+  - **Russian**: `мин`, `минут`, `минуты` (e.g. `450 мин`, `450мин`, `450 минут`)
+- **Note on ambiguous units**: Bare `m` is rejected as ambiguous. Unrecognised unit suffixes (such as `150x` or unparsed characters) are rejected as invalid input, preserving the prior valid value rather than guessing hours.
+
