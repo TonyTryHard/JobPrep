@@ -415,7 +415,15 @@ void TopicDetailPanel::refreshFromRepository() {
 
 bool TopicDetailPanel::hasFocusInEditor() const {
     const QWidget* focus = QApplication::focusWidget();
-    return focus != nullptr && (focus == this || isAncestorOf(focus));
+    if (!focus) return false;
+    if (focus == this || isAncestorOf(focus)) return true;
+    if (m_dateEdit && m_dateEdit->calendarWidget()) {
+        QWidget* calWin = m_dateEdit->calendarWidget()->window();
+        if (focus == calWin || (calWin && calWin->isAncestorOf(focus))) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void TopicDetailPanel::setSessionLogEnabled(bool enabled) {

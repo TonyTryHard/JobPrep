@@ -9,7 +9,9 @@
 #include <QSettings>
 #include <QStyle>
 #include <QStyleOptionComboBox>
+#include <QTableView>
 #include <QTimeEdit>
+#include <QTimer>
 
 namespace JobPrep::Ui::Widgets {
 
@@ -33,6 +35,9 @@ public:
         : QDateEdit(parent) {
         setDisplayFormat(QString::fromLatin1("yyyy-MM-dd"));
         initShortcutHint();
+        if (calendarPopup()) {
+            setupCalendarPopupFocus();
+        }
         if (lineEdit()) {
             lineEdit()->installEventFilter(this);
         }
@@ -42,6 +47,9 @@ public:
         : QDateEdit(date, parent) {
         setDisplayFormat(QString::fromLatin1("yyyy-MM-dd"));
         initShortcutHint();
+        if (calendarPopup()) {
+            setupCalendarPopupFocus();
+        }
         if (lineEdit()) {
             lineEdit()->installEventFilter(this);
         }
@@ -55,10 +63,25 @@ public:
         }
     }
 
+    void setupCalendarPopupFocus() {
+        syncCalendarFirstDayOfWeek();
+        if (auto* cal = calendarWidget()) {
+            cal->setFocusPolicy(Qt::StrongFocus);
+            if (auto* calTable = cal->findChild<QTableView*>()) {
+                calTable->setFocusPolicy(Qt::StrongFocus);
+                cal->setFocusProxy(calTable);
+            }
+            cal->installEventFilter(this);
+            if (auto* win = cal->window()) {
+                win->installEventFilter(this);
+            }
+        }
+    }
+
     void setCalendarPopup(bool enable) {
         QDateEdit::setCalendarPopup(enable);
         if (enable) {
-            syncCalendarFirstDayOfWeek();
+            setupCalendarPopupFocus();
         }
     }
 
@@ -74,9 +97,44 @@ public:
         }
     }
 
+    void focusCalendarView() {
+        if (auto* cal = calendarWidget()) {
+            auto* calTable = cal->findChild<QTableView*>();
+            QWidget* target = calTable ? static_cast<QWidget*>(calTable) : static_cast<QWidget*>(cal);
+            target->setFocus(Qt::PopupFocusReason);
+            QTimer::singleShot(0, target, [this, target]() {
+                if (calendarWidget() && calendarWidget()->isVisible()) {
+                    target->setFocus(Qt::PopupFocusReason);
+                    if (qEnvironmentVariableIntValue("JOBPREP_DEBUG_DATEPOPUP") == 1) {
+                        logDatePopupDebug();
+                    }
+                }
+            });
+        }
+    }
+
+    void logDatePopupDebug() const {
+        QWidget* popup = calendarWidget() ? calendarWidget()->window() : nullptr;
+        QWidget* fw = QApplication::focusWidget();
+        fprintf(stderr, "JOBPREP_DEBUG_DATEPOPUP: popup=%p class=%s flags=0x%x visible=%d\n",
+                static_cast<void*>(popup),
+                popup ? popup->metaObject()->className() : "null",
+                popup ? static_cast<unsigned int>(popup->windowFlags()) : 0,
+                popup ? popup->isVisible() : 0);
+        fprintf(stderr, "JOBPREP_DEBUG_DATEPOPUP: focusWidget=%p class=%s name=%s\n",
+                static_cast<void*>(fw),
+                fw ? fw->metaObject()->className() : "null",
+                fw ? qPrintable(fw->objectName()) : "");
+        int depth = 0;
+        for (QWidget* w = fw; w != nullptr; w = w->parentWidget()) {
+            fprintf(stderr, "JOBPREP_DEBUG_DATEPOPUP:   chain[%d]: %p class=%s name=%s\n",
+                    depth++, static_cast<void*>(w), w->metaObject()->className(), qPrintable(w->objectName()));
+        }
+    }
+
     void openCalendarPopup() {
         if (!calendarPopup()) return;
-        syncCalendarFirstDayOfWeek();
+        setupCalendarPopupFocus();
         if (calendarWidget() && calendarWidget()->isVisible()) return;
 
         QStyleOptionComboBox opt;
@@ -91,6 +149,7 @@ public:
         QMouseEvent press(QEvent::MouseButtonPress, clickPos, mapToGlobal(clickPos),
                           Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
         QApplication::sendEvent(this, &press);
+        focusCalendarView();
     }
 
 protected:
@@ -99,6 +158,13 @@ protected:
     }
 
     bool eventFilter(QObject* watched, QEvent* event) override {
+        if (auto* cal = calendarWidget()) {
+            if (watched == cal || watched == cal->window()) {
+                if (event->type() == QEvent::Show) {
+                    focusCalendarView();
+                }
+            }
+        }
         if (watched == lineEdit()) {
             if (event->type() == QEvent::ShortcutOverride) {
                 auto* ke = static_cast<QKeyEvent*>(event);
