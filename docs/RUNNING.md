@@ -103,13 +103,13 @@ JobPrep stores all user data in standard OS application data directories (`QStan
 
 - **SQLite Database**:
   - Linux: `${XDG_DATA_HOME:-~/.local/share}/JobPrep/JobPrep/jobprep.sqlite`
-  - Windows: `%LOCALAPPDATA%\JobPrep\JobPrep\jobprep.sqlite`
+  - Windows: `%APPDATA%\JobPrep\JobPrep\jobprep.sqlite` *(derived from code, not run on Windows)*
 - **Application Settings**:
   - Linux: `${XDG_CONFIG_HOME:-~/.config}/JobPrep/JobPrep.conf`
   - Windows: Registry `HKEY_CURRENT_USER\Software\JobPrep\JobPrep`
 - **Automatic Safety Backups**:
   - Linux: `${XDG_DATA_HOME:-~/.local/share}/JobPrep/JobPrep/backups/pre-restore-<timestamp>.json`
-  - Windows: `%LOCALAPPDATA%\JobPrep\JobPrep\backups\pre-restore-<timestamp>.json`
+  - Windows: `%APPDATA%\JobPrep\JobPrep\backups\pre-restore-<timestamp>.json` *(derived from code, not run on Windows)*
 
 ### Trying It Without Touching Your Data
 
@@ -118,10 +118,9 @@ To test or demo the application in complete isolation without reading or writing
 ```bash
 # Linux (isolated temporary HOME and XDG folders):
 HOME=/tmp/jp-isolated XDG_DATA_HOME=/tmp/jp-isolated/.local/share XDG_CONFIG_HOME=/tmp/jp-isolated/.config ./build/dev-linux/jobprep
-
-# Windows (PowerShell with isolated local app data folder):
-$env:LOCALAPPDATA = "$env:TEMP\jp-isolated"; .\build\dev-windows\jobprep.exe
 ```
+
+On Windows, the application data directory is resolved via the Windows shell API and cannot be redirected using environment variables; back up your database first (**Settings** -> **Data** -> **Backup**) before running a development build.
 
 ---
 
