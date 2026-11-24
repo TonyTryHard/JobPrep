@@ -55,17 +55,17 @@ JobPrep is a single-user personal desktop application designed to structure tech
 
 ### Requirements
 
-- **C++20 Compiler**: GCC 11+ or Clang 13+ (Linux), MSVC 2022 v143+ (Windows). CI builds with GCC on `ubuntu-latest` and MSVC on `windows-latest`.
+- **C++20 Compiler**: A C++20 compiler (CI uses GCC on `ubuntu-latest` and MSVC 2022 on `windows-latest`).
 - **CMake**: Version >= 3.21
 - **Build Tool**: Ninja
 - **Qt 6**: Version **6.8 LTS** or newer (with modules `Core`, `Gui`, `Widgets`, `Sql`, `Svg`, `Test`, `LinguistTools`)
 
 ### Linux Build
 
-Install dependencies on Ubuntu / Debian:
+Install dependencies on Ubuntu / Debian (as in CI):
 
 ```bash
-sudo apt-get install ninja-build libgl1-mesa-dev libfontconfig1 libdbus-1-3 libxkbcommon0 libxkbcommon-x11-0
+sudo apt-get install -y --no-install-recommends ninja-build libgl1-mesa-dev libfontconfig1 libdbus-1-3 libxkbcommon0 libxkbcommon-x11-0 fonts-dejavu-core
 ```
 
 Configure, build, and run using CMake presets:
@@ -133,6 +133,10 @@ On Windows, the application data directory is resolved via the Windows shell API
 To bundle JobPrep for distribution using `windeployqt` (maintainer recipe, not part of CI):
 
 ```cmd
+:: Open the "x64 Native Tools Command Prompt for VS 2022"
+set QT_PREFIX_PATH=C:\Qt\6.8.2\msvc2022_64
+set PATH=%QT_PREFIX_PATH%\bin;%PATH%
+
 :: Release build using Ninja
 cmake -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/release --target jobprep
@@ -142,7 +146,7 @@ mkdir deploy && copy build\release\jobprep.exe deploy\
 windeployqt --release deploy\jobprep.exe
 ```
 
-> **Note**: This is the maintainer's deployment recipe. `CMakePresets.json` configures a Debug build by default (`dev-windows`); building for distribution uses an explicit Release build directory as shown above.
+> **Note**: This is the maintainer's deployment recipe, not part of CI. The recipe starts from the "x64 Native Tools Command Prompt for VS 2022" (needed for the build only, not for running the result). The deployed folder runs by double-clicking `jobprep.exe` without Qt on `PATH`. `CMakePresets.json` configures a Debug build by default (`dev-windows`); building for distribution uses an explicit Release build directory as shown above.
 
 ---
 
@@ -229,7 +233,7 @@ The repository enforces quality via GitHub Actions (`.github/workflows/ci.yml`):
 
 ## Status and Scope
 
-JobPrep is fully implemented and verified across both Linux and Windows. Core functionality across all five pages (Dashboard, Study, Job Applications, Calendar, Settings) is complete, covered by 35 test suites, and localized in English, Ukrainian, and Russian.
+JobPrep is a working application; all five pages are implemented and covered by the test suites; CI runs on Linux and Windows. The application is localized in English, Ukrainian, and Russian.
 
 ### Known Limitations & Out of Scope
 
