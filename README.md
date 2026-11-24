@@ -12,7 +12,7 @@ Offline desktop application for planning interview preparation and tracking job 
 
 ## What It Is
 
-JobPrep is a single-user personal desktop application designed to structure technical interview preparation and track job opportunities in one focused workspace. It runs completely offline using a local SQLite database—no remote servers, no user accounts, and no background telemetry.
+JobPrep is a single-user personal desktop application designed to structure technical interview preparation and track job opportunities in one focused workspace. It runs completely offline using a local SQLite database—no remote servers, no user accounts, and no background telemetry (external URLs in job applications or study topics open in your standard system web browser on click).
 
 ### Core Features
 
@@ -22,8 +22,8 @@ JobPrep is a single-user personal desktop application designed to structure tech
 - **Application Pipeline**: Track job applications through stages (*Wishlist*, *Applied*, *HR Screen*, *Technical*, *Final*, *Offer*, *Accepted*, *Rejected*, *Withdrawn*, *Ghosted*) with salary ranges, work modes, and follow-up deadlines.
 - **Interview Tracking**: Log interview rounds (*HR*, *Technical*, *Live Coding*, *System Design*, *Behavioral*, *Final*) with date, duration, interviewer, outcome, and meeting notes.
 - **Unified Calendar & Agenda**: Month view with color-coded markers for scheduled interviews, application follow-ups, and study target dates, paired with a daily agenda list.
-- **Reminders & System Tray Notifications**: Background reminder service for upcoming interviews with customizable lead times (e.g. 24 hours, 1 hour) and automatic fallback to in-app notification toasts if the system tray is unavailable.
-- **Data Portability & Safety**: Full database backup and restore via a single JSON archive, featuring automatic pre-restore safety backups. Direct export of job applications to CSV (22 standard columns) and scheduled interviews to iCalendar (`.ics`).
+- **Reminders & System Tray Notifications**: Background reminder service for upcoming interviews (with configurable lead times, default: 24 hours and 1 hour) and due follow-up actions, with system tray alerts or automatic in-app toast fallbacks if the system tray is unavailable.
+- **Data Portability & Safety**: Full database backup and restore via a single JSON archive, featuring automatic pre-restore safety backups. Direct export of job applications to CSV (22 standard columns: Company, Position, Status, Applied, Next step, Salary, Source, Updated, URL, Resume version, Location, Work mode, Salary min, Salary max, Currency, Next action, Next action date, Contact name, Contact email, Notes, Created at, Updated at) and scheduled interviews to iCalendar (`.ics`).
 - **Starter Sample Data**: Optional built-in starter dataset covering modern C++ and English technical interview topics with subtask checklists.
 
 ---
@@ -46,7 +46,7 @@ JobPrep is a single-user personal desktop application designed to structure tech
 
 ## Languages and Themes
 
-- **Languages**: Complete user interface localization for English (source), Ukrainian (`Українська`), and Russian (`Русский`), covering all 506 UI strings with correct Slavic plural forms (`%n`). The application defaults to the system UI locale on first launch. Language can be changed in **Settings** and applies on next application startup.
+- **Languages**: Complete user interface localization for English (source), Ukrainian (`Українська`), and Russian (`Русский`), covering all UI strings with correct Slavic plural forms (`%n`). The application defaults to the system UI locale on first launch. Language can be changed in **Settings** and applies on next application startup.
 - **Themes**: Full Light and Dark mode support, paired with 6 accent color presets (Indigo, Teal, Rose, Amber, Emerald, Sky). Themes switch instantly at runtime without restart.
 
 ---
@@ -55,7 +55,7 @@ JobPrep is a single-user personal desktop application designed to structure tech
 
 ### Requirements
 
-- **C++20 Compiler**: GCC 11+ or Clang 13+ (Linux), MSVC 2022 v143+ (Windows)
+- **C++20 Compiler**: GCC 11+ or Clang 13+ (Linux), MSVC 2022 v143+ (Windows). CI builds with GCC on `ubuntu-latest` and MSVC on `windows-latest`.
 - **CMake**: Version >= 3.21
 - **Build Tool**: Ninja
 - **Qt 6**: Version **6.8 LTS** or newer (with modules `Core`, `Gui`, `Widgets`, `Sql`, `Svg`, `Test`, `LinguistTools`)
@@ -107,41 +107,42 @@ JobPrep stores user data in standard OS locations (`QStandardPaths::AppDataLocat
 
 - **Database**:
   - Linux: `${XDG_DATA_HOME:-~/.local/share}/JobPrep/JobPrep/jobprep.sqlite`
-  - Windows: `%LOCALAPPDATA%\JobPrep\JobPrep\jobprep.sqlite`
+  - Windows: `%APPDATA%\JobPrep\JobPrep\jobprep.sqlite` *(derived from code, not run on Windows)*
 - **Settings**:
   - Linux: `${XDG_CONFIG_HOME:-~/.config}/JobPrep/JobPrep.conf`
   - Windows: Registry `HKEY_CURRENT_USER\Software\JobPrep\JobPrep`
 - **Safety Backups**:
   - Linux: `${XDG_DATA_HOME:-~/.local/share}/JobPrep/JobPrep/backups/pre-restore-<timestamp>.json`
-  - Windows: `%LOCALAPPDATA%\JobPrep\JobPrep\backups\pre-restore-<timestamp>.json`
+  - Windows: `%APPDATA%\JobPrep\JobPrep\backups\pre-restore-<timestamp>.json` *(derived from code, not run on Windows)*
 
 > **Note**: Development builds and deployed copies share the same local database on disk.
 
 ### Running in Complete Isolation
 
-To run or evaluate JobPrep without reading or modifying your actual database:
+To test or demo the application in isolation without reading or writing to your real database:
 
 ```bash
-# Linux
+# Linux (isolated temporary HOME and XDG data/config folders)
 HOME=/tmp/jp-isolated XDG_DATA_HOME=/tmp/jp-isolated/.local/share XDG_CONFIG_HOME=/tmp/jp-isolated/.config ./build/dev-linux/jobprep
 ```
 
-```powershell
-# Windows (PowerShell)
-$env:LOCALAPPDATA = "$env:TEMP\jp-isolated"; .\build\dev-windows\jobprep.exe
-```
+On Windows, the application data directory is resolved via the Windows shell API and cannot be redirected using environment variables; back up your database first (**Settings** -> **Data** -> **Backup**) before running a development build.
 
 ### Windows Deployment Recipe
 
-To bundle JobPrep for distribution using `windeployqt`:
+To bundle JobPrep for distribution using `windeployqt` (maintainer recipe, not part of CI):
 
 ```cmd
-cmake --preset dev-windows -DCMAKE_BUILD_TYPE=Release
-cmake --build --preset dev-windows
-mkdir deploy && copy build\dev-windows\jobprep.exe deploy\
-windeployqt --release --no-translations deploy\jobprep.exe
-xcopy /E /I %QT_PREFIX_PATH%\translations\qtbase_*.qm deploy\translations\
+:: Release build using Ninja
+cmake -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/release --target jobprep
+
+:: Bundle runtime dependencies with windeployqt
+mkdir deploy && copy build\release\jobprep.exe deploy\
+windeployqt --release deploy\jobprep.exe
 ```
+
+> **Note**: This is the maintainer's deployment recipe. `CMakePresets.json` configures a Debug build by default (`dev-windows`); building for distribution uses an explicit Release build directory as shown above.
 
 ---
 
@@ -226,22 +227,16 @@ The repository enforces quality via GitHub Actions (`.github/workflows/ci.yml`):
 
 ---
 
-## Status and Roadmap
+## Status and Scope
 
-All planned milestones (M0 through M7) are completed:
-- [x] **M0–M1**: Foundation, build system, SQLite migrations, and Core repositories.
-- [x] **M2–M3**: Dashboard KPI statistics, Study Kanban board, checklists, and session tracking.
-- [x] **M4**: Job application pipeline, statuses, salary filters, and interview logging.
-- [x] **M5**: Unified calendar, agenda layers, reminders, and data backup/restore.
-- [x] **M6**: UI polishing, design tokens, desktop integration, and HiDPI verification.
-- [x] **M7**: Localization (English, Ukrainian, Russian), Qt 6.10 compatibility, and accessibility.
+JobPrep is fully implemented and verified across both Linux and Windows. Core functionality across all five pages (Dashboard, Study, Job Applications, Calendar, Settings) is complete, covered by 35 test suites, and localized in English, Ukrainian, and Russian.
 
 ### Known Limitations & Out of Scope
 
 - **Single-User Local Storage**: All data resides in local SQLite; there is no cloud synchronization or multi-device account sync.
 - **Language Switch Restart**: Language selection requires an application restart because Qt installs translation catalogs prior to GUI widget creation.
 - **Windows Dialog Buttons**: Standard dialog button translations (*OK*, *Cancel*, *Yes*, *No*) on Windows rely on `qtbase_uk.qm` and `qtbase_ru.qm` being present in `%QT_PREFIX_PATH%\translations` or alongside the executable.
-- **Keyboard Accelerators**: Custom Cyrillic shortcut mnemonics are intentionally omitted (Option B) to avoid shortcut collisions and accommodate Latin keyboard users; standard navigation uses Tab, Enter, and Esc.
+- **Keyboard Accelerators**: Custom mnemonic accelerators are not defined for Ukrainian and Russian; standard dialog buttons use Qt's built-in translations, and field navigation uses Tab, Shift+Tab, Enter, and Esc.
 
 ---
 
