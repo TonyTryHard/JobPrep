@@ -1026,8 +1026,169 @@ The task was performed across distinct logical commits in conventional style:
 2. `05a5e6b` — `docs: write comprehensive GitHub README`
 3. `578e720` — `docs(running): replace absolute file URI with relative link`
 4. `6a274a0` — `docs(reports): add README task verification and hygiene report`
-5. `71d64dd` — `docs(readme): add contributing section` (branch: `archive/dev-docs`)
+5. `71d64dd` — `docs(readme): add contributing section`
 6. `b3ae01f` — `chore(docs): move dev prompts and plans to archive branch`
 7. `9634205` — `docs(readme): fix Windows data paths, isolation guidance, and status section`
 8. `e2b4851` — `docs(running): correct Windows AppData paths and remove unsafe isolation snippet`
 9. `79dc311` — `docs(reports): update README task report with fix-up audit and untrimmed logs`
+
+
+---
+
+## 12. Fix-up 2 Verification (`docs/README-fixup2.md`)
+
+### 12.1 Windows Release Recipe & Qt Location
+
+#### Proof: How the Project Finds Qt
+```bash
+$ grep -n "QT_PREFIX_PATH\|CMAKE_PREFIX_PATH" CMakeLists.txt CMakePresets.json -r
+CMakeLists.txt:14:# Handle QT_PREFIX_PATH if set in environment
+CMakeLists.txt:15:if(DEFINED ENV{QT_PREFIX_PATH} AND NOT "$ENV{QT_PREFIX_PATH}" STREQUAL "")
+CMakeLists.txt:16:    list(PREPEND CMAKE_PREFIX_PATH "$ENV{QT_PREFIX_PATH}")
+CMakePresets.json:17:        "CMAKE_PREFIX_PATH": "$penv{QT_PREFIX_PATH}"
+```
+
+#### What `dev-windows` Preset Sets
+From `CMakePresets.json`:
+- `inherits`: `"base"`
+- `generator`: `"Ninja"` (inherited from `base`)
+- `cacheVariables`:
+  - `"CMAKE_BUILD_TYPE": "Debug"`
+  - `"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"` (inherited)
+  - `"JOBPREP_WERROR": "ON"` (inherited)
+  - `"CMAKE_PREFIX_PATH": "$penv{QT_PREFIX_PATH}"` (inherited)
+
+Because `CMakeLists.txt` lines 14-16 explicitly check `DEFINED ENV{QT_PREFIX_PATH}` and prepend it to `CMAKE_PREFIX_PATH`, setting `set QT_PREFIX_PATH=...` in the environment allows CMake to find Qt directly. In addition, setting `set PATH=%QT_PREFIX_PATH%\bin;%PATH%` makes both `windeployqt` and the runtime Qt tools resolvable from the command line.
+
+The recipe in `README.md` starts from the "x64 Native Tools Command Prompt for VS 2022" (required for the MSVC compiler during build only) and clarifies that the deployed application folder runs by double-clicking without Qt on `PATH`. The note retains that this is the maintainer's deployment recipe, not part of automated CI.
+
+---
+
+### 12.2 Requirements & Dependency List Alignment
+
+#### Compiler Proof in CI
+```bash
+$ grep -n "gcc\|g++\|msvc\|cl.exe\|vcvars\|ilammy" .github/workflows/ci.yml
+31:            qt-arch: linux_gcc_64
+35:            qt-arch: linux_gcc_64
+39:            qt-arch: win64_msvc2022_64
+67:        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+123:          g++ --version | head -1
+138:          & cl.exe 2>&1 | Select-Object -First 1
+322:        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+331:          key: qt-6.8.2-windows-latest-win64_msvc2022_64-aqt-3.2.0
+338:          python -m aqt install-qt windows desktop 6.8.2 win64_msvc2022_64 \
+360:          & cl.exe 2>&1 | Select-Object -First 1
+```
+
+Requirements in `README.md` have been updated to reflect what CI actually proves:
+`- **C++20 Compiler**: A C++20 compiler (CI uses GCC on ubuntu-latest and MSVC 2022 on windows-latest).`
+
+#### Linux Dependencies in CI vs README
+```bash
+$ sed -n '55,63p' .github/workflows/ci.yml
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends \
+            ninja-build \
+            libgl1-mesa-dev \
+            libfontconfig1 \
+            libdbus-1-3 \
+            libxkbcommon0 \
+            libxkbcommon-x11-0 \
+            fonts-dejavu-core
+```
+The apt package installation line in `README.md` now matches CI exactly:
+```bash
+sudo apt-get install -y --no-install-recommends ninja-build libgl1-mesa-dev libfontconfig1 libdbus-1-3 libxkbcommon0 libxkbcommon-x11-0 fonts-dejavu-core
+```
+
+---
+
+### 12.3 Status Wording
+
+The first sentence of "Status and Scope" was updated from:
+> "JobPrep is fully implemented and verified across both Linux and Windows."
+
+To a plain statement without superlatives:
+> "JobPrep is a working application; all five pages are implemented and covered by the test suites; CI runs on Linux and Windows. The application is localized in English, Ukrainian, and Russian."
+
+---
+
+### 12.4 Link Audit Following Document Archive Move
+
+#### References on `main` Outside `docs/reports`
+```bash
+$ git grep -n "docs/prompts\|docs/plans\|M[0-9]-plan\|prompts/" -- . ':!docs/reports'
+docs/README-fixup.md:3:Read `docs/reports/README-task.md`, `README.md`, `docs/RUNNING.md`, `docs/reports/M6-partD2-fixups.md` (the section about `AppDataLocation` that cannot be redirected on Windows), `docs/SPEC.md`. All rules of the README task prompt (archived at `docs/prompts/README-task.md` on the `archive/dev-docs` branch) apply: local commits only, never push, never tag; raw output with the exact command above it, **nothing trimmed (no `...` inside any output block)**, `(no output)` for empty, hashes only from `git log --oneline`; scratch files outside the repository. Windows items you did not run are "not verified by agent". No source code changes.
+```
+
+#### Total References in Entire Repository (including historical reports)
+```bash
+$ git grep -n "docs/prompts\|docs/plans\|M[0-9]-plan\|prompts/" -- . | wc -l
+44
+```
+**Verdict:** The 43 occurrences inside `docs/reports/` are historical milestone reports and development records. None exist in living documentation (`README.md`, `AGENTS.md`, `docs/RUNNING.md`, `docs/SPEC.md`, `docs/i18n-glossary.md`).
+
+#### Relative Markdown Links Verification in Living Documents
+Every relative link in living documents exists and resolves:
+```bash
+$ ls -la docs/images/screenshot-home.png docs/images/screenshot-study.png docs/images/screenshot-jobs.png docs/images/screenshot-calendar.png docs/images/screenshot-settings.png docs/images/screenshot-dark.png docs/RUNNING.md docs/SPEC.md
+-rw-rw-r-- 1 tony tony  12219 Nov 24 10:26 docs/RUNNING.md
+-rw-rw-r-- 1 tony tony  91990 Nov 16 22:51 docs/SPEC.md
+-rw-rw-r-- 1 tony tony  80879 Nov 24 09:38 docs/images/screenshot-calendar.png
+-rw-rw-r-- 1 tony tony  98794 Nov 24 09:38 docs/images/screenshot-dark.png
+-rw-rw-r-- 1 tony tony  97316 Nov 24 09:38 docs/images/screenshot-home.png
+-rw-rw-r-- 1 tony tony  80750 Nov 24 09:38 docs/images/screenshot-jobs.png
+-rw-rw-r-- 1 tony tony  55113 Nov 24 09:38 docs/images/screenshot-settings.png
+-rw-rw-r-- 1 tony tony 112673 Nov 24 09:38 docs/images/screenshot-study.png
+```
+
+#### Scripts and CI Reference Check
+```bash
+$ grep -rn "docs/prompts\|docs/plans" scripts .github || echo "(no output)"
+(no output)
+```
+
+#### Branch Status for Commit `71d64dd`
+```bash
+$ git branch --contains 71d64dd && git log --oneline archive/dev-docs -5
+  archive/dev-docs
+* main
+70ff4c7 (archive/dev-docs) docs(archive): add README-fixup2 prompt to archive branch
+2ef7656 docs(archive): add README-fixup prompt to archive branch
+71d64dd docs(readme): add contributing section
+6a274a0 docs(reports): add README task verification and hygiene report
+578e720 docs(running): replace absolute file URI with relative link
+```
+Commit `71d64dd` is part of `main` history (committed prior to creating the archive branch from it).
+
+
+---
+
+### 12.5 Final Working Tree State & Commit Sequence
+
+#### Working Tree Status:
+```bash
+$ git status --short
+(no output)
+```
+
+#### Git Worktree:
+```bash
+$ git worktree list
+/home/tony/projects/JobPrep <HEAD-HASH> [main]
+```
+
+#### Complete Task Commit Sequence:
+1. `658f5c5` — `docs(images): add application screenshots for README`
+2. `05a5e6b` — `docs: write comprehensive GitHub README`
+3. `578e720` — `docs(running): replace absolute file URI with relative link`
+4. `6a274a0` — `docs(reports): add README task verification and hygiene report`
+5. `71d64dd` — `docs(readme): add contributing section`
+6. `b3ae01f` — `chore(docs): move dev prompts and plans to archive branch`
+7. `9634205` — `docs(readme): fix Windows data paths, isolation guidance, and status section`
+8. `e2b4851` — `docs(running): correct Windows AppData paths and remove unsafe isolation snippet`
+9. `ea2ca80` — `docs(reports): update README task report with fix-up audit and untrimmed logs`
+10. `dbe8d8b` — `docs(readme): refine release recipe, requirements wording, and status text`
+11. `4272373` — `docs: clarify prompt reference to point to archive branch`
+12. `<report commit>` — `docs(reports): append Fix-up 2 verification and corrected commit history`
