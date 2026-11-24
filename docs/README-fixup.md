@@ -1,6 +1,6 @@
 # README fix-up: wrong Windows data path, unsafe isolation snippet, wrong roadmap, unverified claims
 
-Read `docs/reports/README-task.md`, `README.md`, `docs/RUNNING.md`, `docs/reports/M6-partD2-fixups.md` (the section about `AppDataLocation` that cannot be redirected on Windows), `docs/SPEC.md`. All rules of `docs/prompts/README-task.md` apply: local commits only, never push, never tag; raw output with the exact command above it, **nothing trimmed (no `...` inside any output block)**, `(no output)` for empty, hashes only from `git log --oneline`; scratch files outside the repository. Windows items you did not run are "not verified by agent". No source code changes.
+Read `docs/reports/README-task.md`, `README.md`, `docs/RUNNING.md`, `docs/reports/M6-partD2-fixups.md` (the section about `AppDataLocation` that cannot be redirected on Windows), `docs/SPEC.md`. All rules of the README task prompt (archived at `docs/prompts/README-task.md` on the `archive/dev-docs` branch) apply: local commits only, never push, never tag; raw output with the exact command above it, **nothing trimmed (no `...` inside any output block)**, `(no output)` for empty, hashes only from `git log --oneline`; scratch files outside the repository. Windows items you did not run are "not verified by agent". No source code changes.
 
 ## 1. Data paths on Windows are wrong, and the isolation snippet is unsafe (blocking)
 
