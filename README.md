@@ -242,3 +242,11 @@ All planned milestones (M0 through M7) are completed:
 - **Language Switch Restart**: Language selection requires an application restart because Qt installs translation catalogs prior to GUI widget creation.
 - **Windows Dialog Buttons**: Standard dialog button translations (*OK*, *Cancel*, *Yes*, *No*) on Windows rely on `qtbase_uk.qm` and `qtbase_ru.qm` being present in `%QT_PREFIX_PATH%\translations` or alongside the executable.
 - **Keyboard Accelerators**: Custom Cyrillic shortcut mnemonics are intentionally omitted (Option B) to avoid shortcut collisions and accommodate Latin keyboard users; standard navigation uses Tab, Enter, and Esc.
+
+---
+
+## Contributing
+
+Contributions, feedback, and suggestions are welcome!
+- **Discussions & Issues**: If you run into an issue, have a question, or would like to propose an enhancement, feel free to open an issue on the repository issue tracker.
+- **Pull Requests**: When submitting a pull request, please ensure that changes follow the unidirectional architecture, adhere to the coding conventions in `AGENTS.md`, and pass `./scripts/check.sh` (or `.\scripts\check.ps1` on Windows) with zero warnings and all tests green.
