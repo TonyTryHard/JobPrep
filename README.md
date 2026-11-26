@@ -134,7 +134,7 @@ To bundle JobPrep for distribution using `windeployqt` (maintainer recipe, not p
 
 ```cmd
 :: Open the "x64 Native Tools Command Prompt for VS 2022"
-set QT_PREFIX_PATH=C:\Qt\6.8.2\msvc2022_64
+set QT_PREFIX_PATH=<path to your Qt kit, e.g. C:\Qt\6.8.2\msvc2022_64>.
 set PATH=%QT_PREFIX_PATH%\bin;%PATH%
 
 :: Release build using Ninja

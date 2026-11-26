@@ -1176,7 +1176,7 @@ $ git status --short
 #### Git Worktree:
 ```bash
 $ git worktree list
-/home/tony/projects/JobPrep <HEAD-HASH> [main]
+/home/tony/projects/JobPrep 79dc311 [main]
 ```
 
 #### Complete Task Commit Sequence:
@@ -1191,4 +1191,4 @@ $ git worktree list
 9. `ea2ca80` — `docs(reports): update README task report with fix-up audit and untrimmed logs`
 10. `dbe8d8b` — `docs(readme): refine release recipe, requirements wording, and status text`
 11. `4272373` — `docs: clarify prompt reference to point to archive branch`
-12. `<report commit>` — `docs(reports): append Fix-up 2 verification and corrected commit history`
+12. `6382359` — `docs(reports): append Fix-up 2 verification and corrected commit history`
